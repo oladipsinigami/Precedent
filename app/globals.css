@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #090a0d;
+  color: #ede8df;
+  min-height: 100%;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+}
+
+body {
+  background-image:
+    radial-gradient(1000px 500px at 15% -5%, rgba(196, 92, 38, 0.12), transparent 60%),
+    radial-gradient(800px 450px at 90% 15%, rgba(16, 185, 129, 0.08), transparent 55%),
+    linear-gradient(180deg, #0d0f14 0%, #090a0d 45%, #07080a 100%);
+}
+
+.grain {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  z-index: 50;
+}
+
+/* High-end glassmorphic and institutional cards */
+.deck-card {
+  background: #11141b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.deck-card-elevated {
+  background: #141822;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.6);
+}
+
+.deck-card-subtle {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Accent borders */
+.border-copper {
+  border-color: rgba(196, 92, 38, 0.5);
+}
+
+.border-emerald {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.border-amber {
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+/* Custom Institutional Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #090a0d;
+}
+::-webkit-scrollbar-thumb {
+  background: #252a36;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3c4456;
+}
