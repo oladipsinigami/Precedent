@@ -3,15 +3,17 @@ import { buildSearchQuery, majorityLean } from "../providers/social";
 import { fetchXSentiment } from "../providers/x-sentiment";
 import { yahooNews } from "../providers/yahoo";
 import { fetchYouTubeSentiment } from "../providers/youtube-sentiment";
+import { serpNews } from "../providers/serpapi";
 import type { Lean, NewsPillar } from "../types";
 import type { NameCard } from "../universe";
 
 export async function runNews(name: NameCard): Promise<NewsPillar> {
   try {
-    const [yf, rss, gNews, macro, xResult, ytResult] = await Promise.all([
+    const [yf, rss, gNews, serp, macro, xResult, ytResult] = await Promise.all([
       yahooNews(name.native).catch(() => []),
       yahooRss(name.native).catch(() => []),
       googleNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
+      serpNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       googleNews("Federal Reserve OR CPI OR tariffs US stocks").catch(() => []),
       fetchXSentiment({ native: name.native, name: name.name, rToken: name.rToken, bitgetSymbols: name.bitgetSymbols }),
       fetchYouTubeSentiment(
@@ -25,7 +27,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
     ]);
 
     const seen = new Set<string>();
-    const merged = [...yf, ...rss, ...gNews].filter((h) => {
+    const merged = [...serp, ...yf, ...rss, ...gNews].filter((h) => {
       const key = h.title.toLowerCase().slice(0, 80);
       if (seen.has(key)) return false;
       seen.add(key);
@@ -41,6 +43,11 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
     const caveats: string[] = [];
     if (xResult.caveat) caveats.push(xResult.caveat);
     if (ytResult.caveat) caveats.push(ytResult.caveat);
+    if (!process.env.SERPAPI_API_KEY) {
+      caveats.push("SerpAPI Google News unavailable: SERPAPI_API_KEY is not configured.");
+    } else if (!serp.length) {
+      caveats.push("SerpAPI Google News returned no usable headlines or was unreachable this run.");
+    }
 
     const allLeans: Lean[] = [
       ...headlines.map((h) => h.lean as Lean),
@@ -76,6 +83,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       caveats,
       notes,
       sources: [
+        ...(serp.length ? [{ label: "SerpAPI Google News" }] : []),
         { label: "Yahoo Finance search/news" },
         { label: "Yahoo Finance RSS" },
         { label: "Google News RSS" },

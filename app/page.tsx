@@ -4,14 +4,15 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DEMO_TASK, STYLES } from "@/lib/style-profiles";
 import { reweightBriefing } from "@/lib/reweight";
 import { UNIVERSE } from "@/lib/universe";
+import { BlackholeBackground } from "./components/BlackholeBackground";
+import { Header } from "./components/Header";
+import { IntakeView } from "./components/IntakeView";
+import { ResultsView } from "./components/ResultsView";
 import type {
   Briefing,
-  MarketStructurePillar,
-  NewsPillar,
   PillarBundle,
   PillarId,
   ResearchEvent,
-  StructureFlags,
   TradingStyle,
 } from "@/lib/types";
 
@@ -42,14 +43,6 @@ function adaptQuestionToInstrument(question: string, previous: Instrument | unde
   return `${question.trim()} Focus instrument: ${next.rToken} (${next.native}, ${next.name}).`;
 }
 
-const PILLARS: { id: PillarId; label: string; short: string }[] = [
-  { id: "marketStructure", label: "Structure", short: "RMT / regime" },
-  { id: "analogs", label: "Analogs", short: "historical stress test" },
-  { id: "technicals", label: "Venue tape", short: "cash vs Bitget" },
-  { id: "news", label: "Discourse", short: "news / X / YouTube" },
-  { id: "fundamentals", label: "Fundamentals", short: "filings / catalysts" },
-];
-
 const EMPTY_PILLARS: PillarState = {
   fundamentals: "idle",
   technicals: "idle",
@@ -59,6 +52,7 @@ const EMPTY_PILLARS: PillarState = {
 };
 
 export default function Home() {
+  const [view, setView] = useState<"intake" | "results">("intake");
   const [style, setStyle] = useState<TradingStyle>("swing");
   const [symbol, setSymbol] = useState(DEMO_TASK.symbol);
   const [question, setQuestion] = useState(DEMO_TASK.question);
@@ -77,6 +71,7 @@ export default function Home() {
     () => instruments.find((item) => item.native === symbol) ?? instruments[0],
     [instruments, symbol],
   );
+
   useEffect(() => {
     let active = true;
     fetch("/api/universe")
@@ -156,6 +151,8 @@ export default function Home() {
       }
     } else if (event.type === "briefing") {
       setBriefing(event.briefing);
+      // Seamlessly transition from Intake Page to Results Page upon synthesis completion
+      setView("results");
     } else if (event.type === "error") {
       setError(event.message);
     }
@@ -186,166 +183,69 @@ export default function Home() {
     setBriefing(null);
     setMeta(null);
     setStatuses(EMPTY_PILLARS);
+    setView("intake");
   }
 
   return (
-    <main className="min-h-screen bg-[#080a0d] text-[#e7ebef]">
-      <header className="border-b border-white/[0.08] bg-[#0b0e12]/95">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between px-5 py-4 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded bg-[#d7ff4f] font-mono text-sm font-black text-[#0a0d0b]">P</div>
-            <div>
-              <div className="font-mono text-[11px] font-bold uppercase tracking-[0.24em]">Precedent</div>
-              <div className="mt-0.5 text-[11px] text-[#75808b]">Bitget rToken research desk</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.14em] text-[#75808b]">
-            <span className="hidden sm:inline">Research only</span>
-            <span className="flex items-center gap-2 text-[#9cabb7]"><i className="h-1.5 w-1.5 rounded-full bg-[#d7ff4f]" /> Live desk</span>
-            <button type="button" onClick={loadDemo} className="text-[#d7ff4f] hover:text-white">Demo ↗</button>
-          </div>
-        </div>
-      </header>
+    <div className="relative min-h-screen text-[#e7ebef]">
+      {/* Contextual Moving Blackhole Background (Prominent on Intake, Subdued on Results) */}
+      <BlackholeBackground variant={view} />
 
-      <div className="mx-auto max-w-[1500px] px-5 py-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_330px]">
-          <section>
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#d7ff4f]">Decision stress testing / session 01</div>
-                <h1 className="mt-3 max-w-3xl text-4xl font-medium leading-[1.03] tracking-[-0.055em] sm:text-6xl">
-                  Turn a market question<br /><span className="text-[#74808a]">into a research record.</span>
-                </h1>
-              </div>
-              <div className="max-w-xs text-right text-xs leading-5 text-[#75808b]">
-                Five evidence streams. One memo. Your decision stays outside the system.
-              </div>
-            </div>
+      {/* Institutional Top Navigation Bar */}
+      <Header onLoadDemo={loadDemo} />
 
-            <form onSubmit={runResearch} className="border border-white/[0.11] bg-[#101419]">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
-                <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9cabb7]">Research intake</div>
-                <div className="font-mono text-[10px] text-[#59646e]">POST /api/research · SSE</div>
-              </div>
-              <div className="grid gap-6 p-5 lg:grid-cols-[210px_minmax(0,1fr)] lg:p-7">
-                <div>
-                  <label className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#74808a]">Operating frame · re-frame language only</label>
-                  <div className="mt-3 space-y-2">
-                    {(Object.keys(STYLES) as TradingStyle[]).map((item) => (
-                      <button key={item} type="button" onClick={() => handleStyleChange(item)} className={`w-full border px-3 py-3 text-left transition ${style === item ? "border-[#d7ff4f] bg-[#d7ff4f]/[0.08]" : "border-white/[0.08] bg-[#0b0e12] hover:border-white/20"}`}>
-                        <span className="flex items-center justify-between text-xs font-medium"><span>{STYLES[item].label}</span><span className={style === item ? "text-[#d7ff4f]" : "text-[#59646e]"}>{style === item ? "●" : "○"}</span></span>
-                        <span className="mt-1 block text-[10px] leading-4 text-[#74808a]">{STYLES[item].horizon}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label htmlFor="instrument" className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#74808a]">Bitget instrument</label>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-[190px_1fr]">
-                    <select id="instrument" value={symbol} onChange={(event) => handleInstrumentChange(event.target.value)} className="h-12 rounded-none border border-white/[0.1] bg-[#0b0e12] px-3 text-sm outline-none focus:border-[#d7ff4f]">
-                      {instruments.map((item) => <option key={item.native} value={item.native}>{item.rToken} · {item.name}</option>)}
-                    </select>
-                    <div className="flex h-12 items-center justify-between border border-white/[0.08] bg-[#0b0e12] px-4">
-                      <div><div className="font-mono text-[10px] uppercase text-[#59646e]">Underlying</div><div className="mt-1 text-xs">{selected?.native ?? symbol} · {selected?.name ?? "Selected asset"}</div></div>
-                      <div className="text-right"><div className="font-mono text-[10px] uppercase text-[#59646e]">Venue</div><div className="mt-1 text-xs text-[#d7ff4f]">Bitget spot</div></div>
-                    </div>
-                  </div>
-                  <label htmlFor="question" className="mt-6 block font-mono text-[10px] uppercase tracking-[0.18em] text-[#74808a]">Research question</label>
-                  <textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} rows={5} className="mt-3 w-full resize-none border border-white/[0.1] bg-[#0b0e12] p-4 text-sm leading-6 outline-none placeholder:text-[#4f5962] focus:border-[#d7ff4f]" placeholder="What should the desk stress-test?" />
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-[11px] text-[#59646e]">Ask about a catalyst, venue gap, regime, or historical precedent.</div>
-                    <button disabled={busy || question.trim().length < 8} className="flex items-center gap-5 bg-[#d7ff4f] px-5 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#0a0d0b] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40">
-                      {busy ? "Running desk" : "Run research"} <span>↗</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </section>
-
-          <aside className="border border-white/[0.09] bg-[#0d1115]">
-            <div className="border-b border-white/[0.08] px-5 py-4">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#9cabb7]">Evidence pipeline</div>
-              <div className="mt-2 text-xs text-[#59646e]">{meta ? `${meta.native} · ${meta.name}` : "Waiting for a research question"}</div>
-            </div>
-            <div className="p-3">
-              {PILLARS.map((pillar, index) => <PipelineRow key={pillar.id} index={index} pillar={pillar} status={statuses[pillar.id]} />)}
-            </div>
-            <div className="mx-4 mb-4 border-t border-white/[0.08] pt-4 text-[11px] leading-5 text-[#59646e]">
-              <span className="text-[#d7ff4f]">Method:</span> Bitget venue context is kept separate from the underlying cash tape. Missing sources are shown as caveats, never filled in.
-            </div>
-          </aside>
-        </div>
-
-        {error && <div className="mt-6 border border-[#f07867]/40 bg-[#f07867]/[0.08] px-4 py-3 text-xs text-[#ffb1a6]">{error}</div>}
-        {briefing && <ResearchMemo briefing={briefing} style={style} pillarData={pillarData} decisionNote={decisionNote} onDecisionNoteChange={setDecisionNote} />}
-      </div>
-    </main>
+      {/* Main Container Rendering Either Page 1 (Intake) or Page 2 (Results) */}
+      <main className="px-5 sm:px-8">
+        {view === "intake" ? (
+          <IntakeView
+            style={style}
+            onStyleChange={handleStyleChange}
+            symbol={symbol}
+            onInstrumentChange={handleInstrumentChange}
+            instruments={instruments}
+            selectedInstrument={selected}
+            question={question}
+            onQuestionChange={setQuestion}
+            busy={busy}
+            onSubmit={runResearch}
+            error={error}
+            statuses={statuses}
+            hasPreviousBriefing={Boolean(briefing)}
+            onViewPreviousResults={() => setView("results")}
+          />
+        ) : briefing ? (
+          <ResultsView
+            briefing={briefing}
+            style={style}
+            onStyleChange={handleStyleChange}
+            pillarData={pillarData}
+            decisionNote={decisionNote}
+            onDecisionNoteChange={setDecisionNote}
+            onBackToIntake={() => setView("intake")}
+            symbol={symbol}
+            meta={meta}
+            statuses={statuses}
+          />
+        ) : (
+          // Fallback if results view is entered without a briefing
+          <IntakeView
+            style={style}
+            onStyleChange={handleStyleChange}
+            symbol={symbol}
+            onInstrumentChange={handleInstrumentChange}
+            instruments={instruments}
+            selectedInstrument={selected}
+            question={question}
+            onQuestionChange={setQuestion}
+            busy={busy}
+            onSubmit={runResearch}
+            error={error}
+            statuses={statuses}
+            hasPreviousBriefing={false}
+            onViewPreviousResults={() => {}}
+          />
+        )}
+      </main>
+    </div>
   );
-}
-
-function PipelineRow({ index, pillar, status }: { index: number; pillar: (typeof PILLARS)[number]; status: PillarStatus }) {
-  const color = status === "ready" ? "bg-[#d7ff4f]" : status === "degraded" ? "bg-[#e8a85c]" : status === "running" ? "bg-[#75b8ff]" : "bg-[#3b444d]";
-  return <div className="flex items-center gap-3 border-b border-white/[0.06] px-2 py-4 last:border-0">
-    <span className="font-mono text-[10px] text-[#4f5962]">0{index + 1}</span>
-    <span className={`h-1.5 w-1.5 rounded-full ${color} ${status === "running" ? "animate-pulse" : ""}`} />
-    <div className="min-w-0 flex-1"><div className="text-xs">{pillar.label}</div><div className="mt-0.5 text-[10px] text-[#59646e]">{pillar.short}</div></div>
-    <span className="font-mono text-[9px] uppercase tracking-[0.1em] text-[#59646e]">{status === "idle" ? "queued" : status === "running" ? "live" : status}</span>
-  </div>;
-}
-
-function ResearchMemo({ briefing, style, pillarData, decisionNote, onDecisionNoteChange }: { briefing: Briefing; style: TradingStyle; pillarData: PillarBundle | null; decisionNote: string; onDecisionNoteChange: (value: string) => void }) {
-  return <article className="mt-10 border border-white/[0.12] bg-[#eef1ed] text-[#141918]">
-    <header className="border-b border-[#141918]/15 px-5 py-6 sm:px-8">
-      <div className="flex flex-wrap items-start justify-between gap-6">
-        <div><div className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#55721a]">Research record · {briefing.model}</div><h2 className="mt-3 max-w-4xl text-3xl font-medium leading-tight tracking-[-0.05em] sm:text-5xl">{briefing.title}</h2></div>
-        <div className="min-w-[180px] text-right text-xs leading-5 text-[#59645e]"><div className="font-mono text-[10px] uppercase text-[#778078]">Frame</div>{STYLES[style].label}<br />{briefing.regime ?? "regime unavailable"}</div>
-      </div>
-    </header>
-    <MemoSection number="01" title="Evidence"><div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4">{briefing.evidence.map((item, index) => <EvidenceLine key={`${item.source}-${index}`} item={item} />)}</div><div className="space-y-4">{briefing.flags && <FlagsCard flags={briefing.flags} />}{pillarData?.marketStructure && <RmtCard market={pillarData.marketStructure} />}{pillarData?.news && <SocialSummary news={pillarData.news} />}</div></div></MemoSection>
-    <MemoSection number="02" title="Tension" shaded><div className="grid gap-3 md:grid-cols-2">{briefing.tension.map((item, index) => <div key={index} className="border border-[#141918]/12 bg-[#141918]/[0.035] p-4"><div className="grid gap-3 text-sm sm:grid-cols-2"><p>{item.left}</p><p className="text-[#55721a]">{item.right}</p></div><p className="mt-4 border-t border-[#141918]/10 pt-3 text-xs leading-5 text-[#59645e]">{item.whyItMatters}</p></div>)}</div></MemoSection>
-    <MemoSection number="03" title="Historical analog" shaded><p className="max-w-4xl text-sm leading-6">{briefing.historicalAnalog.setup}</p><div className="mt-6 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="border-b border-[#141918]/15 font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]"><tr><th className="pb-3">Ticker</th><th className="pb-3">Date</th><th className="pb-3">Similarity</th><th className="pb-3">Follow-through</th></tr></thead><tbody>{briefing.historicalAnalog.analogs.slice(0, 5).map((item, index) => <tr key={index} className="border-b border-[#141918]/[0.08]"><td className="py-3 font-medium">{item.ticker}</td><td className="py-3 text-[#59645e]">{item.date}</td><td className="py-3 text-[#59645e]">{item.similarity}</td><td className="py-3">{item.followed}</td></tr>)}</tbody></table></div><UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} /><AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} /><p className="mt-5 max-w-4xl text-xs leading-5 text-[#59645e]">{briefing.historicalAnalog.caveat}</p></MemoSection>
-    <MemoSection number="04" title="Considerations for the trader"><div className="grid gap-8 md:grid-cols-3"><ConsiderationList title="For this style" items={briefing.considerations.forStyle} /><ConsiderationList title="Invalidation" items={briefing.considerations.invalidation} /><ConsiderationList title="Questions to weigh" items={briefing.considerations.questions} /></div></MemoSection>
-    <section className="border-t border-[#141918]/15 bg-[#dfe6dc] px-5 py-6 sm:px-8"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#55721a]">Human decision record</div><h3 className="mt-2 text-xl tracking-[-0.03em]">What remains unresolved for you?</h3><p className="mt-2 text-xs text-[#59645e]">Stored in this browser only. This is reflection, not an execution control.</p></div><span className="font-mono text-[10px] uppercase text-[#778078]">No automated action</span></div><textarea value={decisionNote} onChange={(event) => onDecisionNoteChange(event.target.value)} rows={4} className="mt-5 w-full resize-none border border-[#141918]/15 bg-[#eef1ed] p-3 text-sm leading-6 outline-none focus:border-[#55721a]" placeholder="What are you waiting for? Which fact would change your mind?" /></section>
-  </article>;
-}
-
-function EvidenceLine({ item }: { item: Briefing["evidence"][number] }) {
-  return <div className="border-l-2 border-[#789b26] pl-4"><p className="text-sm leading-6">{item.claim}</p><p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-[#778078]">{item.source} · {item.pillar}</p></div>;
-}
-
-function FlagsCard({ flags }: { flags: StructureFlags }) {
-  return <div className="border border-[#141918]/15 p-4"><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">Separate evidence flags</div><div className="mt-3 space-y-2 text-xs">{[["Catalyst density", flags.catalystDensity], ["Regime alignment", flags.regimeAlignment], ["Community stability", flags.communityStability], ["Analog base", `n=${flags.analogQuality.n} · ${flags.analogQuality.clustered ? "clustered" : "scattered"}`]].map(([label, value]) => <div key={label} className="flex justify-between gap-3"><span className="text-[#778078]">{label}</span><span>{value}</span></div>)}</div>{flags.balanceSheet.length > 0 && <p className="mt-3 border-t border-[#141918]/10 pt-3 text-[11px] leading-5 text-[#59645e]">{flags.balanceSheet[0]}</p>}</div>;
-}
-
-function RmtCard({ market }: { market: MarketStructurePillar }) {
-  return <div className="border border-[#141918]/15 p-4"><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">RMT structure · {market.communityId ?? "unavailable"}</div><p className="mt-3 text-xs leading-5">Market-mode share {market.marketModeStrength !== undefined ? `${(market.marketModeStrength * 100).toFixed(1)}%` : "n/a"} · {market.infoBeyondNoisePct?.toFixed(1) ?? "n/a"}% beyond noise · {market.universeSize} assets.</p><p className="mt-2 text-[11px] leading-5 text-[#59645e]">{market.stability ?? market.caveats.join(" ")}</p></div>;
-}
-
-function SocialSummary({ news }: { news: NewsPillar }) {
-  return <div className="border border-[#141918]/15 p-4"><div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">Discourse coverage</div><div className="mt-3 grid grid-cols-2 gap-3 text-xs"><div><span className="text-[#778078]">Headlines</span><br />{news.headlines.length}</div><div><span className="text-[#778078]">X posts</span><br />{news.social.x.length}</div><div><span className="text-[#778078]">YouTube</span><br />{news.social.youtube.length}</div><div><span className="text-[#778078]">Aggregate</span><br />{news.aggregateLean}</div></div>{news.caveats.length > 0 && <p className="mt-3 text-[11px] leading-5 text-[#59645e]">{news.caveats[0]}</p>}</div>;
-}
-
-function UnsignedRanges({ ranges }: { ranges: PillarBundle["analogs"]["ranges"] }) {
-  return <div className="mt-6"><div className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">Historical excess range · unsigned</div>{ranges.length ? <div className="grid gap-3 sm:grid-cols-3">{ranges.map((item) => <div key={item.horizon} className="border border-[#141918]/12 p-4"><div className="font-mono text-[10px] uppercase text-[#55721a]">{item.horizon} · n={item.n}</div><p className="mt-2 text-xs leading-5">p10 {item.p10.toFixed(2)}% · median {item.p50.toFixed(2)}% · p90 {item.p90.toFixed(2)}%</p></div>)}</div> : <p className="text-xs text-[#59645e]">Historical range unavailable for this run.</p>}<p className="mt-3 text-[11px] leading-5 text-[#59645e]">These bands describe what followed similar chart states versus a baseline. They are unsigned distributions, not a side or execution instruction.</p></div>;
-}
-
-function AnalogOverlay({ overlays }: { overlays: PillarBundle["analogs"]["overlay"] }) {
-  const width = 640;
-  const height = 180;
-  const series = overlays.filter((overlay) => overlay.points.some((point) => point.value !== null));
-  if (!series.length) return <p className="mt-6 text-xs text-[#59645e]">Normalized analog paths unavailable for this run.</p>;
-  const values = series.flatMap((overlay) => overlay.points.map((point) => point.value).filter((value): value is number => value !== null));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  return <div className="mt-6"><div className="mb-3 font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">Normalized analog paths</div><svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full border border-[#141918]/12 bg-[#eef1ed]" role="img" aria-label="Normalized historical analog paths">{series.map((overlay, index) => { const points = overlay.points.map((point, pointIndex) => point.value === null ? null : `${(pointIndex / Math.max(1, overlay.points.length - 1)) * width},${height - ((point.value - min) / span) * (height - 16) - 8}`).filter((point): point is string => point !== null).join(" "); return <polyline key={overlay.id} points={points} fill="none" stroke={overlay.kind === "current" ? "#55721a" : "#89958a"} strokeWidth={overlay.kind === "current" ? 2.5 : 1.2} opacity={overlay.kind === "current" ? 1 : Math.max(0.35, 0.85 - index * 0.08)} />; })}</svg><div className="mt-2 text-[11px] leading-5 text-[#59645e]">Each path is rebased to 100 at its matched state. The highlighted path is the current series; other lines are historical analogs.</div></div>;
-}
-
-function MemoSection({ number, title, children, shaded = false }: { number: string; title: string; children: React.ReactNode; shaded?: boolean }) {
-  return <section className={`border-t border-[#141918]/15 px-5 py-7 sm:px-8 ${shaded ? "bg-[#e6ebe3]" : "bg-[#eef1ed]"}`}><div className="mb-6 flex items-center gap-3"><span className="font-mono text-[10px] text-[#55721a]">{number}</span><h3 className="text-xl tracking-[-0.035em]">{title}</h3></div>{children}</section>;
-}
-
-function ConsiderationList({ title, items }: { title: string; items: string[] }) {
-  return <div><h4 className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#55721a]">{title}</h4><ul className="mt-3 space-y-3">{items.map((item, index) => <li key={index} className="flex gap-2 text-xs leading-5"><span className="text-[#789b26]">/</span><span>{item}</span></li>)}</ul></div>;
 }
