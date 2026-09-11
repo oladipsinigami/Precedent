@@ -7,6 +7,30 @@ import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
 
 function provider() {
+  if (process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY?.startsWith("sk-or-")) {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
+    const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o";
+    return {
+      label: `openrouter/${model.replace("openai/", "")}`,
+      model,
+      client: new OpenAI({
+        apiKey,
+        baseURL: "https://openrouter.ai/api/v1",
+        defaultHeaders: {
+          "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
+          "X-Title": "Precedent Research Desk",
+        },
+      }),
+    };
+  }
+  if (process.env.OPENAI_API_KEY) {
+    const model = process.env.OPENAI_MODEL || "gpt-4o";
+    return {
+      label: model,
+      model,
+      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+    };
+  }
   if (process.env.XAI_API_KEY) {
     return {
       label: "grok-4.5",
