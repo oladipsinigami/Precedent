@@ -71,6 +71,7 @@ export async function synthesize(opts: {
 
 HARD RULES
 - Never use the words BUY, SELL, LONG, SHORT.
+- Avoid soft directional language such as upside/downside bias, favors higher/lower prices, constructive/cautious setup, leaning a side, or history being supportive/unsupportive.
 - Never output a confidence percentage as a conclusion or headline.
 - Never issue a verdict, a side, or an order. End with questions the trader should weigh.
 - Historical analogs are base rates (what happened after similar charts), not predictions.

@@ -89,9 +89,13 @@ export async function bitgetTape(name: NameCard): Promise<Tick | undefined> {
         const row = Array.isArray(json.data) ? json.data[0] : json.data;
         const last = Number(row?.lastPr);
         if (!Number.isFinite(last)) throw new Error("no last price");
+        const rawChange = Number(row?.change24h ?? 0);
+        const changePct = Number.isFinite(rawChange)
+          ? (Math.abs(rawChange) <= 1 ? rawChange * 100 : rawChange)
+          : 0;
         return {
           last,
-          changePct: Number(row?.change24h ?? 0) * (Math.abs(Number(row?.change24h ?? 0)) < 1 ? 100 : 1),
+          changePct,
           symbol,
           venue,
           asOf: row?.ts ? new Date(Number(row.ts)).toISOString() : new Date().toISOString(),
