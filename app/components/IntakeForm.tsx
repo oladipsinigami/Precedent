@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent } from "react";
+import { TokenSearchCombobox } from "./TokenSearchCombobox";
 import { StyleSelector } from "./StyleSelector";
 import type { TradingStyle } from "@/lib/types";
 
@@ -37,6 +38,8 @@ export function IntakeForm({
     "Catalyst drift risk into next week's session",
   ];
 
+  const POPULAR_TOKENS = ["NVDA", "TSLA", "AAPL", "MSTU", "VOO", "SMH", "SGOV", "MSFT"];
+
   return (
     <form
       onSubmit={onSubmit}
@@ -62,56 +65,80 @@ export function IntakeForm({
         <StyleSelector currentStyle={style} onStyleChange={onStyleChange} disabled={busy} />
 
         {/* Instrument Selection & Metadata */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label
-              htmlFor="instrument-select"
-              className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]"
-            >
-              Target Instrument (Bitget rToken)
-            </label>
-            <div className="relative mt-2">
-              <select
-                id="instrument-select"
-                value={symbol}
-                disabled={busy}
-                onChange={(e) => onInstrumentChange(e.target.value)}
-                className="h-12 w-full appearance-none rounded-sm border border-white/[0.12] bg-[#090c10] px-4 pr-10 text-sm font-medium text-white transition focus:border-[#d4ff3f] focus:outline-none focus:ring-1 focus:ring-[#d4ff3f]/50 disabled:opacity-50"
-              >
-                {instruments.map((item) => (
-                  <option key={item.native} value={item.native}>
-                    {item.rToken} ({item.native}) · {item.name}
-                  </option>
-                ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-[#70808f]">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                </svg>
+        <div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="token-search-trigger"
+                  className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]"
+                >
+                  Target Instrument (Searchable Bitget rToken)
+                </label>
+                <span className="font-mono text-[10px] text-[#556472]">
+                  {instruments.length} Assets
+                </span>
+              </div>
+
+              <div className="mt-2">
+                <TokenSearchCombobox
+                  instruments={instruments}
+                  selectedSymbol={symbol}
+                  onSelectSymbol={onInstrumentChange}
+                  disabled={busy}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]">
+                Market Structure Context
+              </label>
+              <div className="mt-2 flex h-12 items-center justify-between rounded-sm border border-white/[0.08] bg-[#090c10]/70 px-4">
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium text-[#c4d0dc]">
+                    {selectedInstrument?.name ?? "Asset"} · {selectedInstrument?.sector ?? "Equity"}
+                  </div>
+                  <div className="font-mono text-[10px] text-[#617180]">
+                    Native: <span className="text-[#a1b0be]">{selectedInstrument?.native ?? symbol}</span>
+                    <span className="mx-1.5 text-white/10">|</span>
+                    rToken: <span className="text-[#d4ff3f]">{selectedInstrument?.rToken ?? `r${symbol}`}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 border-l border-white/[0.08] pl-4 text-right">
+                  <span className="font-mono text-[10px] uppercase text-[#617180]">Venue:</span>
+                  <span className="rounded bg-[#d4ff3f]/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#d4ff3f]">
+                    Bitget 7×24
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div>
-            <label className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]">
-              Market Structure Context
-            </label>
-            <div className="mt-2 flex h-12 items-center justify-between rounded-sm border border-white/[0.08] bg-[#090c10]/70 px-4">
-              <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-[#c4d0dc]">
-                  {selectedInstrument?.name ?? "Asset"} · {selectedInstrument?.sector ?? "Equity"}
-                </div>
-                <div className="font-mono text-[10px] text-[#617180]">
-                  Native: <span className="text-[#a1b0be]">{selectedInstrument?.native ?? symbol}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 border-l border-white/[0.08] pl-4 text-right">
-                <span className="font-mono text-[10px] uppercase text-[#617180]">Venue:</span>
-                <span className="rounded bg-[#d4ff3f]/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#d4ff3f]">
-                  Bitget 7×24
-                </span>
-              </div>
-            </div>
+          {/* Quick-Pick Popular Tickers */}
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-[#556472]">
+              Quick Pick:
+            </span>
+            {POPULAR_TOKENS.map((ticker) => {
+              const item = instruments.find((i) => i.native === ticker);
+              const isSelected = symbol.toUpperCase() === ticker.toUpperCase();
+              return (
+                <button
+                  key={ticker}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onInstrumentChange(ticker)}
+                  className={`rounded border px-2 py-0.5 font-mono text-[11px] transition ${
+                    isSelected
+                      ? "border-[#d4ff3f]/60 bg-[#d4ff3f]/15 font-semibold text-[#d4ff3f]"
+                      : "border-white/[0.07] bg-white/[0.02] text-[#8e9fae] hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+                  } disabled:opacity-40`}
+                >
+                  {item?.rToken ?? `r${ticker}`}
+                </button>
+              );
+            })}
           </div>
         </div>
 
