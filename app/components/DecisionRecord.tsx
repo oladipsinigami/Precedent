@@ -7,7 +7,7 @@ interface DecisionRecordProps {
 
 export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionRecordProps) {
   return (
-    <section className="border-t border-[#141918]/15 bg-[#e2e9de] px-6 py-8 sm:px-10 sm:py-10">
+    <section className="border-t border-[#141918]/15 bg-[#e2e9de] px-4 py-6 sm:px-10 sm:py-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -30,15 +30,15 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-5 sm:mt-6">
         <textarea
           value={decisionNote}
           onChange={(event) => onDecisionNoteChange(event.target.value)}
           rows={4}
-          className="w-full rounded-sm border border-[#141918]/20 bg-[#f7f4ee] p-4 text-sm leading-relaxed text-[#141918] placeholder:text-[#78887a] outline-none transition focus:border-[#486326] focus:ring-1 focus:ring-[#486326]/40"
+          className="w-full rounded-sm border border-[#141918]/20 bg-[#f7f4ee] p-3.5 sm:p-4 text-sm leading-relaxed text-[#141918] placeholder:text-[#78887a] outline-none transition focus:border-[#486326] focus:ring-1 focus:ring-[#486326]/40"
           placeholder="What are you waiting for? Which catalyst or price boundary would change your mind?"
         />
-        <div className="mt-2 flex items-center justify-between font-mono text-[10px] text-[#657567]">
+        <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between font-mono text-[10px] text-[#657567]">
           <span>Prompt: Explicitly state what fact or invalidation level would cause you to step aside.</span>
           <span>{decisionNote.length} characters</span>
         </div>

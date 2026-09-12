@@ -195,7 +195,7 @@ export default function Home() {
       <Header onLoadDemo={loadDemo} />
 
       {/* Main Container Rendering Either Page 1 (Intake) or Page 2 (Results) */}
-      <main className="px-5 sm:px-8">
+      <main className="px-3.5 sm:px-6 md:px-8">
         {view === "intake" ? (
           <IntakeView
             style={style}

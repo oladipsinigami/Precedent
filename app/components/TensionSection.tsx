@@ -18,11 +18,11 @@ export function TensionSection({ tension }: TensionSectionProps) {
         </span>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-4 sm:gap-5 md:grid-cols-2">
         {tension.map((item, index) => (
           <div
             key={index}
-            className="flex flex-col justify-between rounded-sm border border-[#141918]/15 bg-[#fbf8f2] p-5 shadow-sm"
+            className="flex flex-col justify-between rounded-sm border border-[#141918]/15 bg-[#fbf8f2] p-4 sm:p-5 shadow-sm"
           >
             <div>
               <div className="flex items-center justify-between border-b border-[#141918]/[0.08] pb-2.5">

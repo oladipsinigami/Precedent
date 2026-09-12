@@ -11,9 +11,9 @@ interface EvidenceSectionProps {
 
 export function EvidenceSection({ evidence, flags, marketStructure, news }: EvidenceSectionProps) {
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
       {/* Left Column: Primary Evidence Claims */}
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[#4d6330]">
           Verified Claims & Empirical Sources ({evidence.length})
         </div>
@@ -21,10 +21,10 @@ export function EvidenceSection({ evidence, flags, marketStructure, news }: Evid
         {evidence.map((item, index) => (
           <div
             key={`${item.source}-${index}`}
-            className="group relative rounded-sm border-l-2 border-[#486326] bg-[#121814]/[0.03] p-4 transition hover:bg-[#121814]/[0.05]"
+            className="group relative rounded-sm border-l-2 border-[#486326] bg-[#121814]/[0.03] p-3.5 sm:p-4 transition hover:bg-[#121814]/[0.05]"
           >
             <p className="text-sm leading-relaxed text-[#1a211c] font-normal">{item.claim}</p>
-            <div className="mt-2.5 flex items-center gap-2 font-mono text-[10px] tracking-wider text-[#637265]">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 font-mono text-[10px] tracking-wider text-[#637265]">
               <span className="rounded bg-[#486326]/10 px-2 py-0.5 font-semibold text-[#486326]">
                 {item.pillar}
               </span>
@@ -36,7 +36,7 @@ export function EvidenceSection({ evidence, flags, marketStructure, news }: Evid
       </div>
 
       {/* Right Column: Institutional Structural Diagnostics Cards */}
-      <div className="space-y-5">
+      <div className="space-y-4 sm:space-y-5">
         {flags && <FlagsCard flags={flags} />}
         {marketStructure && <RmtCard market={marketStructure} />}
         {news && <SocialSummary news={news} />}
@@ -53,7 +53,7 @@ export function FlagsCard({ flags }: { flags: StructureFlags }) {
   };
 
   return (
-    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-5 shadow-sm">
+    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
           Structural Flags
@@ -105,7 +105,7 @@ export function RmtCard({ market }: { market: MarketStructurePillar }) {
   const modePct = market.marketModeStrength !== undefined ? market.marketModeStrength * 100 : null;
 
   return (
-    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-5 shadow-sm">
+    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
           RMT Eigenstructure
@@ -157,7 +157,7 @@ export function RmtCard({ market }: { market: MarketStructurePillar }) {
 
 export function SocialSummary({ news }: { news: NewsPillar }) {
   return (
-    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-5 shadow-sm">
+    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
           Discourse Density

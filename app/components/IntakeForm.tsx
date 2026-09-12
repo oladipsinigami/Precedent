@@ -46,21 +46,21 @@ export function IntakeForm({
       className="relative overflow-hidden rounded-sm border border-white/[0.09] bg-[#0c1016]/90 shadow-[0_20px_50px_rgba(0,0,0,0.6)] backdrop-blur-xl"
     >
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-white/[0.02] px-6 py-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-white/[0.02] px-4 py-3 sm:px-6 sm:py-4">
         <div className="flex items-center gap-2.5">
-          <span className="h-2 w-2 rounded-full bg-[#d4ff3f]/80" />
-          <span className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[#a1b0be]">
+          <span className="h-2 w-2 rounded-full bg-[#d4ff3f]/80 shrink-0" />
+          <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#a1b0be]">
             Research Intake & Frame
           </span>
         </div>
-        <div className="flex items-center gap-3 font-mono text-[10px] text-[#617180]">
+        <div className="flex items-center gap-2 sm:gap-3 font-mono text-[10px] text-[#617180]">
           <span className="hidden sm:inline">5-Pillar Parallel Pipeline</span>
-          <span className="text-white/20">|</span>
-          <span>POST /api/research · SSE</span>
+          <span className="hidden sm:inline text-white/20">|</span>
+          <span className="truncate">POST /api/research · SSE</span>
         </div>
       </div>
 
-      <div className="space-y-6 p-6 sm:p-8">
+      <div className="space-y-5 p-4 sm:space-y-6 sm:p-8">
         {/* Operating Frame (Style) */}
         <StyleSelector currentStyle={style} onStyleChange={onStyleChange} disabled={busy} />
 
@@ -73,7 +73,7 @@ export function IntakeForm({
                   htmlFor="token-search-trigger"
                   className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]"
                 >
-                  Target Instrument (Searchable Bitget rToken)
+                  Target Instrument (Bitget rToken)
                 </label>
                 <span className="font-mono text-[10px] text-[#556472]">
                   {instruments.length} Assets
@@ -94,19 +94,19 @@ export function IntakeForm({
               <label className="block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]">
                 Market Structure Context
               </label>
-              <div className="mt-2 flex h-12 items-center justify-between rounded-sm border border-white/[0.08] bg-[#090c10]/70 px-4">
-                <div className="min-w-0">
+              <div className="mt-2 flex min-h-[48px] items-center justify-between rounded-sm border border-white/[0.08] bg-[#090c10]/70 px-3 py-2 sm:px-4">
+                <div className="min-w-0 pr-2">
                   <div className="truncate text-xs font-medium text-[#c4d0dc]">
                     {selectedInstrument?.name ?? "Asset"} · {selectedInstrument?.sector ?? "Equity"}
                   </div>
-                  <div className="font-mono text-[10px] text-[#617180]">
+                  <div className="font-mono text-[10px] text-[#617180] truncate">
                     Native: <span className="text-[#a1b0be]">{selectedInstrument?.native ?? symbol}</span>
                     <span className="mx-1.5 text-white/10">|</span>
                     rToken: <span className="text-[#d4ff3f]">{selectedInstrument?.rToken ?? `r${symbol}`}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 border-l border-white/[0.08] pl-4 text-right">
-                  <span className="font-mono text-[10px] uppercase text-[#617180]">Venue:</span>
+                <div className="flex items-center gap-2 border-l border-white/[0.08] pl-3 sm:pl-4 text-right shrink-0">
+                  <span className="hidden sm:inline font-mono text-[10px] uppercase text-[#617180]">Venue:</span>
                   <span className="rounded bg-[#d4ff3f]/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#d4ff3f]">
                     Bitget 7×24
                   </span>
@@ -116,7 +116,7 @@ export function IntakeForm({
           </div>
 
           {/* Quick-Pick Popular Tickers */}
-          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-[10px] uppercase tracking-wider text-[#556472]">
               Quick Pick:
             </span>
@@ -129,7 +129,7 @@ export function IntakeForm({
                   type="button"
                   disabled={busy}
                   onClick={() => onInstrumentChange(ticker)}
-                  className={`rounded border px-2 py-0.5 font-mono text-[11px] transition ${
+                  className={`flex min-h-[36px] sm:min-h-0 items-center justify-center rounded border px-2.5 py-1 sm:py-0.5 font-mono text-[11px] transition ${
                     isSelected
                       ? "border-[#d4ff3f]/60 bg-[#d4ff3f]/15 font-semibold text-[#d4ff3f]"
                       : "border-white/[0.07] bg-white/[0.02] text-[#8e9fae] hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
@@ -163,7 +163,7 @@ export function IntakeForm({
             disabled={busy}
             onChange={(e) => onQuestionChange(e.target.value)}
             placeholder="Ask about a catalyst, venue gap, regime alignment, or historical analog precedent..."
-            className="mt-2 w-full rounded-sm border border-white/[0.12] bg-[#090c10] p-4 text-sm leading-relaxed text-[#e7ebef] placeholder:text-[#45505b] transition focus:border-[#d4ff3f] focus:outline-none focus:ring-1 focus:ring-[#d4ff3f]/50 disabled:opacity-50"
+            className="mt-2 w-full rounded-sm border border-white/[0.12] bg-[#090c10] p-3.5 sm:p-4 text-sm leading-relaxed text-[#e7ebef] placeholder:text-[#45505b] transition focus:border-[#d4ff3f] focus:outline-none focus:ring-1 focus:ring-[#d4ff3f]/50 disabled:opacity-50"
           />
 
           {/* Quick prompt suggestions */}
@@ -175,7 +175,7 @@ export function IntakeForm({
                 type="button"
                 disabled={busy}
                 onClick={() => onQuestionChange(prompt)}
-                className="rounded border border-white/[0.06] bg-white/[0.02] px-2.5 py-1 text-[11px] text-[#8a9aa8] transition hover:border-white/20 hover:bg-white/[0.05] hover:text-[#d4ff3f]"
+                className="rounded border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 text-[11px] text-[#8a9aa8] transition hover:border-white/20 hover:bg-white/[0.05] hover:text-[#d4ff3f] text-left"
               >
                 {prompt}
               </button>
@@ -184,7 +184,7 @@ export function IntakeForm({
         </div>
 
         {/* Submit & Guidance Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-white/[0.08] pt-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/[0.08] pt-5">
           <div className="max-w-md text-xs leading-relaxed text-[#687786]">
             The desk synthesizes fundamentals, venue tape, discourse, historical analogs, and RMT eigenstructure without taking a directional side.
           </div>
@@ -192,7 +192,7 @@ export function IntakeForm({
           <button
             type="submit"
             disabled={busy || question.trim().length < 8}
-            className="group relative flex items-center gap-3 overflow-hidden rounded-sm bg-[#d4ff3f] px-6 py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#080b0e] transition-all hover:bg-white hover:shadow-[0_0_24px_rgba(212,255,63,0.4)] disabled:cursor-not-allowed disabled:opacity-40"
+            className="group relative flex w-full sm:w-auto items-center justify-center gap-3 overflow-hidden rounded-sm bg-[#d4ff3f] px-6 py-3.5 sm:py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#080b0e] transition-all hover:bg-white hover:shadow-[0_0_24px_rgba(212,255,63,0.4)] disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px]"
           >
             {busy ? (
               <>

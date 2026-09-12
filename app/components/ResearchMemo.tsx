@@ -26,13 +26,13 @@ export function ResearchMemo({
   onDecisionNoteChange,
 }: ResearchMemoProps) {
   return (
-    <article className="mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-[#f5f0e6] text-[#141918] shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]">
+    <article className="mt-6 sm:mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-[#f5f0e6] text-[#141918] shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]">
       {/* Editorial Document Header */}
-      <header className="border-b border-[#141918]/15 bg-[#ece6dd] px-6 py-8 sm:px-10 sm:py-10">
-        <div className="flex flex-wrap items-start justify-between gap-6">
+      <header className="border-b border-[#141918]/15 bg-[#ece6dd] px-4 py-6 sm:px-10 sm:py-10">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div className="max-w-4xl">
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-xs font-semibold uppercase tracking-[0.22em] text-[#425828]">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.22em] text-[#425828]">
                 Institutional Research Record
               </span>
               <span className="text-[#88998a]">·</span>
@@ -41,30 +41,34 @@ export function ResearchMemo({
               </span>
             </div>
 
-            <h2 className="mt-4 font-display text-3xl font-medium leading-[1.15] tracking-[-0.04em] text-[#111513] sm:text-5xl">
+            <h2 className="mt-3 sm:mt-4 font-display text-2xl font-medium leading-[1.16] tracking-[-0.03em] text-[#111513] sm:text-4xl md:text-5xl">
               {briefing.title}
             </h2>
 
             {briefing.styleNote && (
-              <p className="mt-3.5 text-xs leading-relaxed text-[#566657] font-medium max-w-2xl">
+              <p className="mt-2.5 sm:mt-3.5 text-xs leading-relaxed text-[#566657] font-medium max-w-2xl">
                 {briefing.styleNote}
               </p>
             )}
           </div>
 
-          <div className="min-w-[200px] rounded border border-[#141918]/12 bg-[#f8f5ee] p-4 text-right shadow-sm">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-[#738375]">
-              Active Frame
-            </div>
-            <div className="mt-1 font-semibold text-sm text-[#18201a]">
-              {STYLES[style].label}
-            </div>
-            <div className="mt-2 border-t border-[#141918]/[0.08] pt-2">
-              <div className="font-mono text-[9px] uppercase tracking-wider text-[#738375]">
-                Detected Regime
+          <div className="w-full sm:w-auto sm:min-w-[200px] rounded border border-[#141918]/12 bg-[#f8f5ee] p-3.5 sm:p-4 text-left sm:text-right shadow-sm shrink-0">
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-[#738375]">
+                  Active Frame
+                </div>
+                <div className="mt-0.5 sm:mt-1 font-semibold text-sm text-[#18201a]">
+                  {STYLES[style].label}
+                </div>
               </div>
-              <div className="font-mono text-xs font-semibold text-[#425828]">
-                {briefing.regime ?? "Normal / Unclassified"}
+              <div className="sm:mt-2 sm:border-t sm:border-[#141918]/[0.08] sm:pt-2 text-right">
+                <div className="font-mono text-[9px] uppercase tracking-wider text-[#738375]">
+                  Detected Regime
+                </div>
+                <div className="font-mono text-xs font-semibold text-[#425828]">
+                  {briefing.regime ?? "Normal / Unclassified"}
+                </div>
               </div>
             </div>
           </div>
@@ -121,11 +125,11 @@ export function ResearchMemo({
 
           {/* Base Rates Briefing Cards if present */}
           {briefing.historicalAnalog.baseRates?.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               {briefing.historicalAnalog.baseRates.map((item) => (
                 <div
                   key={item.horizon}
-                  className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 shadow-sm"
+                  className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-3.5 sm:p-4 shadow-sm"
                 >
                   <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
                     {item.horizon} · Sample n={item.n}

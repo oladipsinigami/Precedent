@@ -212,7 +212,7 @@ export function TokenSearchCombobox({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-[320px] sm:min-w-[420px] max-w-[560px] overflow-hidden rounded-sm border border-white/[0.14] bg-[#0a0e14]/98 shadow-[0_24px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl transition-all animate-in fade-in zoom-in-95 duration-100"
+          className="absolute left-0 top-full z-50 mt-1.5 w-full min-w-0 max-w-full sm:min-w-[420px] sm:max-w-[560px] overflow-hidden rounded-sm border border-white/[0.14] bg-[#0a0e14]/98 shadow-[0_24px_60px_rgba(0,0,0,0.9)] backdrop-blur-2xl transition-all animate-in fade-in zoom-in-95 duration-100"
         >
           {/* Popover Header with Instant Search Input */}
           <div className="border-b border-white/[0.08] bg-white/[0.02] p-3">
@@ -386,8 +386,8 @@ export function TokenSearchCombobox({
 
           {/* Footer note */}
           <div className="flex items-center justify-between border-t border-white/[0.08] bg-[#070a0e] px-3 py-2 font-mono text-[10px] text-[#556472]">
-            <span>Venue: Bitget 7×24 rToken Synthetics</span>
-            <span>ESC to close</span>
+            <span className="truncate pr-2">Venue: Bitget 7×24 rTokens</span>
+            <span className="shrink-0">ESC to close</span>
           </div>
         </div>
       )}

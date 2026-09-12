@@ -59,10 +59,10 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   }
 
   return (
-    <div className="mt-8 rounded-sm border border-[#141918]/15 bg-[#fbf8f2] p-5 sm:p-6 shadow-sm">
+    <div className="mt-6 sm:mt-8 rounded-sm border border-[#141918]/15 bg-[#fbf8f2] p-4 sm:p-6 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#141918]/10 pb-3">
         <div>
-          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#486326]">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#486326]">
             Normalized Analog Paths · Trajectory Overlay
           </div>
           <div className="mt-0.5 text-xs text-[#637265]">
@@ -71,7 +71,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
         </div>
 
         {/* Chart Legend */}
-        <div className="flex items-center gap-4 font-mono text-[10px] uppercase text-[#637265]">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 font-mono text-[10px] uppercase text-[#637265]">
           <div className="flex items-center gap-1.5">
             <span className="h-1 w-4 rounded-full bg-[#3d5c22]" />
             <span className="font-semibold text-[#253816]">Current Target</span>

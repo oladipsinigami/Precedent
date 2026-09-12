@@ -8,9 +8,9 @@ interface ConsiderationsSectionProps {
 
 export function ConsiderationsSection({ considerations }: ConsiderationsSectionProps) {
   return (
-    <div className="grid gap-8 md:grid-cols-3">
+    <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
       {/* Column 1: Operating Frame Considerations */}
-      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-5 shadow-sm">
+      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#486326]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">
@@ -28,7 +28,7 @@ export function ConsiderationsSection({ considerations }: ConsiderationsSectionP
       </div>
 
       {/* Column 2: Invalidation Criteria */}
-      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-5 shadow-sm">
+      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#a3442e]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#8f3622]">
@@ -46,7 +46,7 @@ export function ConsiderationsSection({ considerations }: ConsiderationsSectionP
       </div>
 
       {/* Column 3: Deliberative Questions */}
-      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-5 shadow-sm">
+      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#3d6075]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#3d6075]">
