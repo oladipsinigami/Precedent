@@ -87,7 +87,9 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
         { label: "Yahoo Finance search/news" },
         { label: "Yahoo Finance RSS" },
         { label: "Google News RSS" },
-        ...(xCount ? [{ label: "X discourse" }] : [{ label: "X discourse (unavailable this run)" }]),
+        ...(xCount
+          ? [{ label: process.env.SORSA_API_KEY && !xResult.caveat?.startsWith("Sorsa unavailable") ? "Sorsa X discourse" : "X discourse" }]
+          : [{ label: "X discourse (unavailable this run)" }]),
         ...(ytResult.items.length ? [{ label: "YouTube discourse" }] : [{ label: "YouTube discourse (unavailable this run)" }]),
       ],
     };
