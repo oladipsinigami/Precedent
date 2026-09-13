@@ -6,6 +6,17 @@ interface DecisionRecordProps {
 }
 
 export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionRecordProps) {
+  const prompts = [
+    "What would make me step aside or wait?",
+    "What price level or news would change my mind?",
+    "Am I comfortable holding if the price drops 3–4% in the next few days?",
+    "Is the overnight Bitget price more important to me than the regular daytime stock price?",
+  ];
+
+  function addPrompt(prompt: string) {
+    onDecisionNoteChange(decisionNote ? `${decisionNote}\n\n${prompt}\n` : `${prompt}\n`);
+  }
+
   return (
     <section className="border-t border-[#141918]/15 bg-[#e2e9de] px-4 py-6 sm:px-10 sm:py-10">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -31,6 +42,21 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
       </div>
 
       <div className="mt-5 sm:mt-6">
+        <div className="mb-3">
+          <p className="text-xs font-semibold text-[#3f4c41]">Start with one question:</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {prompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => addPrompt(prompt)}
+                className="rounded border border-[#141918]/12 bg-white/45 px-3 py-2 text-left text-xs leading-relaxed text-[#3f4c41] transition hover:border-[#486326]/45 hover:bg-white/70"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
         <textarea
           value={decisionNote}
           onChange={(event) => onDecisionNoteChange(event.target.value)}

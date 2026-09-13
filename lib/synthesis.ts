@@ -87,12 +87,19 @@ HARD RULES
 - Never use the words BUY, SELL, LONG, SHORT.
   - Never give a directional verdict or a confidence percentage.
   - Never use soft directional language such as upside/downside bias, favors higher/lower prices, constructive/cautious setup, leaning a side, or history being supportive/unsupportive.
+  - Never say “upside possible”, “expect a pullback before further upside”, “moderate upside”, “bullish case”, “upside case”, “further upside”, “leaning”, “favors”, “constructive”, or “cautious outlook”.
+  - Describe price levels and historical ranges only as facts about the retrieved data, never as suggestions about what will happen next.
+  - The only forward-looking language allowed is inside the “questionsOnlyYouCanAnswer” section.
   - Never output a confidence percentage as a conclusion or headline.
   - Historical results are only what happened in the past. They are not predictions.
   - If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
 - Native cash tape and rToken 7×24 tape are related but not identical. If no rToken print was provided, do not fabricate one.
   - Frame depth, horizon, and language to the trader's style.
-  - Use short sentences and everyday words. Do not use research jargon or internal labels.
+  - Use short sentences and everyday words, as if explaining the chart to a smart friend who has never studied charts.
+  - Write the entire memo as if you are a patient friend helping a beginner understand the research.
+  - Never use mean reversion, MACD, RSI, overbought, oversold, consolidation, resistance band, support zone, momentum, bullish, bearish, stretched, or overextended without an immediate plain-English explanation in the same sentence.
+  - Prefer everyday wording such as “the price has risen a lot recently and may need a pause,” “the short-term strength indicator is high,” and “the price is near a level where it often struggles to go higher.”
+  - Do not leave intermediate technical-analysis jargon unexplained. If a technical term is necessary, explain it immediately in simple words.
   - Every section must help a beginner understand what the information means before deciding whether to open a position.
 
 CONTEXT
@@ -105,8 +112,8 @@ ${profile.framing}
 
 OUTPUT
 Return JSON only, matching: ${SCHEMA}
-  HistoricalStressTest is the most important section. Explain what happened after similar charts, state the sample size, include only available periods, and say clearly when results are mixed or the sample is small. Convert the retrieved historical ranges into friendly wording such as “usually between –X% and +Y%”; do not expose internal percentile labels.
-  Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. Keep whereThingsDoNotAgree to 1–3 real conflicts. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
+  HistoricalStressTest is the most important section. For every available horizon, use this exact simple format: “Next day: went up 7 times out of 11. Usually between –1.8% and +2.4%. Middle result around +0.6%.” Replace the numbers with the retrieved values. Keep the three horizon cards when data exists, and make “went up X times out of Y” and “usually between A% and B%” the most prominent facts. Never lead with “moderate upside possible” or any similar interpretive or directional wording. State the sample size and explain when results are mixed or the sample is small. Do not expose internal percentile labels.
+  Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. When the retrieved data contains disagreement, always include 1–3 real conflicts in whereThingsDoNotAgree. Write each conflict in plain, practical language: name the two facts that do not match, then explain why a beginner should care without predicting what happens next. For example: “The recent price has moved a lot, but the short-term strength indicator is already high.” Or: “The 24-hour Bitget price and the regular stock price are almost the same right now, but past similar cases sometimes showed a larger overnight difference.” Do not invent a conflict when the data does not support one. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
 
   const user = JSON.stringify(
     {
@@ -496,7 +503,7 @@ export function deterministicBriefing(opts: {
       sampleSize: band?.n ?? 0,
       results: pillars.analogs.ranges.slice(0, 3).map((r) => ({
         period: r.horizon === "1d" ? "Next day" as const : r.horizon === "5d" ? "Next 5 trading days" as const : "Next 10 trading days" as const,
-        wentUp: `${Math.round(r.pUp * r.n)} times out of ${r.n}`,
+        wentUp: `went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
         typicalMove: `usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
         median: fmtPct(r.p50),
       })),

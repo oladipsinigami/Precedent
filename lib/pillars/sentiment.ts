@@ -4,16 +4,18 @@ import { fetchXSentiment } from "../providers/x-sentiment";
 import { yahooNews } from "../providers/yahoo";
 import { fetchYouTubeSentiment } from "../providers/youtube-sentiment";
 import { serpNews } from "../providers/serpapi";
+import { serperNews } from "../providers/serper";
 import type { Lean, NewsPillar } from "../types";
 import type { NameCard } from "../universe";
 
 export async function runNews(name: NameCard): Promise<NewsPillar> {
   try {
-    const [yf, rss, gNews, serp, macro, xResult, ytResult] = await Promise.all([
+    const [yf, rss, gNews, serp, serper, macro, xResult, ytResult] = await Promise.all([
       yahooNews(name.native).catch(() => []),
       yahooRss(name.native).catch(() => []),
       googleNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       serpNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
+      serperNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       googleNews("Federal Reserve OR CPI OR tariffs US stocks").catch(() => []),
       fetchXSentiment({ native: name.native, name: name.name, rToken: name.rToken, bitgetSymbols: name.bitgetSymbols }),
       fetchYouTubeSentiment(
@@ -27,7 +29,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
     ]);
 
     const seen = new Set<string>();
-    const merged = [...serp, ...yf, ...rss, ...gNews].filter((h) => {
+    const merged = [...serper, ...serp, ...yf, ...rss, ...gNews].filter((h) => {
       const key = h.title.toLowerCase().slice(0, 80);
       if (seen.has(key)) return false;
       seen.add(key);
@@ -47,6 +49,11 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       caveats.push("SerpAPI Google News unavailable: SERPAPI_API_KEY is not configured.");
     } else if (!serp.length) {
       caveats.push("SerpAPI Google News returned no usable headlines or was unreachable this run.");
+    }
+    if (!process.env.SERPER_API_KEY) {
+      caveats.push("Serper news unavailable: SERPER_API_KEY is not configured.");
+    } else if (!serper.length) {
+      caveats.push("Serper news returned no usable headlines or was unreachable this run.");
     }
 
     const allLeans: Lean[] = [
@@ -83,6 +90,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       caveats,
       notes,
       sources: [
+        ...(serper.length ? [{ label: "Serper Google News" }] : []),
         ...(serp.length ? [{ label: "SerpAPI Google News" }] : []),
         { label: "Yahoo Finance search/news" },
         { label: "Yahoo Finance RSS" },
