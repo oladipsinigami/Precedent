@@ -53,29 +53,18 @@ function provider() {
 
 const SCHEMA = `{
   "title": string,
-  "styleNote": string,
-  "regime": "trending-up"|"range-bound"|"trending-down"|"high-systemic"|"normal"|"low-systemic",
-  "flags": {
-    "catalystDensity": "high"|"moderate"|"low",
-    "balanceSheet": string[],
-    "regimeAlignment": "aligned"|"misaligned",
-    "communityStability": "stable"|"unstable",
-    "cleanedCorrRankPct": number | null,
-    "analogQuality": { "n": number, "clustered": boolean }
+  "whatWeDid": string,
+  "historicalStressTest": {
+    "summary": string,
+    "sampleSize": number,
+    "results": [{ "period": "Next day"|"Next 5 trading days"|"Next 10 trading days", "wentUp": string, "typicalMove": string, "median": string }],
+    "examples": [{ "when": string, "whatHappened": string }],
+    "importantNote": string
   },
-  "evidence": [{ "claim": string, "source": string, "pillar": "fundamentals"|"technicals"|"news"|"analogs"|"marketStructure" }],
-  "tension": [{ "left": string, "right": string, "whyItMatters": string }],
-  "historicalAnalog": {
-    "setup": string,
-    "analogs": [{ "ticker": string, "date": string, "similarity": string, "followed": string }],
-    "baseRates": [{ "horizon": string, "range": string, "n": number, "note": string }],
-    "caveat": string
-  },
-  "considerations": {
-    "forStyle": string[],
-    "invalidation": string[],
-    "questions": string[]
-  }
+  "otherThingsWeChecked": string[],
+  "whereThingsDoNotAgree": [{ "conflict": string, "whyItMatters": string }],
+  "simpleTakeAways": string[],
+  "questionsOnlyYouCanAnswer": string[]
 }`;
 
 export async function synthesize(opts: {
@@ -91,22 +80,23 @@ export async function synthesize(opts: {
   if (!llm) return guardBriefing(fallback);
 
   const profile = STYLES[opts.style];
-  const system = `You are Precedent, a research workbench for tokenized US stocks (rToken). You synthesize the five pillars into one briefing. The human makes the trade. You never do.
+  const system = `You are Precedent, a friendly research helper for tokenized US stocks on Bitget. You explain the retrieved facts to a complete beginner. The human makes the decision. You never do.
 
 HARD RULES
 - Never use the words BUY, SELL, LONG, SHORT.
-- Avoid soft directional language such as upside/downside bias, favors higher/lower prices, constructive/cautious setup, leaning a side, or history being supportive/unsupportive.
-- Never output a confidence percentage as a conclusion or headline.
-- Never issue a verdict, a side, or an order. End with questions the trader should weigh.
-- Historical analogs are base rates (what happened after similar charts), not predictions.
-- If a pillar is missing or degraded, say so. Do not invent filings, quotes, analog dates, social posts, or RMT communities.
+  - Never give a directional verdict or a confidence percentage.
+  - Never use soft directional language such as upside/downside bias, favors higher/lower prices, constructive/cautious setup, leaning a side, or history being supportive/unsupportive.
+  - Never output a confidence percentage as a conclusion or headline.
+  - Historical results are only what happened in the past. They are not predictions.
+  - If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
 - Native cash tape and rToken 7×24 tape are related but not identical. If no rToken print was provided, do not fabricate one.
-- Structure & Fundamentals flags are separate labeled facts. Never blend them into one score, rank, or verdict.
-- Frame depth, horizon, and language to the trader's style.
+  - Frame depth, horizon, and language to the trader's style.
+  - Use short sentences and everyday words. Do not use research jargon or internal labels.
+  - Every section must help a beginner understand what the information means before deciding whether to open a position.
 
 CONTEXT
-- Detected regime for this run: ${opts.regime}. Use it to frame the memo and to condition the analog read. It is a structural description, not a call.
-- Computed flags are provided; report each flag as its own evidence line. Do not merge them.
+  - The selected style is ${profile.label}, with a ${profile.horizon} horizon.
+  - The detected market label is internal context only. Do not show its internal name to the beginner.
 
 STYLE
 ${profile.label}. Horizon: ${profile.horizon}
@@ -114,10 +104,8 @@ ${profile.framing}
 
 OUTPUT
 Return JSON only, matching: ${SCHEMA}
-Evidence must cite the actual source names (SEC, Yahoo, Chart Library, Bitget, Google News, X discourse, YouTube discourse, RMT precompute snapshot).
-Tension must name real disagreements between pillars, including at least: news lean vs X lean (when both exist), raw technical signal vs cleaned RMT community structure, and any regime mismatch with recent history.
-Historical analog must use the closest analogs and the p10/p50/p90 bands provided, and note the regime/community conditioning.
-Considerations.questions must be actual questions, not disguised instructions.`;
+  HistoricalStressTest is the most important section. Explain what happened after similar charts, state the sample size, include only available periods, and say clearly when results are mixed or the sample is small. Convert the retrieved historical ranges into friendly wording such as “usually between –X% and +Y%”; do not expose internal percentile labels.
+  Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. Keep whereThingsDoNotAgree to 1–3 real conflicts. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
 
   const user = JSON.stringify(
     {
@@ -133,17 +121,84 @@ Considerations.questions must be actual questions, not disguised instructions.`;
 
   try {
     const text = await complete(llm.client, llm.model, system, user);
-    const parsed = JSON.parse(extractJson(text)) as Omit<Briefing, "model" | "sources">;
+    const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
+    const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
-      ...parsed,
-      regime: parsed.regime ?? opts.regime,
-      flags: parsed.flags ?? flags,
+      ...adapted,
       model: llm.label,
       sources: collectSources(opts.pillars),
     };
     return guardBriefing(normalizeBriefing(briefing, fallback));
   } catch {
     return guardBriefing({ ...fallback, model: `${llm.label} (fell back to deterministic synthesizer)` });
+  }
+
+  type RetailBriefing = {
+    title?: string;
+    whatWeDid?: string;
+    historicalStressTest?: {
+      summary?: string;
+      sampleSize?: number;
+      results?: { period: string; wentUp: string; typicalMove: string; median: string }[];
+      examples?: { when: string; whatHappened: string }[];
+      importantNote?: string;
+    };
+    otherThingsWeChecked?: string[];
+    whereThingsDoNotAgree?: { conflict: string; whyItMatters: string }[];
+    simpleTakeAways?: string[];
+    questionsOnlyYouCanAnswer?: string[];
+  };
+
+  function adaptRetailBriefing(
+    parsed: RetailBriefing,
+    fallback: Briefing,
+    opts: { style: TradingStyle; name: NameCard; regime: Regime },
+    flags: Briefing["flags"],
+  ): Briefing {
+    const stress = parsed.historicalStressTest;
+    const evidence = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3).map((claim, index) => ({
+      claim,
+      source: ["Fundamentals", "Price and Bitget", "Recent news"][index] ?? "Research data",
+      pillar: (["fundamentals", "technicals", "news"][index] ?? "news") as Briefing["evidence"][number]["pillar"],
+    }));
+    return {
+      ...fallback,
+      title: parsed.title || fallback.title,
+      styleNote: parsed.whatWeDid || fallback.styleNote,
+      regime: opts.regime,
+      flags,
+      evidence: evidence?.length ? evidence : fallback.evidence,
+      tension: parsed.whereThingsDoNotAgree?.length
+        ? parsed.whereThingsDoNotAgree.slice(0, 3).map((item) => ({ left: item.conflict, right: "", whyItMatters: item.whyItMatters }))
+        : fallback.tension,
+      historicalAnalog: stress
+        ? {
+            setup: stress.summary || fallback.historicalAnalog.setup,
+            analogs: (stress.examples ?? []).map((item) => ({
+              ticker: item.when,
+              date: "",
+              similarity: "Past chart with a similar shape",
+              followed: item.whatHappened,
+            })),
+            baseRates: (stress.results ?? []).map((item) => ({
+              horizon: item.period,
+              range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
+              n: stress.sampleSize ?? 0,
+              note: "This is only what happened in the past. It is not a prediction.",
+            })),
+            caveat: stress.importantNote || fallback.historicalAnalog.caveat,
+          }
+        : fallback.historicalAnalog,
+      considerations: parsed.simpleTakeAways || parsed.questionsOnlyYouCanAnswer
+        ? {
+            forStyle: parsed.simpleTakeAways?.filter(Boolean).slice(0, 3) ?? fallback.considerations.forStyle,
+            invalidation: fallback.considerations.invalidation,
+            questions: (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? []).length >= 2
+              ? (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? [])
+              : fallback.considerations.questions,
+          }
+        : fallback.considerations,
+    };
   }
 }
 

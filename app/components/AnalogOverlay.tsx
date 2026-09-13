@@ -6,6 +6,20 @@ interface AnalogOverlayProps {
   overlays: OverlaySeries[];
 }
 
+function smoothPath(points: { x: number; y: number }[]) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  let path = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const midpointX = (points[i].x + points[i + 1].x) / 2;
+    const midpointY = (points[i].y + points[i + 1].y) / 2;
+    path += ` Q ${points[i].x.toFixed(1)} ${points[i].y.toFixed(1)} ${midpointX.toFixed(1)} ${midpointY.toFixed(1)}`;
+  }
+  const last = points[points.length - 1];
+  path += ` T ${last.x.toFixed(1)} ${last.y.toFixed(1)}`;
+  return path;
+}
+
 export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   const width = 800;
   const height = 240;
@@ -184,28 +198,29 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             </text>
           </g>
 
-          {/* Analog Series Polylines */}
+          {/* Analog Series Paths */}
           {analogSeries.map((overlay, index) => {
             const points = overlay.points
               .map((point, pointIndex) => {
                 if (point.value === null) return null;
                 const x = padLeft + (pointIndex / Math.max(1, overlay.points.length - 1)) * plotWidth;
                 const y = getY(point.value);
-                return `${x.toFixed(1)},${y.toFixed(1)}`;
+                return { x, y };
               })
-              .filter((p): p is string => p !== null)
-              .join(" ");
+              .filter((p): p is { x: number; y: number } => p !== null);
 
             const opacity = Math.max(0.3, 0.75 - index * 0.1);
 
             return (
-              <polyline
+              <path
                 key={overlay.id}
-                points={points}
+                d={smoothPath(points)}
                 fill="none"
                 stroke="#6b7c70"
-                strokeWidth={1.3}
+                strokeWidth={1.8}
                 strokeOpacity={opacity}
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 className="transition-all hover:stroke-[#1d2720] hover:stroke-width-2"
               />
             );
@@ -214,19 +229,18 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
           {/* Current Target Series (Highlighted) */}
           {currentSeries && (
             <g>
-              <polyline
-                points={currentSeries.points
+              <path
+                d={smoothPath(currentSeries.points
                   .map((point, pointIndex) => {
                     if (point.value === null) return null;
                     const x = padLeft + (pointIndex / Math.max(1, currentSeries.points.length - 1)) * plotWidth;
                     const y = getY(point.value);
-                    return `${x.toFixed(1)},${y.toFixed(1)}`;
+                    return { x, y };
                   })
-                  .filter((p): p is string => p !== null)
-                  .join(" ")}
+                  .filter((p): p is { x: number; y: number } => p !== null))}
                 fill="none"
                 stroke="#38541e"
-                strokeWidth={2.8}
+                strokeWidth={3.2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />

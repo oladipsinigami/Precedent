@@ -8,6 +8,7 @@ import { AnalogOverlay } from "./AnalogOverlay";
 import { UnsignedRanges } from "./UnsignedRanges";
 import { ConsiderationsSection } from "./ConsiderationsSection";
 import { DecisionRecord } from "./DecisionRecord";
+import { aggregatePillarScore, fundamentalsScore, sentimentScore, technicalsScore, type PillarScore } from "@/lib/pillar-scores";
 import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 
 interface ResearchMemoProps {
@@ -25,6 +26,12 @@ export function ResearchMemo({
   decisionNote,
   onDecisionNoteChange,
 }: ResearchMemoProps) {
+  const scores = {
+    sentiment: sentimentScore(pillarData?.news),
+    fundamentals: fundamentalsScore(pillarData?.fundamentals),
+    technicals: technicalsScore(pillarData?.technicals),
+  };
+  const aggregate = aggregatePillarScore(Object.values(scores));
   return (
     <article className="mt-6 sm:mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-[#f5f0e6] text-[#141918] shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]">
       {/* Editorial Document Header */}
@@ -33,7 +40,7 @@ export function ResearchMemo({
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.22em] text-[#425828]">
-                Institutional Research Record
+                Beginner-friendly research note
               </span>
               <span className="text-[#88998a]">·</span>
               <span className="font-mono text-[10px] uppercase text-[#637566]">
@@ -56,7 +63,7 @@ export function ResearchMemo({
             <div className="flex items-center justify-between sm:block">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-wider text-[#738375]">
-                  Active Frame
+                  Trading style
                 </div>
                 <div className="mt-0.5 sm:mt-1 font-semibold text-sm text-[#18201a]">
                   {STYLES[style].label}
@@ -64,10 +71,10 @@ export function ResearchMemo({
               </div>
               <div className="sm:mt-2 sm:border-t sm:border-[#141918]/[0.08] sm:pt-2 text-right">
                 <div className="font-mono text-[9px] uppercase tracking-wider text-[#738375]">
-                  Detected Regime
+                  Market context
                 </div>
                 <div className="font-mono text-xs font-semibold text-[#425828]">
-                  {briefing.regime ?? "Normal / Unclassified"}
+                  {briefing.regime ? "Shown for context only" : "Not available"}
                 </div>
               </div>
             </div>
@@ -76,22 +83,23 @@ export function ResearchMemo({
       </header>
 
       {/* Section 01: Evidence */}
-      <MemoSection number="01" title="Evidence Base" badge="5 Converged Streams">
+      <MemoSection number="01" title="What We Checked" badge="Plain-English summary">
         <EvidenceSection
           evidence={briefing.evidence}
           flags={briefing.flags}
           marketStructure={pillarData?.marketStructure}
           news={pillarData?.news}
+          scores={scores}
         />
       </MemoSection>
 
       {/* Section 02: Tension */}
-      <MemoSection number="02" title="Structural Tension" shaded badge="Disagreements Isolated">
+      <MemoSection number="02" title="Where the Facts Differ" shaded badge="Worth noticing">
         <TensionSection tension={briefing.tension} />
       </MemoSection>
 
       {/* Section 03: Historical Analog */}
-      <MemoSection number="03" title="Historical Analogs" badge="Stress Test">
+      <MemoSection number="03" title="What Happened in Similar Past Cases" badge="Historical stress test">
         <div className="space-y-6">
           <p className="max-w-4xl text-sm leading-relaxed text-[#232b25]">
             {briefing.historicalAnalog.setup}
@@ -102,10 +110,10 @@ export function ResearchMemo({
             <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="border-b border-[#141918]/15 bg-[#141918]/[0.03] font-mono text-[10px] uppercase tracking-[0.14em] text-[#486326]">
                 <tr>
-                  <th className="py-3.5 pl-4 pr-3">Precedent Ticker</th>
-                  <th className="py-3.5 px-3">Session Date</th>
-                  <th className="py-3.5 px-3">Similarity Metric</th>
-                  <th className="py-3.5 pr-4 pl-3">Empirical Follow-Through</th>
+                  <th className="py-3.5 pl-4 pr-3">Past example</th>
+                  <th className="py-3.5 px-3">When</th>
+                  <th className="py-3.5 px-3">Why it was included</th>
+                  <th className="py-3.5 pr-4 pl-3">What happened next</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#141918]/[0.06]">
@@ -154,8 +162,14 @@ export function ResearchMemo({
       </MemoSection>
 
       {/* Section 04: Considerations */}
-      <MemoSection number="04" title="Considerations for the Trader" shaded badge="Risk Matrix">
-        <ConsiderationsSection considerations={briefing.considerations} />
+      <MemoSection number="04" title="Simple Takeaways and Questions" shaded badge="Your decision">
+        <ConsiderationsSection
+          considerations={briefing.considerations}
+          scores={scores}
+          aggregate={aggregate}
+          analogs={pillarData?.analogs}
+          analogQuality={briefing.flags?.analogQuality}
+        />
       </MemoSection>
 
       {/* Human Decision Record */}

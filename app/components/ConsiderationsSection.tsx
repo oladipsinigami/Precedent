@@ -1,14 +1,36 @@
 "use client";
 
-import type { Briefing } from "@/lib/types";
+import type { AnalogsPillar, Briefing, StructureFlags } from "@/lib/types";
+import type { PillarScore } from "@/lib/pillar-scores";
 
 interface ConsiderationsSectionProps {
   considerations: Briefing["considerations"];
+  scores: { sentiment: PillarScore; fundamentals: PillarScore; technicals: PillarScore };
+  aggregate: { value: number | null; label: PillarScore["label"]; basis: string };
+  analogs?: AnalogsPillar;
+  analogQuality?: StructureFlags["analogQuality"];
 }
 
-export function ConsiderationsSection({ considerations }: ConsiderationsSectionProps) {
+export function ConsiderationsSection({ considerations, scores, aggregate, analogs, analogQuality }: ConsiderationsSectionProps) {
+  const available = Object.values(scores).filter((score) => score.value !== null);
+  const labels = available.map((score) => score.label);
+  const agreement = labels.length > 1 && labels.every((label) => label === labels[0])
+    ? `The available pillars are broadly ${labels[0]}.`
+    : "The available pillars do not fully agree, so the setup remains mixed across evidence types.";
+  const trajectory = analogs?.ranges.length
+    ? `Analog bands remain available across ${analogs.ranges.length} horizon${analogs.ranges.length === 1 ? "" : "s"} and are ${analogQuality?.clustered ? "clustered" : "scattered"} in the available sample; ${analogs.informative?.note ?? "dispersion should be read as historical context rather than a forecast."}`
+    : "Analog trajectory context was unavailable for this run.";
   return (
-    <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
+    <div className="space-y-5">
+      <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">Aggregate evidence score</h4>
+          <span className="font-mono text-lg font-semibold text-[#1f2821]">{aggregate.value === null ? "N/A" : `${aggregate.value} / 100`} <span className="text-[10px] uppercase text-[#738275]">· {aggregate.label}</span></span>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{aggregate.basis}</p>
+        <p className="mt-2 text-xs leading-relaxed text-[#222b24]"><span className="font-semibold">Trend explanation:</span> {agreement} {trajectory} The unresolved questions below define what evidence would change the interpretation.</p>
+      </div>
+      <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
       {/* Column 1: Operating Frame Considerations */}
       <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
@@ -62,6 +84,7 @@ export function ConsiderationsSection({ considerations }: ConsiderationsSectionP
           ))}
         </ul>
       </div>
+    </div>
     </div>
   );
 }

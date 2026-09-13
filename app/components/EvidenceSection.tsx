@@ -1,15 +1,17 @@
 "use client";
 
 import type { Briefing, MarketStructurePillar, NewsPillar, StructureFlags } from "@/lib/types";
+import type { PillarScore } from "@/lib/pillar-scores";
 
 interface EvidenceSectionProps {
   evidence: Briefing["evidence"];
   flags?: StructureFlags;
   marketStructure?: MarketStructurePillar;
   news?: NewsPillar;
+  scores: { sentiment: PillarScore; fundamentals: PillarScore; technicals: PillarScore };
 }
 
-export function EvidenceSection({ evidence, flags, marketStructure, news }: EvidenceSectionProps) {
+export function EvidenceSection({ evidence, flags, marketStructure, news, scores }: EvidenceSectionProps) {
   return (
     <div className="grid gap-6 lg:gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
       {/* Left Column: Primary Evidence Claims */}
@@ -33,6 +35,7 @@ export function EvidenceSection({ evidence, flags, marketStructure, news }: Evid
             </div>
           </div>
         ))}
+        <ScoreRow scores={scores} />
       </div>
 
       {/* Right Column: Institutional Structural Diagnostics Cards */}
@@ -43,6 +46,23 @@ export function EvidenceSection({ evidence, flags, marketStructure, news }: Evid
       </div>
     </div>
   );
+}
+
+function ScoreRow({ scores }: { scores: EvidenceSectionProps["scores"] }) {
+  return <div className="grid gap-3 sm:grid-cols-3">
+    {[
+      ["Sentiment", scores.sentiment],
+      ["Fundamentals", scores.fundamentals],
+      ["Technicals", scores.technicals],
+    ].map(([label, score]) => {
+      const item = score as PillarScore;
+      return <div key={label as string} className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-3.5 shadow-sm">
+        <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-[#486326]">{label as string}</div>
+        <div className="mt-1 text-lg font-semibold text-[#1f2821]">{item.value === null ? "N/A" : `${item.value} / 100`} <span className="text-[10px] uppercase text-[#738275]">· {item.label}</span></div>
+        <p className="mt-1 text-[11px] leading-relaxed text-[#637265]">{item.basis}</p>
+      </div>;
+    })}
+  </div>;
 }
 
 export function FlagsCard({ flags }: { flags: StructureFlags }) {
