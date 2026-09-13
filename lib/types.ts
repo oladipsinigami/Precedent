@@ -243,6 +243,24 @@ export type StructureFlags = {
 
 export type Briefing = {
   title: string;
+  whatWeDid: string;
+  historicalStressTest: {
+    summary: string;
+    sampleSize: number;
+    results: {
+      period: "Next day" | "Next 5 trading days" | "Next 10 trading days";
+      wentUp: string;
+      typicalMove: string;
+      median: string;
+    }[];
+    examples: { when: string; whatHappened: string }[];
+    importantNote: string;
+  };
+  otherThingsWeChecked: string[];
+  whereThingsDoNotAgree: { conflict: string; whyItMatters: string }[];
+  simpleTakeAways: string[];
+  questionsOnlyYouCanAnswer: string[];
+  // Legacy fields remain as an internal compatibility bridge for existing memo components.
   styleNote: string;
   model: string;
   regime?: Regime;

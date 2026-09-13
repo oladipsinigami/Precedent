@@ -39,6 +39,30 @@ export function guardBriefing(briefing: Briefing): Briefing {
   return {
     ...briefing,
     title: rewrite(briefing.title).replace(/the (constructive|cautious) case/gi, "setup").trim(),
+    whatWeDid: rewrite(briefing.whatWeDid),
+    historicalStressTest: {
+      ...briefing.historicalStressTest,
+      summary: rewrite(briefing.historicalStressTest.summary),
+      results: briefing.historicalStressTest.results.map((result) => ({
+        ...result,
+        wentUp: rewrite(result.wentUp),
+        typicalMove: rewrite(result.typicalMove),
+        median: rewrite(result.median),
+      })),
+      examples: briefing.historicalStressTest.examples.map((example) => ({
+        ...example,
+        when: rewrite(example.when),
+        whatHappened: rewrite(example.whatHappened),
+      })),
+      importantNote: rewrite(briefing.historicalStressTest.importantNote),
+    },
+    otherThingsWeChecked: scrubList(briefing.otherThingsWeChecked),
+    whereThingsDoNotAgree: briefing.whereThingsDoNotAgree.map((item) => ({
+      conflict: rewrite(item.conflict),
+      whyItMatters: rewrite(item.whyItMatters),
+    })),
+    simpleTakeAways: scrubList(briefing.simpleTakeAways),
+    questionsOnlyYouCanAnswer: scrubList(briefing.questionsOnlyYouCanAnswer),
     styleNote: rewrite(briefing.styleNote),
     flags: briefing.flags
       ? {

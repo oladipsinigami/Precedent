@@ -82,24 +82,120 @@ export function ResearchMemo({
         </div>
       </header>
 
-      {/* Section 01: Evidence */}
-      <MemoSection number="01" title="What We Checked" badge="Plain-English summary">
-        <EvidenceSection
-          evidence={briefing.evidence}
-          flags={briefing.flags}
-          marketStructure={pillarData?.marketStructure}
-          news={pillarData?.news}
-          scores={scores}
-        />
-      </MemoSection>
+      <section className="border-b border-[#141918]/15 bg-[#f8f5ee] px-4 py-6 sm:px-10 sm:py-8">
+        <div className="mb-5">
+          <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[#486326]">
+            Decision stress test
+          </div>
+          <h3 className="mt-2 font-display text-2xl font-medium text-[#111513] sm:text-3xl">
+            What happened in similar past cases?
+          </h3>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#3f4c41]">{briefing.whatWeDid}</p>
+        </div>
 
-      {/* Section 02: Tension */}
-      <MemoSection number="02" title="Where the Facts Differ" shaded badge="Worth noticing">
-        <TensionSection tension={briefing.tension} />
-      </MemoSection>
+        <div className="rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-4 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">
+              Historical stress test
+            </h4>
+            <span className="font-mono text-xs text-[#637265]">
+              {briefing.historicalStressTest.sampleSize} past cases
+            </span>
+          </div>
+          <p className="mt-3 text-sm leading-relaxed text-[#232b25]">
+            {briefing.historicalStressTest.summary}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            {briefing.historicalStressTest.results.map((result) => (
+              <div key={result.period} className="rounded border border-[#141918]/10 bg-white/40 p-3">
+                <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                  {result.period}
+                </div>
+                <p className="mt-2 text-sm font-semibold text-[#1a221c]">{result.wentUp}</p>
+                <p className="mt-1 text-xs text-[#4f5e51]">{result.typicalMove}</p>
+                <p className="mt-1 text-xs text-[#637265]">Middle result: {result.median}</p>
+              </div>
+            ))}
+          </div>
+          {briefing.historicalStressTest.examples.length > 0 && (
+            <div className="mt-5">
+              <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                A few past examples
+              </h5>
+              <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+                {briefing.historicalStressTest.examples.slice(0, 3).map((example) => (
+                  <li key={`${example.when}-${example.whatHappened}`}>
+                    <span className="font-semibold">{example.when}:</span> {example.whatHappened}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <p className="mt-5 text-xs italic leading-relaxed text-[#637265]">
+            {briefing.historicalStressTest.importantNote}
+          </p>
+        </div>
 
-      {/* Section 03: Historical Analog */}
-      <MemoSection number="03" title="What Happened in Similar Past Cases" badge="Historical stress test">
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
+            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">Other things we checked</h4>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+              {briefing.otherThingsWeChecked.slice(0, 3).map((item) => <li key={item}>• {item}</li>)}
+            </ul>
+          </div>
+          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
+            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">Simple takeaways</h4>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+              {briefing.simpleTakeAways.slice(0, 3).map((item) => <li key={item}>• {item}</li>)}
+            </ul>
+          </div>
+          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
+            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">Questions only you can answer</h4>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+              {briefing.questionsOnlyYouCanAnswer.slice(0, 3).map((item) => <li key={item}>? {item}</li>)}
+            </ul>
+          </div>
+        </div>
+
+        {briefing.whereThingsDoNotAgree.length > 0 && (
+          <div className="mt-5 rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
+            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">Where things do not agree</h4>
+            <ul className="mt-3 space-y-3 text-xs leading-relaxed text-[#3f4c41]">
+              {briefing.whereThingsDoNotAgree.slice(0, 3).map((item) => (
+                <li key={item.conflict}>
+                  <span className="font-semibold">{item.conflict}</span> {item.whyItMatters}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
+        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
+          Technical details
+        </summary>
+        <div className="border-t border-[#141918]/10">
+          <MemoSection number="01" title="Evidence details" badge="Sources">
+            <EvidenceSection
+              evidence={briefing.evidence}
+              flags={briefing.flags}
+              marketStructure={pillarData?.marketStructure}
+              news={pillarData?.news}
+              scores={scores}
+            />
+          </MemoSection>
+          <MemoSection number="02" title="Where the Facts Differ" shaded badge="Disagreements">
+            <TensionSection tension={briefing.tension} />
+          </MemoSection>
+        </div>
+      </details>
+
+      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
+        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
+          Historical chart details
+        </summary>
+        <MemoSection number="03" title="Chart details" badge="Supporting view">
         <div className="space-y-6">
           <p className="max-w-4xl text-sm leading-relaxed text-[#232b25]">
             {briefing.historicalAnalog.setup}
@@ -159,18 +255,23 @@ export function ResearchMemo({
             {briefing.historicalAnalog.caveat}
           </p>
         </div>
-      </MemoSection>
+        </MemoSection>
+      </details>
 
-      {/* Section 04: Considerations */}
-      <MemoSection number="04" title="Simple Takeaways and Questions" shaded badge="Your decision">
-        <ConsiderationsSection
-          considerations={briefing.considerations}
-          scores={scores}
-          aggregate={aggregate}
-          analogs={pillarData?.analogs}
-          analogQuality={briefing.flags?.analogQuality}
-        />
-      </MemoSection>
+      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
+        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
+          Additional technical scoring
+        </summary>
+        <MemoSection number="04" title="Additional details" shaded badge="Optional">
+          <ConsiderationsSection
+            considerations={briefing.considerations}
+            scores={scores}
+            aggregate={aggregate}
+            analogs={pillarData?.analogs}
+            analogQuality={briefing.flags?.analogQuality}
+          />
+        </MemoSection>
+      </details>
 
       {/* Human Decision Record */}
       <DecisionRecord decisionNote={decisionNote} onDecisionNoteChange={onDecisionNoteChange} />

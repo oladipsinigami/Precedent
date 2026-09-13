@@ -6,11 +6,12 @@ import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
 
-function provider() {
+function providers() {
+  const available = [];
   if (process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY?.startsWith("sk-or-")) {
     const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-    const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o";
-    return {
+    const model = process.env.OPENROUTER_MODEL || "openrouter/free";
+    available.push({
       label: `openrouter/${model.replace("openai/", "")}`,
       model,
       client: new OpenAI({
@@ -21,34 +22,34 @@ function provider() {
           "X-Title": "Precedent Research Desk",
         },
       }),
-    };
+    });
   }
   if (process.env.OPENAI_API_KEY) {
     const model = process.env.OPENAI_MODEL || "gpt-4o";
-    return {
+    available.push({
       label: model,
       model,
       client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
-    };
+    });
   }
   if (process.env.XAI_API_KEY) {
-    return {
+    available.push({
       label: "grok-4.5",
       model: "grok-4.5",
       client: new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" }),
-    };
+    });
   }
   if (process.env.BITGET_QWEN_API_KEY) {
-    return {
+    available.push({
       label: "qwen3.8-max",
       model: "qwen3.8-max",
       client: new OpenAI({
         apiKey: process.env.BITGET_QWEN_API_KEY,
         baseURL: "https://hackathon.bitgetops.com/v1",
       }),
-    };
+    });
   }
-  return null;
+  return available;
 }
 
 const SCHEMA = `{
@@ -74,10 +75,10 @@ export async function synthesize(opts: {
   regime: Regime;
   pillars: PillarBundle;
 }): Promise<Briefing> {
-  const llm = provider();
   const flags = await computeFlags(opts.pillars, opts.regime, opts.name.native);
   const fallback = deterministicBriefing({ ...opts, flags });
-  if (!llm) return guardBriefing(fallback);
+  const llms = providers();
+  if (!llms.length) return guardBriefing(fallback);
 
   const profile = STYLES[opts.style];
   const system = `You are Precedent, a friendly research helper for tokenized US stocks on Bitget. You explain the retrieved facts to a complete beginner. The human makes the decision. You never do.
@@ -119,8 +120,9 @@ Return JSON only, matching: ${SCHEMA}
     2,
   );
 
-  try {
-    const text = await complete(llm.client, llm.model, system, user);
+  for (const llm of llms) {
+    try {
+      const text = await complete(llm.client, llm.model, system, user);
     const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
@@ -129,9 +131,11 @@ Return JSON only, matching: ${SCHEMA}
       sources: collectSources(opts.pillars),
     };
     return guardBriefing(normalizeBriefing(briefing, fallback));
-  } catch {
-    return guardBriefing({ ...fallback, model: `${llm.label} (fell back to deterministic synthesizer)` });
+    } catch {
+      continue;
+    }
   }
+  return guardBriefing({ ...fallback, model: `${llms[llms.length - 1].label} (fell back to deterministic synthesizer)` });
 
   type RetailBriefing = {
     title?: string;
@@ -156,6 +160,25 @@ Return JSON only, matching: ${SCHEMA}
     flags: Briefing["flags"],
   ): Briefing {
     const stress = parsed.historicalStressTest;
+    const otherThingsWeChecked = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3) ?? fallback.otherThingsWeChecked;
+    const whereThingsDoNotAgree = parsed.whereThingsDoNotAgree?.filter((item) => item.conflict && item.whyItMatters).slice(0, 3) ?? fallback.whereThingsDoNotAgree;
+    const simpleTakeAways = parsed.simpleTakeAways?.filter(Boolean).slice(0, 3) ?? fallback.simpleTakeAways;
+    const questionsOnlyYouCanAnswer = (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? []).length >= 2
+      ? (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? [])
+      : fallback.questionsOnlyYouCanAnswer;
+    const historicalStressTest = stress
+      ? {
+          summary: stress.summary || fallback.historicalStressTest.summary,
+          sampleSize: typeof stress.sampleSize === "number" && Number.isFinite(stress.sampleSize)
+            ? stress.sampleSize
+            : fallback.historicalStressTest.sampleSize,
+          results: (stress.results ?? []).filter((item): item is Briefing["historicalStressTest"]["results"][number] =>
+            ["Next day", "Next 5 trading days", "Next 10 trading days"].includes(item.period),
+          ).slice(0, 3),
+          examples: (stress.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5),
+          importantNote: stress.importantNote || fallback.historicalStressTest.importantNote,
+        }
+      : fallback.historicalStressTest;
     const evidence = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3).map((claim, index) => ({
       claim,
       source: ["Fundamentals", "Price and Bitget", "Recent news"][index] ?? "Research data",
@@ -164,6 +187,12 @@ Return JSON only, matching: ${SCHEMA}
     return {
       ...fallback,
       title: parsed.title || fallback.title,
+      whatWeDid: parsed.whatWeDid || fallback.whatWeDid,
+      historicalStressTest,
+      otherThingsWeChecked,
+      whereThingsDoNotAgree,
+      simpleTakeAways,
+      questionsOnlyYouCanAnswer,
       styleNote: parsed.whatWeDid || fallback.styleNote,
       regime: opts.regime,
       flags,
@@ -259,6 +288,12 @@ const REGIMES: Regime[] = ["trending-up", "range-bound", "trending-down", "high-
 function normalizeBriefing(parsed: Briefing, fallback: Briefing): Briefing {
   return {
     title: parsed.title || fallback.title,
+    whatWeDid: parsed.whatWeDid || fallback.whatWeDid,
+    historicalStressTest: parsed.historicalStressTest ?? fallback.historicalStressTest,
+    otherThingsWeChecked: parsed.otherThingsWeChecked?.length ? parsed.otherThingsWeChecked : fallback.otherThingsWeChecked,
+    whereThingsDoNotAgree: parsed.whereThingsDoNotAgree?.length ? parsed.whereThingsDoNotAgree : fallback.whereThingsDoNotAgree,
+    simpleTakeAways: parsed.simpleTakeAways?.length ? parsed.simpleTakeAways : fallback.simpleTakeAways,
+    questionsOnlyYouCanAnswer: parsed.questionsOnlyYouCanAnswer?.length ? parsed.questionsOnlyYouCanAnswer : fallback.questionsOnlyYouCanAnswer,
     styleNote: parsed.styleNote || fallback.styleNote,
     model: parsed.model,
     regime: REGIMES.includes(parsed.regime as Regime) ? parsed.regime : fallback.regime,
@@ -453,6 +488,46 @@ export function deterministicBriefing(opts: {
 
   return {
     title: `${name.rToken} — ${profile.label} stress test`,
+    whatWeDid: `We compared the current chart with past charts that looked similar. We also checked company updates, price data, Bitget trading, and recent news.`,
+    historicalStressTest: {
+      summary: band
+        ? `We found ${band.n} past cases with a similar chart. The results show a range of outcomes, so history is useful for context but cannot tell us what happens this time.`
+        : "The historical comparison was not available in this run, so there is not enough past data to summarize.",
+      sampleSize: band?.n ?? 0,
+      results: pillars.analogs.ranges.slice(0, 3).map((r) => ({
+        period: r.horizon === "1d" ? "Next day" as const : r.horizon === "5d" ? "Next 5 trading days" as const : "Next 10 trading days" as const,
+        wentUp: `${Math.round(r.pUp * r.n)} times out of ${r.n}`,
+        typicalMove: `usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
+        median: fmtPct(r.p50),
+      })),
+      examples: pillars.analogs.closest.slice(0, 3).map((a) => ({
+        when: a.date,
+        whatHappened: `${a.ticker} moved ${fmtPct(a.ret5d)} over the next 5 trading days.`,
+      })),
+      importantNote: "This is only what happened in the past. It does not tell us what will happen this time.",
+    },
+    otherThingsWeChecked: [
+      pillars.fundamentals.eps
+        ? `The latest company report included diluted EPS of ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
+        : "Company earnings data was limited in this run.",
+      pillars.technicals.rTokenGap ?? "Bitget price comparison was not available in this run.",
+      pillars.news.headlines[0]
+        ? `Recent news included: “${pillars.news.headlines[0].title}”.`
+        : "Recent news coverage was limited in this run.",
+    ],
+    whereThingsDoNotAgree: tension.slice(0, 3).map((item) => ({
+      conflict: `${item.left}${item.right ? ` ${item.right}` : ""}`,
+      whyItMatters: item.whyItMatters,
+    })),
+    simpleTakeAways: [
+      band ? "Similar past cases had mixed outcomes." : "There was not enough similar historical data.",
+      pillars.technicals.rTokenGap ?? "The Bitget price could not be compared with the regular stock price.",
+      pillars.news.caveats[0] ?? "News coverage was included where available.",
+    ],
+    questionsOnlyYouCanAnswer: [
+      "If the price moves outside the historical range, would you still feel comfortable with your plan?",
+      "How much does the Bitget price matter for the way you trade?",
+    ],
     styleNote: `${profile.framing} Horizon in force: ${profile.horizon} Regime frame: ${regime}.`,
     model: "deterministic-synthesizer",
     regime,
