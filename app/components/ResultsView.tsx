@@ -8,6 +8,7 @@ import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 
 interface ResultsViewProps {
   briefing: Briefing;
+  error: string;
   style: TradingStyle;
   onStyleChange: (style: TradingStyle) => void;
   pillarData: PillarBundle | null;
@@ -21,6 +22,7 @@ interface ResultsViewProps {
 
 export function ResultsView({
   briefing,
+  error,
   style,
   onStyleChange,
   pillarData,
@@ -138,6 +140,12 @@ export function ResultsView({
       )}
 
       {/* In-Place Style Frame Re-weighting Selector */}
+      {error && (
+        <div className="mb-6 rounded-sm border border-[#d6a34a]/35 bg-[#d6a34a]/[0.08] px-4 py-3 text-sm text-[#f0d39a]">
+          {error}
+        </div>
+      )}
+
       <div className="mb-6 sm:mb-8 rounded-sm border border-white/[0.07] bg-[#0c1016]/80 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
           <div>

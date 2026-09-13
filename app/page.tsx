@@ -216,6 +216,7 @@ export default function Home() {
         ) : briefing ? (
           <ResultsView
             briefing={briefing}
+            error={error}
             style={style}
             onStyleChange={handleStyleChange}
             pillarData={pillarData}

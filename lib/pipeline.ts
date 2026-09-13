@@ -5,7 +5,7 @@ import { runNews } from "./pillars/sentiment";
 import { runTechnicals } from "./pillars/technicals";
 import { bitgetRTokenMarkets, bitgetRwaContracts } from "./providers/bitget";
 import { detectRegime } from "./regime";
-import { synthesize } from "./synthesis";
+import { deterministicBriefing, synthesize } from "./synthesis";
 import type { PillarBundle, PillarId, ResearchEvent, TradingStyle } from "./types";
 import { findName, nameFromBitgetContract, nameFromBitgetRTokenMarket } from "./universe";
 
@@ -74,13 +74,35 @@ export async function* runResearch(input: {
     };
   }
 
-  const briefing = await synthesize({
-    style: input.style,
-    question: input.question,
-    name,
-    regime,
-    pillars,
-  });
+  let briefing;
+  try {
+    briefing = await synthesize({
+      style: input.style,
+      question: input.question,
+      name,
+      regime,
+      pillars,
+    });
+  } catch {
+    briefing = deterministicBriefing({
+      style: input.style,
+      question: input.question,
+      name,
+      regime,
+      pillars,
+      flags: undefined,
+    });
+    yield {
+      type: "error",
+      message: "Synthesis step had a problem. Showing a simplified research note instead.",
+    };
+  }
+  if (briefing.model.includes("fell back to deterministic synthesizer")) {
+    yield {
+      type: "error",
+      message: "Synthesis step had a problem. Showing a simplified research note instead.",
+    };
+  }
   yield { type: "briefing", briefing };
   yield { type: "done" };
 }

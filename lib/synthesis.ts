@@ -75,7 +75,12 @@ export async function synthesize(opts: {
   regime: Regime;
   pillars: PillarBundle;
 }): Promise<Briefing> {
-  const flags = await computeFlags(opts.pillars, opts.regime, opts.name.native);
+  let flags: Briefing["flags"];
+  try {
+    flags = await computeFlags(opts.pillars, opts.regime, opts.name.native);
+  } catch {
+    flags = undefined;
+  }
   const fallback = deterministicBriefing({ ...opts, flags });
   const llms = providers();
   if (!llms.length) return guardBriefing(fallback);
@@ -94,6 +99,7 @@ HARD RULES
   - Historical results are only what happened in the past. They are not predictions.
   - If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
 - Native cash tape and rToken 7×24 tape are related but not identical. If no rToken print was provided, do not fabricate one.
+- If the question mentions overnight trading, 7×24 trading, Bitget versus cash, or a basis difference, make the current Bitget-versus-regular-stock comparison one of the clearest beginner-friendly facts in the memo and explain why the difference matters while cash markets are closed.
   - Frame depth, horizon, and language to the trader's style.
   - Use short sentences and everyday words, as if explaining the chart to a smart friend who has never studied charts.
   - Write the entire memo as if you are a patient friend helping a beginner understand the research.
@@ -129,7 +135,12 @@ Return JSON only, matching: ${SCHEMA}
 
   for (const llm of llms) {
     try {
-      const text = await complete(llm.client, llm.model, system, user);
+      const text = await Promise.race([
+        complete(llm.client, llm.model, system, user),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error("synthesis timeout")), 12_000),
+        ),
+      ]);
     const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
@@ -327,6 +338,7 @@ export function deterministicBriefing(opts: {
 }): Briefing {
   const { pillars, name, style, regime, flags } = opts;
   const profile = STYLES[style];
+  const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget)\b/i.test(opts.question);
   const analogHorizon = profile.analogHorizon;
   const band = pillars.analogs.ranges.find((r) => r.horizon === analogHorizon) ?? pillars.analogs.ranges[0];
   const evidence = [];
@@ -426,17 +438,17 @@ export function deterministicBriefing(opts: {
   const rsi = pillars.technicals.indicators.rsi14;
   if (band && Math.abs(band.p50) < 0.5 && (band.p90 - band.p10) > 6) {
     tension.push({
-      left: "The analog median excess is close to zero.",
-      right: `The ${analogHorizon} band is wide (p10 ${fmtPct(band.p10)} to p90 ${fmtPct(band.p90)}).`,
+      left: "Similar past cases were close to flat in the middle.",
+      right: `The usual range was wide, from ${fmtPct(band.p10)} to ${fmtPct(band.p90)} over ${analogHorizon}.`,
       whyItMatters:
-        "History is speaking more to the size of the next move than to its direction — a stress-test input, not a side.",
+        "The past cases show that the size of the move varied a lot, so this history does not give a simple answer.",
     });
   }
   if (rsi !== undefined && rsi >= 60 && pillars.news.headlines.some((h) => h.lean === "cautious")) {
     tension.push({
-      left: `Tape momentum is not washed out (RSI14 ${rsi.toFixed(1)}).`,
+      left: `The price has moved strongly recently; a short-term strength reading is ${rsi.toFixed(1)}.`,
       right: "Recent headlines include cautious language.",
-      whyItMatters: "Price action and the news tape are not telling the same story; the trader has to pick which clock they are on.",
+      whyItMatters: "The price and recent news do not tell the same story, so a beginner should note the disagreement rather than treat either one as a forecast.",
     });
   }
   const newsLean = pillars.news.headlines[0]?.lean;
@@ -450,17 +462,17 @@ export function deterministicBriefing(opts: {
   }
   if (pillars.news.social.x.length >= 10 && new Set(pillars.news.social.x.map((p) => p.lean)).size >= 3) {
     tension.push({
-      left: `X volume is elevated (${pillars.news.social.x.length} posts) with mixed lean.`,
-      right: "High attention with no consensus direction.",
-      whyItMatters: "Crowded attention without agreement is a disagreement input, not confirmation of anything.",
+      left: `There were many public posts about the company (${pillars.news.social.x.length}).`,
+      right: "Those posts did not agree with each other.",
+      whyItMatters: "A lot of attention does not mean the information is clear, so a beginner should treat this as mixed evidence.",
     });
   }
   const cleaned = pillars.marketStructure.cleanedCorrelations?.[0];
   if (cleaned && Math.abs(cleaned.raw - cleaned.cleaned) > 0.2) {
     tension.push({
-      left: `Raw correlation to ${cleaned.peer} reads ${cleaned.raw.toFixed(2)}.`,
-      right: `After noise-filtering it reads ${cleaned.cleaned.toFixed(2)}.`,
-      whyItMatters: "The raw tape overstates (or understates) the relationship; the cleaned community structure is the one to weigh.",
+      left: `The price relationship with ${cleaned.peer} looks different in the raw data than after a noise check.`,
+      right: "The two measurements do not match closely.",
+      whyItMatters: "A beginner should treat the peer comparison as uncertain instead of assuming the two prices will keep moving together.",
     });
   }
   if (flags && flags.regimeAlignment === "misaligned") {
@@ -475,7 +487,7 @@ export function deterministicBriefing(opts: {
       left: "Analog and cash-session tape are available.",
       right: "The Bitget rToken print was not retrieved this run.",
       whyItMatters:
-        "A 7×24 window can reprice while cash is closed. Without the rToken mark, overnight premium/discount is an open question rather than a measured input.",
+        "Bitget trades around the clock while the regular stock market closes. Without that Bitget price, the overnight difference cannot be measured.",
     });
   }
   if (!tension.length) {
@@ -517,7 +529,11 @@ export function deterministicBriefing(opts: {
       pillars.fundamentals.eps
         ? `The latest company report included diluted EPS of ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
         : "Company earnings data was limited in this run.",
-      pillars.technicals.rTokenGap ?? "Bitget price comparison was not available in this run.",
+      asksAboutOvernight
+        ? pillars.technicals.rTokenGap
+          ? `The 24-hour Bitget price compared with the regular stock price: ${pillars.technicals.rTokenGap}`
+          : "The 24-hour Bitget price could not be compared with the regular stock price in this run."
+        : pillars.technicals.rTokenGap ?? "Bitget price comparison was not available in this run.",
       pillars.news.headlines[0]
         ? `Recent news included: “${pillars.news.headlines[0].title}”.`
         : "Recent news coverage was limited in this run.",
@@ -558,12 +574,12 @@ export function deterministicBriefing(opts: {
     },
     considerations: {
       forStyle: [
-        `Style on this session is ${profile.label}. ${profile.horizon}`,
+        `This memo is framed for a ${profile.label} style over ${profile.horizon}.`,
         analogHorizon === "1d"
           ? "Weight the 1-session analog band and any cash/rToken gap into the next open."
           : analogHorizon === "10d"
-            ? "Weight filings and the 10-session analog band over a single RSI print."
-            : "Weight the 5-session analog band and the places the pillars disagree over a single headline.",
+            ? "For this time frame, company reports matter more than one short-term price reading."
+            : "For this time frame, compare the five-session history with the places where the facts disagree.",
         pillars.technicals.rTokenGap ?? "rToken venue print was not on the tape this run.",
         pillars.marketStructure.ok
           ? `Community ${pillars.marketStructure.communityId} membership means peer moves inside that group deserve more weight than index-level moves.`
@@ -571,7 +587,7 @@ export function deterministicBriefing(opts: {
       ],
       invalidation: [
         band
-          ? `A realized move beyond the analog ${analogHorizon} p10/p90 band (${fmtPct(band.p10)} / ${fmtPct(band.p90)} excess) would mean this setup is no longer inside the retrieved sample.`
+          ? `A move outside the usual historical range for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) would be different from the cases in this sample.`
           : "Without analog bands, invalidation has to be defined by the trader’s own level — the desk will not invent one.",
         pillars.fundamentals.catalysts[0]
           ? `A new 8-K that changes the last-known filing picture (latest on tape: ${pillars.fundamentals.catalysts[0]}) would reopen the fundamental case.`
