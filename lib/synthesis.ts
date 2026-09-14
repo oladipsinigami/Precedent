@@ -13,6 +13,7 @@ function providers() {
 
   const openRouterKey =
     process.env.OPENROUTER_API_KEY ||
+    process.env.OPENROUTER_KEY ||
     (process.env.OPENAI_API_KEY?.startsWith("sk-or-") ? process.env.OPENAI_API_KEY : undefined);
 
   // 1. Always prioritize free OpenRouter models whenever an OpenRouter API key is available
@@ -28,15 +29,17 @@ function providers() {
     });
 
     // Curated list of reliable, currently active free model slugs on OpenRouter in priority order
+    // Fast lightweight models (e.g. 2.6B) are prioritized first to minimize queue delay and prevent timeouts
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
-      "google/gemma-4-26b-a4b-it:free",
-      "openrouter/free",
-      "nvidia/nemotron-3.5-lightning:free",
       "liquid/lfm-2.5-2.6b:free",
+      "nvidia/nemotron-3.5-lightning:free",
+      "nex-agi/nex-n2.5-mini:free",
+      "openrouter/free",
       "inclusionai/ling-3.0-flash-fin:free",
       "google/gemma-4-31b-it:free",
-      "nex-agi/nex-n2.5-mini:free",
+      "thinkingmachines/inkling-small:free",
+      "google/gemma-4-26b-a4b-it:free",
     ].filter(Boolean) as string[];
 
     const uniqueSlugs = Array.from(new Set(freeCandidateSlugs));
@@ -202,17 +205,18 @@ Return JSON only, matching: ${SCHEMA}
   );
 
   const attempted: { label: string; error: string }[] = [];
-  const PER_MODEL_TIMEOUT_MS = 18_000;
+  const PER_MODEL_TIMEOUT_MS = 10_000;
 
   for (const llm of llms) {
     try {
       console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model})...`);
-      const { text, actualModel } = await Promise.race([
-        complete(llm.client, llm.model, system, user),
-        new Promise<{ text: string; actualModel?: string }>((_, reject) =>
-          setTimeout(() => reject(new Error(`synthesis timeout (${PER_MODEL_TIMEOUT_MS / 1000}s)`)), PER_MODEL_TIMEOUT_MS),
-        ),
-      ]);
+      const { text, actualModel } = await complete(
+        llm.client,
+        llm.model,
+        system,
+        user,
+        PER_MODEL_TIMEOUT_MS,
+      );
       const parsed = parseModelJson(text) as RetailBriefing;
       const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
       const effectiveModelLabel = actualModel && actualModel !== llm.model
@@ -371,21 +375,31 @@ async function complete(
   model: string,
   system: string,
   user: string,
+  timeoutMs: number = 10_000,
 ): Promise<{ text: string; actualModel?: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const chat = await client.chat.completions.create({
-      model,
-      temperature: 0.2,
-      max_tokens: 1500,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    });
+    const chat = await client.chat.completions.create(
+      {
+        model,
+        temperature: 0.2,
+        max_tokens: 1500,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      },
+      { signal: controller.signal },
+    );
     const msg = chat.choices[0]?.message;
     const text = msg?.content || (msg as any)?.reasoning_content || (msg as any)?.reasoning;
     if (text) return { text, actualModel: chat.model };
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.name === "AbortError" || controller.signal.aborted) {
+      throw new Error(`synthesis timeout (${timeoutMs / 1000}s)`);
+    }
     // Only attempt legacy responses API if explicitly available on this client instance
     if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
       try {
@@ -404,6 +418,8 @@ async function complete(
       }
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
   throw new Error("empty model output");
 }
@@ -426,11 +442,13 @@ function parseModelJson(text: string): any {
 }
 
 function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  // Strip reasoning blocks from models that emit <think>...</think> before JSON
+  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const fenced = stripped.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1].trim();
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start >= 0 && end > start) return text.slice(start, end + 1);
+  const start = stripped.indexOf("{");
+  const end = stripped.lastIndexOf("}");
+  if (start >= 0 && end > start) return stripped.slice(start, end + 1);
   throw new Error("no json");
 }
 

@@ -74,7 +74,7 @@ export async function* runResearch(input: {
     };
   }
 
-  const SYNTHESIS_TIMEOUT_MS = 45_000;
+  const SYNTHESIS_TIMEOUT_MS = 50_000;
   let briefing: Briefing;
   let synthesisFailed = false;
 
@@ -93,6 +93,11 @@ export async function* runResearch(input: {
     ]);
   } catch {
     synthesisFailed = true;
+    const hasOpenRouter = Boolean(
+      process.env.OPENROUTER_API_KEY ||
+      process.env.OPENROUTER_KEY ||
+      process.env.OPENAI_API_KEY?.startsWith("sk-or-")
+    );
     briefing = deterministicBriefing({
       style: input.style,
       question: input.question,
@@ -101,6 +106,9 @@ export async function* runResearch(input: {
       pillars,
       flags: undefined,
     });
+    if (hasOpenRouter) {
+      briefing.model = "openrouter/free (fell back to deterministic synthesizer)";
+    }
   }
 
   const isFallback =
