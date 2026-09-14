@@ -20,20 +20,22 @@ function providers() {
     const client = new OpenAI({
       apiKey: openRouterKey,
       baseURL: "https://openrouter.ai/api/v1",
+      maxRetries: 0, // Fail fast on rate-limited or overloaded free endpoints to immediately try the next model
       defaultHeaders: {
         "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
         "X-Title": "Precedent Research Desk",
       },
     });
 
-    // Curated list of reliable free model slugs on OpenRouter (DeepSeek, Llama, Gemma, Nemotron, free router)
+    // Curated list of reliable, currently active free model slugs on OpenRouter in priority order
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "deepseek/deepseek-chat:free",
-      "google/gemma-4-31b-it:free",
       "openrouter/free",
       "nvidia/nemotron-3.5-lightning:free",
+      "google/gemma-4-31b-it:free",
+      "inclusionai/ling-3.0-flash-fin:free",
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "deepseek/deepseek-chat:free",
     ].filter(Boolean) as string[];
 
     const uniqueSlugs = Array.from(new Set(freeCandidateSlugs));
@@ -164,25 +166,29 @@ Return JSON only, matching: ${SCHEMA}
   );
 
   const attempted: { label: string; error: string }[] = [];
+  const PER_MODEL_TIMEOUT_MS = 8_000;
 
   for (const llm of llms) {
     try {
       console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model})...`);
-      const text = await Promise.race([
+      const { text, actualModel } = await Promise.race([
         complete(llm.client, llm.model, system, user),
-        new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error("synthesis timeout (10s)")), 10_000),
+        new Promise<{ text: string; actualModel?: string }>((_, reject) =>
+          setTimeout(() => reject(new Error(`synthesis timeout (${PER_MODEL_TIMEOUT_MS / 1000}s)`)), PER_MODEL_TIMEOUT_MS),
         ),
       ]);
-      const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
+      const parsed = parseModelJson(text) as RetailBriefing;
       const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
+      const effectiveModelLabel = actualModel && actualModel !== llm.model
+        ? `${llm.label} (${actualModel})`
+        : llm.label;
       const briefing: Briefing = {
         ...adapted,
-        model: llm.label,
+        model: effectiveModelLabel,
         sources: collectSources(opts.pillars),
         isFallback: false,
       };
-      console.log(`[Synthesis] Successfully generated memo using ${llm.label}.`);
+      console.log(`[Synthesis] Successfully generated memo using ${effectiveModelLabel}.`);
       return guardBriefing(normalizeBriefing(briefing, fallback));
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -324,7 +330,12 @@ Return JSON only, matching: ${SCHEMA}
   }
 }
 
-async function complete(client: OpenAI, model: string, system: string, user: string): Promise<string> {
+async function complete(
+  client: OpenAI,
+  model: string,
+  system: string,
+  user: string,
+): Promise<{ text: string; actualModel?: string }> {
   try {
     const chat = await client.chat.completions.create({
       model,
@@ -334,8 +345,9 @@ async function complete(client: OpenAI, model: string, system: string, user: str
         { role: "user", content: user },
       ],
     });
-    const text = chat.choices[0]?.message?.content;
-    if (text) return text;
+    const msg = chat.choices[0]?.message;
+    const text = msg?.content || (msg as any)?.reasoning_content || (msg as any)?.reasoning;
+    if (text) return { text, actualModel: chat.model };
   } catch (err) {
     // Only attempt legacy responses API if explicitly available on this client instance
     if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
@@ -349,7 +361,7 @@ async function complete(client: OpenAI, model: string, system: string, user: str
           ],
         });
         const text = (res as { output_text?: string }).output_text;
-        if (text) return text;
+        if (text) return { text };
       } catch {
         // preserve original error
       }
@@ -357,6 +369,23 @@ async function complete(client: OpenAI, model: string, system: string, user: str
     throw err;
   }
   throw new Error("empty model output");
+}
+
+function parseModelJson(text: string): any {
+  const jsonStr = extractJson(text);
+  try {
+    return JSON.parse(jsonStr);
+  } catch (err) {
+    // Clean trailing commas and control characters commonly returned by free models
+    const sanitized = jsonStr
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
+    try {
+      return JSON.parse(sanitized);
+    } catch {
+      throw err;
+    }
+  }
 }
 
 function extractJson(text: string): string {

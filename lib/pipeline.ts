@@ -74,7 +74,7 @@ export async function* runResearch(input: {
     };
   }
 
-  const SYNTHESIS_TIMEOUT_MS = 25_000;
+  const SYNTHESIS_TIMEOUT_MS = 35_000;
   let briefing: Briefing;
   let synthesisFailed = false;
 
