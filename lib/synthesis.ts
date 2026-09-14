@@ -30,12 +30,13 @@ function providers() {
     // Curated list of reliable, currently active free model slugs on OpenRouter in priority order
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
+      "google/gemma-4-26b-a4b-it:free",
       "openrouter/free",
       "nvidia/nemotron-3.5-lightning:free",
-      "google/gemma-4-31b-it:free",
+      "liquid/lfm-2.5-2.6b:free",
       "inclusionai/ling-3.0-flash-fin:free",
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "deepseek/deepseek-chat:free",
+      "google/gemma-4-31b-it:free",
+      "nex-agi/nex-n2.5-mini:free",
     ].filter(Boolean) as string[];
 
     const uniqueSlugs = Array.from(new Set(freeCandidateSlugs));
@@ -153,20 +154,55 @@ Return JSON only, matching: ${SCHEMA}
   HistoricalStressTest is the most important section. For every available horizon, use this exact simple format: “Next day: went up 7 times out of 11. Usually between –1.8% and +2.4%. Middle result around +0.6%.” Replace the numbers with the retrieved values. Keep the three horizon cards when data exists, and make “went up X times out of Y” and “usually between A% and B%” the most prominent facts. Never lead with “moderate upside possible” or any similar interpretive or directional wording. State the sample size and explain when results are mixed or the sample is small. Do not expose internal percentile labels.
   Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. When the retrieved data contains disagreement, always include 1–3 real conflicts in whereThingsDoNotAgree. Write each conflict in plain, practical language: name the two facts that do not match, then explain why a beginner should care without predicting what happens next. For example: “The recent price has moved a lot, but the short-term strength indicator is already high.” Or: “The 24-hour Bitget price and the regular stock price are almost the same right now, but past similar cases sometimes showed a larger overnight difference.” Do not invent a conflict when the data does not support one. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
 
+  const compactPillars = {
+    fundamentals: opts.pillars.fundamentals?.ok ? {
+      company: opts.pillars.fundamentals.company,
+      eps: opts.pillars.fundamentals.eps,
+      latestFilings: opts.pillars.fundamentals.latestFilings?.slice(0, 2),
+      catalysts: opts.pillars.fundamentals.catalysts?.slice(0, 3),
+      notes: opts.pillars.fundamentals.notes?.slice(0, 3),
+    } : { ok: false },
+    technicals: opts.pillars.technicals?.ok ? {
+      native: opts.pillars.technicals.native,
+      rToken: opts.pillars.technicals.rToken,
+      rTokenGap: opts.pillars.technicals.rTokenGap,
+      trend: opts.pillars.technicals.trend,
+      momentum: opts.pillars.technicals.momentum,
+      volatility: opts.pillars.technicals.volatility,
+      levels: opts.pillars.technicals.levels,
+      indicators: opts.pillars.technicals.indicators,
+      notes: opts.pillars.technicals.notes?.slice(0, 3),
+    } : { ok: false },
+    news: opts.pillars.news?.ok ? {
+      headlines: opts.pillars.news.headlines?.slice(0, 4).map((h) => ({ title: h.title, publisher: h.publisher, tag: h.tag })),
+      macro: opts.pillars.news.macro?.slice(0, 2),
+      aggregateLean: opts.pillars.news.aggregateLean,
+    } : { ok: false },
+    analogs: opts.pillars.analogs?.ok ? {
+      ranges: opts.pillars.analogs.ranges,
+      sample: opts.pillars.analogs.sample,
+      closest: opts.pillars.analogs.closest?.slice(0, 3).map((c) => ({ ticker: c.ticker, date: c.date, ret1d: c.ret1d, ret5d: c.ret5d })),
+    } : { ok: false },
+    marketStructure: opts.pillars.marketStructure?.ok ? {
+      communityId: opts.pillars.marketStructure.communityId,
+      stability: opts.pillars.marketStructure.stability,
+    } : { ok: false },
+  };
+
   const user = JSON.stringify(
     {
       question: opts.question,
       name: { native: opts.name.native, rToken: opts.name.rToken, company: opts.name.name },
       regime: opts.regime,
       flags,
-      pillars: opts.pillars,
+      pillars: compactPillars,
     },
     null,
     2,
   );
 
   const attempted: { label: string; error: string }[] = [];
-  const PER_MODEL_TIMEOUT_MS = 8_000;
+  const PER_MODEL_TIMEOUT_MS = 18_000;
 
   for (const llm of llms) {
     try {
@@ -340,6 +376,7 @@ async function complete(
     const chat = await client.chat.completions.create({
       model,
       temperature: 0.2,
+      max_tokens: 1500,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },
