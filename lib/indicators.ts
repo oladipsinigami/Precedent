@@ -97,22 +97,22 @@ export function describeTrend(last: number, sma20?: number, sma50?: number, sma2
   const vs20 = sma20 ? last - sma20 : 0;
   const vs50 = sma50 ? last - sma50 : 0;
   const stacked = sma20 && sma50 && sma200 ? sma20 > sma50 && sma50 > sma200 : false;
-  if (stacked && vs20 > 0) return "Price is above the 20/50/200 session averages (averages stacked higher).";
-  if (sma200 && last < sma200 && vs50 < 0) return "Price is below the 50- and 200-session averages.";
-  if (vs20 > 0 && vs50 > 0) return "Price is holding above the 20- and 50-session averages.";
-  if (vs20 < 0 && vs50 > 0) return "Price has slipped under the 20-session average while still above the 50.";
-  return "The moving-average stack is mixed; treat trend as unresolved.";
+  if (stacked && vs20 > 0) return "Price is above its 20-, 50-, and 200-day averages, showing steady upward movement.";
+  if (sma200 && last < sma200 && vs50 < 0) return "Price is below its 50- and 200-day averages, showing steady downward movement.";
+  if (vs20 > 0 && vs50 > 0) return "Price is holding above its 20- and 50-day price averages.";
+  if (vs20 < 0 && vs50 > 0) return "Price is below its 20-day average but still above its 50-day average.";
+  return "Price is between its short- and long-term averages; recent direction is mixed.";
 }
 
 export function describeMomentum(rsi14?: number, macdLine?: number, macdSignal?: number): string {
   const bits: string[] = [];
   if (rsi14 !== undefined) {
-    if (rsi14 >= 70) bits.push(`RSI14 at ${rsi14.toFixed(1)} (stretched on the high side)`);
-    else if (rsi14 <= 30) bits.push(`RSI14 at ${rsi14.toFixed(1)} (stretched on the low side)`);
-    else bits.push(`RSI14 at ${rsi14.toFixed(1)} (mid-range)`);
+    if (rsi14 >= 70) bits.push(`Short-term strength score (RSI) is high at ${rsi14.toFixed(1)} out of 100, meaning recent gains have been fast and prices often pause here`);
+    else if (rsi14 <= 30) bits.push(`Short-term strength score (RSI) is low at ${rsi14.toFixed(1)} out of 100, meaning recent drops have been fast and prices often pause here`);
+    else bits.push(`Short-term strength score (RSI) is in the middle at ${rsi14.toFixed(1)} out of 100`);
   }
   if (macdLine !== undefined && macdSignal !== undefined) {
-    bits.push(macdLine > macdSignal ? "MACD line is above its signal line" : "MACD line is below its signal line");
+    bits.push(macdLine > macdSignal ? "Trend-speed indicator (MACD) shows short-term momentum is running faster than its baseline" : "Trend-speed indicator (MACD) shows short-term momentum is running slower than its baseline");
   }
-  return bits.join(". ") || "Momentum readings were incomplete.";
+  return bits.join(". ") || "Short-term momentum readings were incomplete.";
 }

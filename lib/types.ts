@@ -263,6 +263,7 @@ export type Briefing = {
   // Legacy fields remain as an internal compatibility bridge for existing memo components.
   styleNote: string;
   model: string;
+  isFallback?: boolean;
   regime?: Regime;
   flags?: StructureFlags;
   evidence: Citation[];

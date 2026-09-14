@@ -1,5 +1,7 @@
+import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { runResearch } from "@/lib/pipeline";
 import type { TradingStyle } from "@/lib/types";
+import { findName } from "@/lib/universe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,12 +41,43 @@ export async function POST(req: Request) {
       const send = (event: unknown) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
+      let hasSentBriefing = false;
       try {
         for await (const event of runResearch({ style, question, symbol })) {
+          if (event.type === "briefing") {
+            hasSentBriefing = true;
+          }
           send(event);
         }
       } catch (err) {
-        send({ type: "error", message: err instanceof Error ? err.message : "Research failed" });
+        send({
+          type: "error",
+          message: "Synthesis step had a problem. Showing simplified research note instead.",
+        });
+        if (!hasSentBriefing) {
+          try {
+            const fallbackName = findName(`${symbol ?? ""} ${question}`);
+            const emptyPillars = {
+              fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
+              technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },
+              news: { ok: false, headlines: [], macro: [], social: { x: [], youtube: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
+              analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
+              marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
+            };
+            const fallbackBriefing = deterministicBriefing({
+              style,
+              question,
+              name: fallbackName,
+              regime: "normal",
+              pillars: emptyPillars,
+              flags: undefined,
+            });
+            fallbackBriefing.isFallback = true;
+            send({ type: "briefing", briefing: fallbackBriefing });
+          } catch {
+            // Guard against any unexpected failure
+          }
+        }
         send({ type: "done" });
       } finally {
         controller.close();

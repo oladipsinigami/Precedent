@@ -1,30 +1,57 @@
 import OpenAI from "openai";
+import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
-import { fmtPct } from "./http";
-import { guardBriefing } from "./language-guard";
+import { guardBriefing, cleanHistoricalSummary } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
 
+export { deterministicBriefing, collectSources } from "./deterministic-briefing";
+
 function providers() {
-  const available = [];
-  if (process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY?.startsWith("sk-or-")) {
-    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
-    const model = process.env.OPENROUTER_MODEL || "openrouter/free";
-    available.push({
-      label: `openrouter/${model.replace("openai/", "")}`,
-      model,
-      client: new OpenAI({
-        apiKey,
-        baseURL: "https://openrouter.ai/api/v1",
-        defaultHeaders: {
-          "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
-          "X-Title": "Precedent Research Desk",
-        },
-      }),
+  const available: { label: string; model: string; client: OpenAI }[] = [];
+
+  const openRouterKey =
+    process.env.OPENROUTER_API_KEY ||
+    (process.env.OPENAI_API_KEY?.startsWith("sk-or-") ? process.env.OPENAI_API_KEY : undefined);
+
+  // 1. Always prioritize free OpenRouter models whenever an OpenRouter API key is available
+  if (openRouterKey) {
+    const client = new OpenAI({
+      apiKey: openRouterKey,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
+        "X-Title": "Precedent Research Desk",
+      },
     });
+
+    // Curated list of reliable free model slugs on OpenRouter (DeepSeek, Llama, Gemma, Nemotron, free router)
+    const freeCandidateSlugs = [
+      process.env.OPENROUTER_MODEL,
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "deepseek/deepseek-chat:free",
+      "google/gemma-4-31b-it:free",
+      "openrouter/free",
+      "nvidia/nemotron-3.5-lightning:free",
+    ].filter(Boolean) as string[];
+
+    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs));
+    for (const slug of uniqueSlugs) {
+      const cleanLabel = slug.startsWith("openrouter/") ? slug : `openrouter/${slug}`;
+      available.push({
+        label: cleanLabel,
+        model: slug,
+        client,
+      });
+    }
+
+    // Do not default to paid models when an OpenRouter key is present
+    return available;
   }
-  if (process.env.OPENAI_API_KEY) {
+
+  // 2. Secondary providers (only when OpenRouter key is not set, never hard-preferred)
+  if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith("sk-or-")) {
     const model = process.env.OPENAI_MODEL || "gpt-4o";
     available.push({
       label: model,
@@ -32,6 +59,7 @@ function providers() {
       client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
     });
   }
+
   if (process.env.XAI_API_KEY) {
     available.push({
       label: "grok-4.5",
@@ -39,6 +67,7 @@ function providers() {
       client: new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" }),
     });
   }
+
   if (process.env.BITGET_QWEN_API_KEY) {
     available.push({
       label: "qwen3.8-max",
@@ -49,6 +78,7 @@ function providers() {
       }),
     });
   }
+
   return available;
 }
 
@@ -83,7 +113,7 @@ export async function synthesize(opts: {
   }
   const fallback = deterministicBriefing({ ...opts, flags });
   const llms = providers();
-  if (!llms.length) return guardBriefing(fallback);
+  if (!llms.length) return guardBriefing({ ...fallback, isFallback: true });
 
   const profile = STYLES[opts.style];
   const system = `You are Precedent, a friendly research helper for tokenized US stocks on Bitget. You explain the retrieved facts to a complete beginner. The human makes the decision. You never do.
@@ -133,27 +163,48 @@ Return JSON only, matching: ${SCHEMA}
     2,
   );
 
+  const attempted: { label: string; error: string }[] = [];
+
   for (const llm of llms) {
     try {
+      console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model})...`);
       const text = await Promise.race([
         complete(llm.client, llm.model, system, user),
         new Promise<string>((_, reject) =>
-          setTimeout(() => reject(new Error("synthesis timeout")), 12_000),
+          setTimeout(() => reject(new Error("synthesis timeout (10s)")), 10_000),
         ),
       ]);
-    const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
-    const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
-    const briefing: Briefing = {
-      ...adapted,
-      model: llm.label,
-      sources: collectSources(opts.pillars),
-    };
-    return guardBriefing(normalizeBriefing(briefing, fallback));
-    } catch {
+      const parsed = JSON.parse(extractJson(text)) as RetailBriefing;
+      const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
+      const briefing: Briefing = {
+        ...adapted,
+        model: llm.label,
+        sources: collectSources(opts.pillars),
+        isFallback: false,
+      };
+      console.log(`[Synthesis] Successfully generated memo using ${llm.label}.`);
+      return guardBriefing(normalizeBriefing(briefing, fallback));
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Synthesis] Model provider ${llm.label} failed: ${errMsg}`);
+      attempted.push({ label: llm.label, error: errMsg });
       continue;
     }
   }
-  return guardBriefing({ ...fallback, model: `${llms[llms.length - 1].label} (fell back to deterministic synthesizer)` });
+
+  // All providers failed or timed out. Gracefully fall back to deterministic briefing.
+  const primaryAttempted = attempted[0]?.label ?? "model";
+  const fallbackModelLabel = attempted.length > 0
+    ? `${primaryAttempted} (fell back to deterministic synthesizer)`
+    : "deterministic-synthesizer";
+
+  console.info(`[Synthesis] Model calls failed or unavailable. Using deterministic briefing: ${fallbackModelLabel}`);
+
+  return guardBriefing({
+    ...fallback,
+    isFallback: true,
+    model: fallbackModelLabel,
+  });
 
   type RetailBriefing = {
     title?: string;
@@ -174,34 +225,66 @@ Return JSON only, matching: ${SCHEMA}
   function adaptRetailBriefing(
     parsed: RetailBriefing,
     fallback: Briefing,
-    opts: { style: TradingStyle; name: NameCard; regime: Regime },
+    opts: { style: TradingStyle; question: string; name: NameCard; regime: Regime; pillars: PillarBundle },
     flags: Briefing["flags"],
   ): Briefing {
+    const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget|after[- ]hours|pre[- ]market|session)\b/i.test(opts.question);
     const stress = parsed.historicalStressTest;
-    const otherThingsWeChecked = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3) ?? fallback.otherThingsWeChecked;
-    const whereThingsDoNotAgree = parsed.whereThingsDoNotAgree?.filter((item) => item.conflict && item.whyItMatters).slice(0, 3) ?? fallback.whereThingsDoNotAgree;
-    const simpleTakeAways = parsed.simpleTakeAways?.filter(Boolean).slice(0, 3) ?? fallback.simpleTakeAways;
+    let otherThingsWeChecked = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3) ?? fallback.otherThingsWeChecked;
+    let whereThingsDoNotAgree = parsed.whereThingsDoNotAgree?.filter((item) => item.conflict && item.whyItMatters).slice(0, 3) ?? [];
+    if (!whereThingsDoNotAgree.length) {
+      whereThingsDoNotAgree = fallback.whereThingsDoNotAgree;
+    }
+    let simpleTakeAways = parsed.simpleTakeAways?.filter(Boolean).slice(0, 3) ?? fallback.simpleTakeAways;
     const questionsOnlyYouCanAnswer = (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? []).length >= 2
       ? (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? [])
       : fallback.questionsOnlyYouCanAnswer;
-    const historicalStressTest = stress
-      ? {
-          summary: stress.summary || fallback.historicalStressTest.summary,
-          sampleSize: typeof stress.sampleSize === "number" && Number.isFinite(stress.sampleSize)
-            ? stress.sampleSize
-            : fallback.historicalStressTest.sampleSize,
-          results: (stress.results ?? []).filter((item): item is Briefing["historicalStressTest"]["results"][number] =>
-            ["Next day", "Next 5 trading days", "Next 10 trading days"].includes(item.period),
-          ).slice(0, 3),
-          examples: (stress.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5),
-          importantNote: stress.importantNote || fallback.historicalStressTest.importantNote,
-        }
-      : fallback.historicalStressTest;
-    const evidence = parsed.otherThingsWeChecked?.filter(Boolean).slice(0, 3).map((claim, index) => ({
+
+    if (asksAboutOvernight) {
+      const mentionsOvernight = (s: string) => /\b(overnight|7\s*[×x]\s*24|bitget|cash|basis)\b/i.test(s);
+      if (!otherThingsWeChecked.some(mentionsOvernight)) {
+        otherThingsWeChecked = [fallback.otherThingsWeChecked[0], ...otherThingsWeChecked].slice(0, 3);
+      }
+      if (!whereThingsDoNotAgree.some((item) => mentionsOvernight(item.conflict) || mentionsOvernight(item.whyItMatters))) {
+        whereThingsDoNotAgree = [fallback.whereThingsDoNotAgree[0], ...whereThingsDoNotAgree].slice(0, 3);
+      }
+      if (!simpleTakeAways.some(mentionsOvernight)) {
+        simpleTakeAways = [fallback.simpleTakeAways[0], ...simpleTakeAways].slice(0, 3);
+      }
+    }
+
+    const cleanSummary = cleanHistoricalSummary(stress?.summary) || fallback.historicalStressTest.summary;
+    const normalizedResults = fallback.historicalStressTest.results.map((fallbackItem) => {
+      const parsedItem = stress?.results?.find((r) => r.period === fallbackItem.period);
+      if (!parsedItem) return fallbackItem;
+      const hasWentUp = /went\s+up\s+\d+\s+times\s+out\s+of\s+\d+/i.test(parsedItem.wentUp);
+      const hasTypical = /usually\s+between/i.test(parsedItem.typicalMove);
+      return {
+        period: fallbackItem.period,
+        wentUp: hasWentUp ? parsedItem.wentUp : fallbackItem.wentUp,
+        typicalMove: hasTypical ? parsedItem.typicalMove : fallbackItem.typicalMove,
+        median: parsedItem.median || fallbackItem.median,
+      };
+    });
+
+    const historicalStressTest = {
+      summary: cleanSummary,
+      sampleSize: typeof stress?.sampleSize === "number" && Number.isFinite(stress.sampleSize)
+        ? stress.sampleSize
+        : fallback.historicalStressTest.sampleSize,
+      results: normalizedResults,
+      examples: (stress?.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5).length
+        ? (stress?.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5)
+        : fallback.historicalStressTest.examples,
+      importantNote: stress?.importantNote || fallback.historicalStressTest.importantNote,
+    };
+
+    const evidence = otherThingsWeChecked.slice(0, 3).map((claim, index) => ({
       claim,
       source: ["Fundamentals", "Price and Bitget", "Recent news"][index] ?? "Research data",
       pillar: (["fundamentals", "technicals", "news"][index] ?? "news") as Briefing["evidence"][number]["pillar"],
     }));
+
     return {
       ...fallback,
       title: parsed.title || fallback.title,
@@ -215,36 +298,28 @@ Return JSON only, matching: ${SCHEMA}
       regime: opts.regime,
       flags,
       evidence: evidence?.length ? evidence : fallback.evidence,
-      tension: parsed.whereThingsDoNotAgree?.length
-        ? parsed.whereThingsDoNotAgree.slice(0, 3).map((item) => ({ left: item.conflict, right: "", whyItMatters: item.whyItMatters }))
-        : fallback.tension,
-      historicalAnalog: stress
-        ? {
-            setup: stress.summary || fallback.historicalAnalog.setup,
-            analogs: (stress.examples ?? []).map((item) => ({
-              ticker: item.when,
-              date: "",
-              similarity: "Past chart with a similar shape",
-              followed: item.whatHappened,
-            })),
-            baseRates: (stress.results ?? []).map((item) => ({
-              horizon: item.period,
-              range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
-              n: stress.sampleSize ?? 0,
-              note: "This is only what happened in the past. It is not a prediction.",
-            })),
-            caveat: stress.importantNote || fallback.historicalAnalog.caveat,
-          }
-        : fallback.historicalAnalog,
-      considerations: parsed.simpleTakeAways || parsed.questionsOnlyYouCanAnswer
-        ? {
-            forStyle: parsed.simpleTakeAways?.filter(Boolean).slice(0, 3) ?? fallback.considerations.forStyle,
-            invalidation: fallback.considerations.invalidation,
-            questions: (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? []).length >= 2
-              ? (parsed.questionsOnlyYouCanAnswer?.filter(Boolean).slice(0, 3) ?? [])
-              : fallback.considerations.questions,
-          }
-        : fallback.considerations,
+      tension: whereThingsDoNotAgree.map((item) => ({ left: item.conflict, right: "", whyItMatters: item.whyItMatters })),
+      historicalAnalog: {
+        setup: cleanSummary,
+        analogs: (historicalStressTest.examples ?? []).map((item) => ({
+          ticker: item.when,
+          date: "",
+          similarity: "Past chart with a similar shape",
+          followed: item.whatHappened,
+        })),
+        baseRates: historicalStressTest.results.map((item) => ({
+          horizon: item.period,
+          range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
+          n: historicalStressTest.sampleSize,
+          note: "This is only what happened in the past. It is not a prediction.",
+        })),
+        caveat: historicalStressTest.importantNote,
+      },
+      considerations: {
+        forStyle: simpleTakeAways,
+        invalidation: fallback.considerations.invalidation,
+        questions: questionsOnlyYouCanAnswer,
+      },
     };
   }
 }
@@ -261,24 +336,31 @@ async function complete(client: OpenAI, model: string, system: string, user: str
     });
     const text = chat.choices[0]?.message?.content;
     if (text) return text;
-  } catch {
-    // try responses API (xAI / some Qwen gateways)
+  } catch (err) {
+    // Only attempt legacy responses API if explicitly available on this client instance
+    if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
+      try {
+        const res = await (client as unknown as { responses: { create: Function } }).responses.create({
+          model,
+          temperature: 0.2,
+          input: [
+            { role: "system", content: system },
+            { role: "user", content: user },
+          ],
+        });
+        const text = (res as { output_text?: string }).output_text;
+        if (text) return text;
+      } catch {
+        // preserve original error
+      }
+    }
+    throw err;
   }
-  const res = await client.responses.create({
-    model,
-    temperature: 0.2,
-    input: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-  });
-  const text = (res as { output_text?: string }).output_text;
-  if (!text) throw new Error("empty model output");
-  return text;
+  throw new Error("empty model output");
 }
 
 function extractJson(text: string): string {
-  const fenced = text.match(/```json([\s\S]*?)```/i);
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) return fenced[1].trim();
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -314,6 +396,7 @@ function normalizeBriefing(parsed: Briefing, fallback: Briefing): Briefing {
     questionsOnlyYouCanAnswer: parsed.questionsOnlyYouCanAnswer?.length ? parsed.questionsOnlyYouCanAnswer : fallback.questionsOnlyYouCanAnswer,
     styleNote: parsed.styleNote || fallback.styleNote,
     model: parsed.model,
+    isFallback: parsed.isFallback ?? false,
     regime: REGIMES.includes(parsed.regime as Regime) ? parsed.regime : fallback.regime,
     flags: validFlags(parsed.flags) ? parsed.flags : fallback.flags,
     evidence: parsed.evidence?.length ? parsed.evidence : fallback.evidence,
@@ -326,289 +409,4 @@ function normalizeBriefing(parsed: Briefing, fallback: Briefing): Briefing {
       : fallback.considerations,
     sources: parsed.sources?.length ? parsed.sources : fallback.sources,
   };
-}
-
-export function deterministicBriefing(opts: {
-  style: TradingStyle;
-  question: string;
-  name: NameCard;
-  regime: Regime;
-  pillars: PillarBundle;
-  flags: Briefing["flags"];
-}): Briefing {
-  const { pillars, name, style, regime, flags } = opts;
-  const profile = STYLES[style];
-  const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget)\b/i.test(opts.question);
-  const analogHorizon = profile.analogHorizon;
-  const band = pillars.analogs.ranges.find((r) => r.horizon === analogHorizon) ?? pillars.analogs.ranges[0];
-  const evidence = [];
-
-  if (pillars.fundamentals.ok && pillars.fundamentals.eps) {
-    evidence.push({
-      claim: `${pillars.fundamentals.company} last reported diluted EPS ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd} (${pillars.fundamentals.eps.form} filed ${pillars.fundamentals.eps.filed}).`,
-      source: "SEC EDGAR companyconcept",
-      pillar: "fundamentals" as const,
-    });
-  }
-  if (pillars.fundamentals.latestFilings[0]) {
-    const f = pillars.fundamentals.latestFilings[0];
-    evidence.push({
-      claim: `Most recent filing on the EDGAR tape: ${f.form} dated ${f.filed}.`,
-      source: "SEC EDGAR submissions",
-      pillar: "fundamentals" as const,
-    });
-  }
-  if (pillars.technicals.ok) {
-    evidence.push({
-      claim: `Native ${name.native} last ${pillars.technicals.native.last.toFixed(2)} (${fmtPct(pillars.technicals.native.changePct)}). ${pillars.technicals.trend}`,
-      source: "Yahoo Finance chart",
-      pillar: "technicals" as const,
-    });
-    if (pillars.technicals.rTokenGap) {
-      evidence.push({
-        claim: pillars.technicals.rTokenGap,
-        source: pillars.technicals.rToken ? "Bitget public ticker" : "Bitget tape unavailable",
-        pillar: "technicals" as const,
-      });
-    }
-  }
-  if (pillars.news.headlines[0]) {
-    evidence.push({
-      claim: `Lead headline: “${pillars.news.headlines[0].title}” (${pillars.news.headlines[0].publisher}).`,
-      source: pillars.news.headlines[0].publisher,
-      pillar: "news" as const,
-    });
-  }
-  if (pillars.news.social.x[0]) {
-    const top = pillars.news.social.x[0];
-    evidence.push({
-      claim: `Top X post (@${top.author}, ${top.lean}): “${top.text.slice(0, 160)}”. Aggregate X lean across ${pillars.news.social.x.length} posts is engagement-weighted.`,
-      source: "X discourse",
-      pillar: "news" as const,
-    });
-  }
-  if (pillars.news.social.youtube[0]) {
-    const v = pillars.news.social.youtube[0];
-    evidence.push({
-      claim: `Top YouTube item: “${v.title}” (${v.channelTitle}, ${v.overallLean}).`,
-      source: "YouTube discourse",
-      pillar: "news" as const,
-    });
-  }
-  if (pillars.news.caveats.length) {
-    evidence.push({
-      claim: `Social coverage caveats: ${pillars.news.caveats.join(" ")}`,
-      source: "Sentiment pillar",
-      pillar: "news" as const,
-    });
-  }
-  if (pillars.marketStructure.ok) {
-    const ms = pillars.marketStructure;
-    evidence.push({
-      claim: `Market structure: ${name.native} sits in RMT community ${ms.communityId} alongside ${(ms.communityMembers ?? []).filter((m) => m !== name.native).slice(0, 5).join(", ") || "no listed peers"}; market-mode share ${ms.marketModeStrength !== undefined ? (ms.marketModeStrength * 100).toFixed(1) + "%" : "n/a"}; ≈${ms.infoBeyondNoisePct?.toFixed(1)}% of eigenstructure beyond noise.`,
-      source: "RMT precompute snapshot",
-      pillar: "marketStructure" as const,
-    });
-  } else {
-    evidence.push({
-      claim: `Market-structure lookup degraded: ${pillars.marketStructure.error ?? "no snapshot"}. Community-conditioned analogs fall back to pure chart shape.`,
-      source: "RMT precompute snapshot",
-      pillar: "marketStructure" as const,
-    });
-  }
-  if (flags) {
-    evidence.push({
-      claim: `Flags (separate facts, not a score): catalyst density ${flags.catalystDensity}; regime alignment ${flags.regimeAlignment}; community stability ${flags.communityStability}; analog base n=${flags.analogQuality.n} (${flags.analogQuality.clustered ? "clustered" : "scattered"} outcomes)${flags.cleanedCorrRankPct !== undefined ? `; cleaned-correlation rank p${flags.cleanedCorrRankPct} in community` : ""}.`,
-      source: "Structure & Fundamentals flags",
-      pillar: "marketStructure" as const,
-    });
-    for (const line of flags.balanceSheet.slice(0, 2)) {
-      evidence.push({ claim: line, source: "SEC EDGAR companyconcept", pillar: "fundamentals" as const });
-    }
-  }
-  if (pillars.analogs.ok && band) {
-    evidence.push({
-      claim: `Chart Library ${analogHorizon} analog excess vs a liquid baseline: p10 ${fmtPct(band.p10)}, median ${fmtPct(band.p50)}, p90 ${fmtPct(band.p90)} (n=${band.n}). State: ${pillars.analogs.state ?? "n/a"} on ${pillars.analogs.session ?? "n/a"}. Regime frame: ${regime}.`,
-      source: "Chart Library state-packet",
-      pillar: "analogs" as const,
-    });
-  }
-
-  const tension = [];
-  const rsi = pillars.technicals.indicators.rsi14;
-  if (band && Math.abs(band.p50) < 0.5 && (band.p90 - band.p10) > 6) {
-    tension.push({
-      left: "Similar past cases were close to flat in the middle.",
-      right: `The usual range was wide, from ${fmtPct(band.p10)} to ${fmtPct(band.p90)} over ${analogHorizon}.`,
-      whyItMatters:
-        "The past cases show that the size of the move varied a lot, so this history does not give a simple answer.",
-    });
-  }
-  if (rsi !== undefined && rsi >= 60 && pillars.news.headlines.some((h) => h.lean === "cautious")) {
-    tension.push({
-      left: `The price has moved strongly recently; a short-term strength reading is ${rsi.toFixed(1)}.`,
-      right: "Recent headlines include cautious language.",
-      whyItMatters: "The price and recent news do not tell the same story, so a beginner should note the disagreement rather than treat either one as a forecast.",
-    });
-  }
-  const newsLean = pillars.news.headlines[0]?.lean;
-  const xLean = pillars.news.social.x[0]?.lean;
-  if (newsLean && xLean && newsLean !== "mixed" && xLean !== "mixed" && xLean !== "neutral" && newsLean !== xLean) {
-    tension.push({
-      left: `Headline tape leans ${newsLean}.`,
-      right: `X discourse leans ${xLean} (engagement-weighted).`,
-      whyItMatters: "The press tape and the crowd tape disagree; the trader must decide which audience moves this name first.",
-    });
-  }
-  if (pillars.news.social.x.length >= 10 && new Set(pillars.news.social.x.map((p) => p.lean)).size >= 3) {
-    tension.push({
-      left: `There were many public posts about the company (${pillars.news.social.x.length}).`,
-      right: "Those posts did not agree with each other.",
-      whyItMatters: "A lot of attention does not mean the information is clear, so a beginner should treat this as mixed evidence.",
-    });
-  }
-  const cleaned = pillars.marketStructure.cleanedCorrelations?.[0];
-  if (cleaned && Math.abs(cleaned.raw - cleaned.cleaned) > 0.2) {
-    tension.push({
-      left: `The price relationship with ${cleaned.peer} looks different in the raw data than after a noise check.`,
-      right: "The two measurements do not match closely.",
-      whyItMatters: "A beginner should treat the peer comparison as uncertain instead of assuming the two prices will keep moving together.",
-    });
-  }
-  if (flags && flags.regimeAlignment === "misaligned") {
-    tension.push({
-      left: `Detected regime is “${regime}”.`,
-      right: "Recent price action does not match that regime label.",
-      whyItMatters: "A regime mismatch means recent history may be a poor guide even before analogs are consulted.",
-    });
-  }
-  if (!pillars.technicals.rToken && pillars.analogs.ok) {
-    tension.push({
-      left: "Analog and cash-session tape are available.",
-      right: "The Bitget rToken print was not retrieved this run.",
-      whyItMatters:
-        "Bitget trades around the clock while the regular stock market closes. Without that Bitget price, the overnight difference cannot be measured.",
-    });
-  }
-  if (!tension.length) {
-    tension.push({
-      left: "Pillars are not in open conflict on the facts retrieved.",
-      right: "Absence of conflict is not confirmation.",
-      whyItMatters: "The trader still has to decide whether the analog range is acceptable for this style and holding period.",
-    });
-  }
-
-  const analogRows = pillars.analogs.closest.slice(0, 5).map((a) => ({
-    ticker: a.ticker,
-    date: a.date,
-    similarity: `distance ${a.distance.toFixed(3)} (lower is closer)`,
-    followed: `next session ${fmtPct(a.ret1d)}; 5 sessions ${fmtPct(a.ret5d)}; 10 sessions ${fmtPct(a.ret10d)} (cash close-to-close)`,
-  }));
-
-  return {
-    title: `${name.rToken} — ${profile.label} stress test`,
-    whatWeDid: `We compared the current chart with past charts that looked similar. We also checked company updates, price data, Bitget trading, and recent news.`,
-    historicalStressTest: {
-      summary: band
-        ? `We found ${band.n} past cases with a similar chart. The results show a range of outcomes, so history is useful for context but cannot tell us what happens this time.`
-        : "The historical comparison was not available in this run, so there is not enough past data to summarize.",
-      sampleSize: band?.n ?? 0,
-      results: pillars.analogs.ranges.slice(0, 3).map((r) => ({
-        period: r.horizon === "1d" ? "Next day" as const : r.horizon === "5d" ? "Next 5 trading days" as const : "Next 10 trading days" as const,
-        wentUp: `went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
-        typicalMove: `usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
-        median: fmtPct(r.p50),
-      })),
-      examples: pillars.analogs.closest.slice(0, 3).map((a) => ({
-        when: a.date,
-        whatHappened: `${a.ticker} moved ${fmtPct(a.ret5d)} over the next 5 trading days.`,
-      })),
-      importantNote: "This is only what happened in the past. It does not tell us what will happen this time.",
-    },
-    otherThingsWeChecked: [
-      pillars.fundamentals.eps
-        ? `The latest company report included diluted EPS of ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
-        : "Company earnings data was limited in this run.",
-      asksAboutOvernight
-        ? pillars.technicals.rTokenGap
-          ? `The 24-hour Bitget price compared with the regular stock price: ${pillars.technicals.rTokenGap}`
-          : "The 24-hour Bitget price could not be compared with the regular stock price in this run."
-        : pillars.technicals.rTokenGap ?? "Bitget price comparison was not available in this run.",
-      pillars.news.headlines[0]
-        ? `Recent news included: “${pillars.news.headlines[0].title}”.`
-        : "Recent news coverage was limited in this run.",
-    ],
-    whereThingsDoNotAgree: tension.slice(0, 3).map((item) => ({
-      conflict: `${item.left}${item.right ? ` ${item.right}` : ""}`,
-      whyItMatters: item.whyItMatters,
-    })),
-    simpleTakeAways: [
-      band ? "Similar past cases had mixed outcomes." : "There was not enough similar historical data.",
-      pillars.technicals.rTokenGap ?? "The Bitget price could not be compared with the regular stock price.",
-      pillars.news.caveats[0] ?? "News coverage was included where available.",
-    ],
-    questionsOnlyYouCanAnswer: [
-      "If the price moves outside the historical range, would you still feel comfortable with your plan?",
-      "How much does the Bitget price matter for the way you trade?",
-    ],
-    styleNote: `${profile.framing} Horizon in force: ${profile.horizon} Regime frame: ${regime}.`,
-    model: "deterministic-synthesizer",
-    regime,
-    flags: flags ?? undefined,
-    evidence: evidence.slice(0, 12),
-    tension,
-    historicalAnalog: {
-      setup: pillars.analogs.state
-        ? `Current Chart Library state “${pillars.analogs.state}” on ${pillars.analogs.session}. Previous: “${pillars.analogs.prevState}”. Regime frame: ${regime}.`
-        : "Chart Library state was unavailable; closest-name follow-through still listed where Yahoo history exists.",
-      analogs: analogRows,
-      baseRates: pillars.analogs.ranges.map((r) => ({
-        horizon: r.horizon,
-        range: `p10 ${fmtPct(r.p10)} · median ${fmtPct(r.p50)} · p90 ${fmtPct(r.p90)} · share of positive excess ${Math.round(r.pUp * 100)}% of the sample`,
-        n: r.n,
-        note: "Excess versus a date-matched liquid-stock baseline, not raw return, and not a forecast.",
-      })),
-      caveat:
-        pillars.analogs.caveats.join(" ") ||
-        "Analogs are a historical sample. They do not assign a side to the current name.",
-    },
-    considerations: {
-      forStyle: [
-        `This memo is framed for a ${profile.label} style over ${profile.horizon}.`,
-        analogHorizon === "1d"
-          ? "Weight the 1-session analog band and any cash/rToken gap into the next open."
-          : analogHorizon === "10d"
-            ? "For this time frame, company reports matter more than one short-term price reading."
-            : "For this time frame, compare the five-session history with the places where the facts disagree.",
-        pillars.technicals.rTokenGap ?? "rToken venue print was not on the tape this run.",
-        pillars.marketStructure.ok
-          ? `Community ${pillars.marketStructure.communityId} membership means peer moves inside that group deserve more weight than index-level moves.`
-          : "No community membership this run; peer comparison stays manual.",
-      ],
-      invalidation: [
-        band
-          ? `A move outside the usual historical range for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) would be different from the cases in this sample.`
-          : "Without analog bands, invalidation has to be defined by the trader’s own level — the desk will not invent one.",
-        pillars.fundamentals.catalysts[0]
-          ? `A new 8-K that changes the last-known filing picture (latest on tape: ${pillars.fundamentals.catalysts[0]}) would reopen the fundamental case.`
-          : "Watch the next 8-K; the current filing tape is the last known state.",
-      ],
-      questions: [
-        "Is the analog range wide enough that standing aside is the actual decision, not a placeholder?",
-        "If cash is closed and rToken is still trading, which tape are you answering to?",
-        "Which pillar, if it flipped tomorrow, would make you abandon the rest of this memo?",
-      ],
-    },
-    sources: collectSources(pillars),
-  };
-}
-
-function collectSources(pillars: PillarBundle) {
-  return [
-    ...pillars.fundamentals.sources,
-    ...pillars.technicals.sources,
-    ...pillars.news.sources,
-    ...pillars.analogs.sources,
-    ...pillars.marketStructure.sources,
-  ];
 }

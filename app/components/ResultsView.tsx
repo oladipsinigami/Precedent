@@ -139,10 +139,15 @@ export function ResultsView({
         </div>
       )}
 
-      {/* In-Place Style Frame Re-weighting Selector */}
-      {error && (
-        <div className="mb-6 rounded-sm border border-[#d6a34a]/35 bg-[#d6a34a]/[0.08] px-4 py-3 text-sm text-[#f0d39a]">
-          {error}
+      {/* Surface a visible, non-scary synthesis feedback banner */}
+      {(error || briefing.isFallback || briefing.model.includes("deterministic") || briefing.model.includes("fell back")) && (
+        <div className="mb-6 flex items-center gap-3 rounded-sm border border-[#d6a34a]/35 bg-[#d6a34a]/[0.08] px-4 py-3 text-xs sm:text-sm text-[#f0d39a] shadow-sm backdrop-blur-sm">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#d6a34a]/20 font-mono text-xs font-bold text-[#d6a34a]">
+            i
+          </span>
+          <div className="flex-1 font-medium">
+            {error || "Synthesis step had a problem. Showing simplified research note instead."}
+          </div>
         </div>
       )}
 

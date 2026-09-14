@@ -6,7 +6,7 @@ import { runTechnicals } from "./pillars/technicals";
 import { bitgetRTokenMarkets, bitgetRwaContracts } from "./providers/bitget";
 import { detectRegime } from "./regime";
 import { deterministicBriefing, synthesize } from "./synthesis";
-import type { PillarBundle, PillarId, ResearchEvent, TradingStyle } from "./types";
+import type { Briefing, PillarBundle, PillarId, ResearchEvent, TradingStyle } from "./types";
 import { findName, nameFromBitgetContract, nameFromBitgetRTokenMarket } from "./universe";
 
 function queryMentions(query: string, value: string): boolean {
@@ -74,16 +74,25 @@ export async function* runResearch(input: {
     };
   }
 
-  let briefing;
+  const SYNTHESIS_TIMEOUT_MS = 25_000;
+  let briefing: Briefing;
+  let synthesisFailed = false;
+
   try {
-    briefing = await synthesize({
-      style: input.style,
-      question: input.question,
-      name,
-      regime,
-      pillars,
-    });
+    briefing = await Promise.race([
+      synthesize({
+        style: input.style,
+        question: input.question,
+        name,
+        regime,
+        pillars,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Synthesis call timed out")), SYNTHESIS_TIMEOUT_MS),
+      ),
+    ]);
   } catch {
+    synthesisFailed = true;
     briefing = deterministicBriefing({
       style: input.style,
       question: input.question,
@@ -92,17 +101,26 @@ export async function* runResearch(input: {
       pillars,
       flags: undefined,
     });
+  }
+
+  const isFallback =
+    synthesisFailed ||
+    briefing.isFallback ||
+    !briefing.model ||
+    briefing.model.includes("deterministic") ||
+    briefing.model.includes("fell back");
+
+  if (isFallback) {
+    briefing.isFallback = true;
+    const isFreeModelAttempt = briefing.model?.includes("openrouter");
     yield {
       type: "error",
-      message: "Synthesis step had a problem. Showing a simplified research note instead.",
+      message: isFreeModelAttempt
+        ? "Free OpenRouter model was unavailable. Showing simplified research note instead."
+        : "Synthesis step had a problem. Showing simplified research note instead.",
     };
   }
-  if (briefing.model.includes("fell back to deterministic synthesizer")) {
-    yield {
-      type: "error",
-      message: "Synthesis step had a problem. Showing a simplified research note instead.",
-    };
-  }
+
   yield { type: "briefing", briefing };
   yield { type: "done" };
 }

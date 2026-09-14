@@ -1,9 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { DEMO_TASK, STYLES } from "@/lib/style-profiles";
 import { reweightBriefing } from "@/lib/reweight";
-import { UNIVERSE } from "@/lib/universe";
+import { findName, UNIVERSE } from "@/lib/universe";
 import { BlackholeBackground } from "./components/BlackholeBackground";
 import { Header } from "./components/Header";
 import { IntakeView } from "./components/IntakeView";
@@ -12,6 +13,7 @@ import type {
   Briefing,
   PillarBundle,
   PillarId,
+  Regime,
   ResearchEvent,
   TradingStyle,
 } from "@/lib/types";
@@ -105,6 +107,70 @@ export default function Home() {
       marketStructure: "running",
     });
 
+    let receivedBriefing = false;
+    let collectedPillars: Partial<PillarBundle> = {};
+    let collectedMeta: { native: string; name: string; regime: string } | null = null;
+    let collectedStatuses: PillarState = { ...EMPTY_PILLARS };
+
+    const handleEvent = (ev: ResearchEvent) => {
+      if (ev.type === "meta") {
+        collectedMeta = { native: ev.symbol, name: ev.name, regime: ev.regime };
+        setMeta(collectedMeta);
+      } else if (ev.type === "pillar") {
+        collectedStatuses = { ...collectedStatuses, [ev.id]: ev.status };
+        setStatuses((current) => ({ ...current, [ev.id]: ev.status }));
+        if (ev.data) {
+          collectedPillars = { ...collectedPillars, [ev.id]: ev.data as PillarBundle[PillarId] };
+          setPillarData((current) => ({ ...((current ?? {}) as PillarBundle), [ev.id]: ev.data as PillarBundle[PillarId] }));
+        }
+      } else if (ev.type === "briefing") {
+        receivedBriefing = true;
+        setBriefing(ev.briefing);
+        setView("results");
+      } else if (ev.type === "error") {
+        setError(ev.message);
+      }
+    };
+
+    const recoverWithFallback = (errorMessage?: string) => {
+      if (receivedBriefing) return;
+      const hasCompletedPillars = Object.values(collectedStatuses).some(
+        (s) => s === "ready" || s === "degraded",
+      );
+      if (hasCompletedPillars || Object.keys(collectedPillars).length > 0) {
+        const fallbackName = findName(`${symbol ?? ""} ${question}`);
+        const defaultEmptyPillars: PillarBundle = {
+          fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
+          technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },
+          news: { ok: false, headlines: [], macro: [], social: { x: [], youtube: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
+          analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
+          marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
+        };
+        const resolvedBundle: PillarBundle = {
+          fundamentals: (collectedPillars.fundamentals as PillarBundle["fundamentals"]) ?? defaultEmptyPillars.fundamentals,
+          technicals: (collectedPillars.technicals as PillarBundle["technicals"]) ?? defaultEmptyPillars.technicals,
+          news: (collectedPillars.news as PillarBundle["news"]) ?? defaultEmptyPillars.news,
+          analogs: (collectedPillars.analogs as PillarBundle["analogs"]) ?? defaultEmptyPillars.analogs,
+          marketStructure: (collectedPillars.marketStructure as PillarBundle["marketStructure"]) ?? defaultEmptyPillars.marketStructure,
+        };
+        const fallbackBriefing = deterministicBriefing({
+          style,
+          question: question.trim(),
+          name: fallbackName,
+          regime: (collectedMeta?.regime as Regime) ?? "normal",
+          pillars: resolvedBundle,
+          flags: undefined,
+        });
+        fallbackBriefing.isFallback = true;
+        setPillarData(resolvedBundle);
+        setBriefing(fallbackBriefing);
+        setError("Synthesis step had a problem. Showing simplified research note instead.");
+        setView("results");
+      } else {
+        setError(errorMessage || "The research run could not complete. Please try again.");
+      }
+    };
+
     try {
       const response = await fetch("/api/research", {
         method: "POST",
@@ -129,32 +195,18 @@ export default function Home() {
           if (line) handleEvent(JSON.parse(line.slice(6)) as ResearchEvent);
         }
       }
+      if (!receivedBriefing) {
+        recoverWithFallback();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Research failed.");
       setStatuses((current) =>
         Object.fromEntries(
           Object.entries(current).map(([key, value]) => [key, value === "ready" ? value : "degraded"]),
         ) as PillarState,
       );
+      recoverWithFallback(err instanceof Error ? err.message : "Research failed.");
     } finally {
       setBusy(false);
-    }
-  }
-
-  function handleEvent(event: ResearchEvent) {
-    if (event.type === "meta") {
-      setMeta({ native: event.symbol, name: event.name, regime: event.regime });
-    } else if (event.type === "pillar") {
-      setStatuses((current) => ({ ...current, [event.id]: event.status }));
-      if (event.data) {
-        setPillarData((current) => ({ ...((current ?? {}) as PillarBundle), [event.id]: event.data }));
-      }
-    } else if (event.type === "briefing") {
-      setBriefing(event.briefing);
-      // Seamlessly transition from Intake Page to Results Page upon synthesis completion
-      setView("results");
-    } else if (event.type === "error") {
-      setError(event.message);
     }
   }
 
