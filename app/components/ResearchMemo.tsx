@@ -124,20 +124,34 @@ export function ResearchMemo({
               </div>
             ))}
           </div>
-          {briefing.historicalStressTest.examples.length > 0 && (
-            <div className="mt-5">
-              <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
-                A few past examples
-              </h5>
-              <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
-                {briefing.historicalStressTest.examples.slice(0, 3).map((example) => (
-                  <li key={`${example.when}-${example.whatHappened}`}>
-                    <span className="font-semibold">{example.when}:</span> {example.whatHappened}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          {(() => {
+            const validExamples = (briefing.historicalStressTest.examples ?? [])
+              .filter(
+                (example) =>
+                  example?.when &&
+                  example?.whatHappened &&
+                  !/\b(n\/?a|null|undefined)\b/i.test(example.whatHappened) &&
+                  /\d/.test(example.whatHappened),
+              )
+              .slice(0, 3);
+
+            if (!validExamples.length) return null;
+
+            return (
+              <div className="mt-5">
+                <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                  A few past examples
+                </h5>
+                <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+                  {validExamples.map((example) => (
+                    <li key={`${example.when}-${example.whatHappened}`}>
+                      <span className="font-semibold">{example.when}:</span> {example.whatHappened}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
           <p className="mt-5 text-xs italic leading-relaxed text-[#637265]">
             {briefing.historicalStressTest.importantNote}
           </p>

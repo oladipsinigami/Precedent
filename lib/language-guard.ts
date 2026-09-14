@@ -104,11 +104,19 @@ export function guardBriefing(briefing: Briefing): Briefing {
         typicalMove: rewrite(result?.typicalMove),
         median: rewrite(result?.median),
       })),
-      examples: (briefing.historicalStressTest?.examples ?? []).map((example) => ({
-        ...example,
-        when: rewrite(example?.when),
-        whatHappened: rewrite(example?.whatHappened),
-      })),
+      examples: (briefing.historicalStressTest?.examples ?? [])
+        .filter(
+          (example) =>
+            example?.when &&
+            example?.whatHappened &&
+            !/\b(n\/?a|null|undefined)\b/i.test(example.whatHappened) &&
+            /\d/.test(example.whatHappened),
+        )
+        .map((example) => ({
+          ...example,
+          when: rewrite(example?.when),
+          whatHappened: rewrite(example?.whatHappened),
+        })),
       importantNote: rewrite(briefing.historicalStressTest?.importantNote),
     },
     otherThingsWeChecked: scrubList(briefing.otherThingsWeChecked),

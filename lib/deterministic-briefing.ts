@@ -273,10 +273,17 @@ export function deterministicBriefing(opts: {
         typicalMove: `usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
         median: fmtPct(r.p50),
       })),
-      examples: (pillars?.analogs?.closest ?? []).slice(0, 3).map((a) => ({
-        when: a.date,
-        whatHappened: `${a.ticker} moved ${fmtPct(a.ret5d)} over the next 5 trading days.`,
-      })),
+      examples: (pillars?.analogs?.closest ?? [])
+        .map((a) => {
+          const outcome = formatAnalogOutcome(a);
+          if (!outcome) return null;
+          return {
+            when: a.date,
+            whatHappened: outcome,
+          };
+        })
+        .filter((ex): ex is { when: string; whatHappened: string } => ex !== null)
+        .slice(0, 3),
       importantNote: "This is only what happened in the past. It does not tell us what will happen this time.",
     },
     otherThingsWeChecked: otherChecked,
@@ -337,4 +344,26 @@ export function deterministicBriefing(opts: {
     },
     sources: collectSources(pillars),
   };
+}
+
+function formatAnalogOutcome(a: { ticker: string; ret1d: number | null; ret5d: number | null; ret10d?: number | null }): string | null {
+  if (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) {
+    const abs5d = Math.abs(a.ret5d).toFixed(1);
+    const verb = a.ret5d > 0.05 ? "rose" : a.ret5d < -0.05 ? "fell" : "stayed roughly flat";
+    const amount = a.ret5d > 0.05 || a.ret5d < -0.05 ? `about ${abs5d}%` : `(${a.ret5d >= 0 ? "+" : ""}${a.ret5d.toFixed(1)}%)`;
+    return `${a.ticker} ${verb} ${amount} over the next 5 trading days.`;
+  }
+  if (typeof a.ret1d === "number" && !Number.isNaN(a.ret1d)) {
+    const abs1d = Math.abs(a.ret1d).toFixed(1);
+    const verb = a.ret1d > 0.05 ? "rose" : a.ret1d < -0.05 ? "fell" : "stayed roughly flat";
+    const amount = a.ret1d > 0.05 || a.ret1d < -0.05 ? `about ${abs1d}%` : `(${a.ret1d >= 0 ? "+" : ""}${a.ret1d.toFixed(1)}%)`;
+    return `${a.ticker} ${verb} ${amount} the next day.`;
+  }
+  if (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)) {
+    const abs10d = Math.abs(a.ret10d).toFixed(1);
+    const verb = a.ret10d > 0.05 ? "rose" : a.ret10d < -0.05 ? "fell" : "stayed roughly flat";
+    const amount = a.ret10d > 0.05 || a.ret10d < -0.05 ? `about ${abs10d}%` : `(${a.ret10d >= 0 ? "+" : ""}${a.ret10d.toFixed(1)}%)`;
+    return `${a.ticker} ${verb} ${amount} over the next 10 trading days.`;
+  }
+  return null;
 }

@@ -184,7 +184,10 @@ Return JSON only, matching: ${SCHEMA}
     analogs: opts.pillars.analogs?.ok ? {
       ranges: opts.pillars.analogs.ranges,
       sample: opts.pillars.analogs.sample,
-      closest: opts.pillars.analogs.closest?.slice(0, 3).map((c) => ({ ticker: c.ticker, date: c.date, ret1d: c.ret1d, ret5d: c.ret5d })),
+      closest: opts.pillars.analogs.closest
+        ?.filter((c) => (c.ret5d !== null && !Number.isNaN(c.ret5d)) || (c.ret1d !== null && !Number.isNaN(c.ret1d)))
+        .slice(0, 3)
+        .map((c) => ({ ticker: c.ticker, date: c.date, ret1d: c.ret1d, ret5d: c.ret5d })),
     } : { ok: false },
     marketStructure: opts.pillars.marketStructure?.ok ? {
       communityId: opts.pillars.marketStructure.communityId,
@@ -319,9 +322,16 @@ Return JSON only, matching: ${SCHEMA}
         ? stress.sampleSize
         : fallback.historicalStressTest.sampleSize,
       results: normalizedResults,
-      examples: (stress?.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5).length
-        ? (stress?.examples ?? []).filter((item) => item.when && item.whatHappened).slice(0, 5)
-        : fallback.historicalStressTest.examples,
+      examples: (() => {
+        const validParsed = (stress?.examples ?? []).filter(
+          (item) =>
+            item?.when &&
+            item?.whatHappened &&
+            !/\b(n\/?a|null|undefined)\b/i.test(item.whatHappened) &&
+            /\d/.test(item.whatHappened),
+        ).slice(0, 3);
+        return validParsed.length ? validParsed : fallback.historicalStressTest.examples;
+      })(),
       importantNote: stress?.importantNote || fallback.historicalStressTest.importantNote,
     };
 
