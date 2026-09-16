@@ -386,7 +386,7 @@ export function formatAnalogOutcome(
       const abs1d = Math.abs(a.ret1d).toFixed(1);
       const verb = a.ret1d > 0.05 ? "rose" : a.ret1d < -0.05 ? "fell" : "stayed roughly flat";
       const amount = a.ret1d > 0.05 || a.ret1d < -0.05 ? `about ${abs1d}%` : `(${a.ret1d >= 0 ? "+" : ""}${a.ret1d.toFixed(1)}%)`;
-      return `${verb} ${amount} the next day.`;
+      return `${verb} ${amount} the next day`;
     }
     return null;
   };
@@ -396,7 +396,7 @@ export function formatAnalogOutcome(
       const abs5d = Math.abs(a.ret5d).toFixed(1);
       const verb = a.ret5d > 0.05 ? "rose" : a.ret5d < -0.05 ? "fell" : "stayed roughly flat";
       const amount = a.ret5d > 0.05 || a.ret5d < -0.05 ? `about ${abs5d}%` : `(${a.ret5d >= 0 ? "+" : ""}${a.ret5d.toFixed(1)}%)`;
-      return `${verb} ${amount} over the next 5 days.`;
+      return `${verb} ${amount} over the next 5 days`;
     }
     return null;
   };
@@ -406,7 +406,7 @@ export function formatAnalogOutcome(
       const abs10d = Math.abs(a.ret10d).toFixed(1);
       const verb = a.ret10d > 0.05 ? "rose" : a.ret10d < -0.05 ? "fell" : "stayed roughly flat";
       const amount = a.ret10d > 0.05 || a.ret10d < -0.05 ? `about ${abs10d}%` : `(${a.ret10d >= 0 ? "+" : ""}${a.ret10d.toFixed(1)}%)`;
-      return `${verb} ${amount} over the next 10 days.`;
+      return `${verb} ${amount} over the next 10 days`;
     }
     return null;
   };

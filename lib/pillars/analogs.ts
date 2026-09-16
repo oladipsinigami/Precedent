@@ -57,6 +57,83 @@ export async function runAnalogs(
       return a[2] - b[2];
     });
     const poolRaw = ranked.slice(0, 15);
+function findSameTickerAnalogs(
+  bars: Bar[],
+  ticker: string,
+  minDaysApart = 15,
+  windowSize = 20,
+): AnalogFollowThrough[] {
+  if (!bars || bars.length < windowSize * 2 + 20) return [];
+
+  const currentIdx = bars.length - 1;
+  const currentOrigin = bars[currentIdx]?.c;
+  if (!currentOrigin || currentOrigin <= 0) return [];
+
+  const currentShape: number[] = [];
+  for (let t = -windowSize; t <= 0; t++) {
+    const b = bars[currentIdx + t];
+    if (!b || b.c <= 0) return [];
+    currentShape.push(b.c / currentOrigin);
+  }
+
+  type Candidate = {
+    idx: number;
+    date: string;
+    distance: number;
+  };
+  const candidates: Candidate[] = [];
+
+  const scanEnd = bars.length - 30;
+  for (let i = windowSize; i <= scanEnd; i++) {
+    const origin = bars[i]?.c;
+    if (!origin || origin <= 0) continue;
+
+    let sumSq = 0;
+    let valid = true;
+    for (let j = 0; j <= windowSize; j++) {
+      const b = bars[i - windowSize + j];
+      if (!b || b.c <= 0) {
+        valid = false;
+        break;
+      }
+      const diff = b.c / origin - currentShape[j];
+      sumSq += diff * diff;
+    }
+    if (!valid) continue;
+
+    const distance = Math.sqrt(sumSq / (windowSize + 1));
+    const dateStr = new Date(bars[i].t * 1000).toISOString().slice(0, 10);
+    candidates.push({ idx: i, date: dateStr, distance });
+  }
+
+  candidates.sort((a, b) => a.distance - b.distance);
+
+  const distinct: Candidate[] = [];
+  for (const c of candidates) {
+    const cTime = new Date(c.date).getTime();
+    const isNearby = distinct.some((d) => Math.abs(new Date(d.date).getTime() - cTime) < minDaysApart * 86400000);
+    if (!isNearby) {
+      distinct.push(c);
+      if (distinct.length >= 4) break;
+    }
+  }
+
+  return distinct.map((d) => ({
+    ticker,
+    date: d.date,
+    distance: d.distance,
+    sameName: true,
+    ret1d: forwardReturn(bars, d.date, 1),
+    ret5d: forwardReturn(bars, d.date, 5),
+    ret10d: forwardReturn(bars, d.date, 10),
+  })).filter(
+    (a) =>
+      (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) ||
+      (typeof a.ret1d === "number" && !Number.isNaN(a.ret1d)) ||
+      (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)),
+  );
+}
+
     const uniqueTickers = [...new Set([name.native, ...poolRaw.map((x) => x[0])])];
     const charts = await Promise.all(
       uniqueTickers.map(async (ticker) => {
@@ -69,19 +146,25 @@ export async function runAnalogs(
       }),
     );
     const byTicker = Object.fromEntries(charts);
+    const selfBars = byTicker[name.native] ?? [];
 
-    const poolComputed: AnalogFollowThrough[] = poolRaw.map(([ticker, date, distance]) => {
-      const bars = byTicker[ticker] ?? [];
-      return {
-        ticker,
-        date,
-        distance,
-        sameName: ticker === name.native,
-        ret1d: bars.length ? forwardReturn(bars, date, 1) : null,
-        ret5d: bars.length ? forwardReturn(bars, date, 5) : null,
-        ret10d: bars.length ? forwardReturn(bars, date, 10) : null,
-      };
-    });
+    const sameTickerAnalogs = findSameTickerAnalogs(selfBars, name.native);
+
+    const poolComputed: AnalogFollowThrough[] = [
+      ...sameTickerAnalogs,
+      ...poolRaw.map(([ticker, date, distance]) => {
+        const bars = byTicker[ticker] ?? [];
+        return {
+          ticker,
+          date,
+          distance,
+          sameName: ticker === name.native,
+          ret1d: bars.length ? forwardReturn(bars, date, 1) : null,
+          ret5d: bars.length ? forwardReturn(bars, date, 5) : null,
+          ret10d: bars.length ? forwardReturn(bars, date, 10) : null,
+        };
+      }),
+    ];
 
     // Only show examples that have clear, complete forward outcomes
     const validPool = poolComputed.filter(
@@ -110,7 +193,6 @@ export async function runAnalogs(
     const conditioned = members.size > 0 && closest.some((c) => members.has(c.ticker));
 
     const overlay: OverlaySeries[] = [];
-    const selfBars = byTicker[name.native] ?? [];
     if (selfBars.length) {
       overlay.push(
         overlayFromBars(
