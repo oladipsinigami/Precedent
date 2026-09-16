@@ -217,7 +217,13 @@ export default function Home() {
         buffer = frames.pop() ?? "";
         for (const frame of frames) {
           const line = frame.split("\n").find((item) => item.startsWith("data: "));
-          if (line) handleEvent(JSON.parse(line.slice(6)) as ResearchEvent);
+          if (line) {
+            try {
+              handleEvent(JSON.parse(line.slice(6)) as ResearchEvent);
+            } catch (frameErr) {
+              console.warn("[Stream] Failed to parse SSE frame:", frameErr);
+            }
+          }
         }
       }
       if (!receivedBriefing) {

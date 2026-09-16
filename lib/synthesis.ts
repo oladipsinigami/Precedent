@@ -428,8 +428,17 @@ async function hedgeSynthesis(
       }
     };
 
-    // Start primary candidate; failover immediately triggers on error or timeout
+    // Start primary candidate immediately
     tryCandidate(0);
+
+    // If primary candidate takes >4.5s, launch hedged backup candidate in parallel
+    const hedgeTimer = setTimeout(() => {
+      if (!resolved && !started.has(1) && llms.length > 1) {
+        console.log("[Synthesis] Primary candidate taking >4.5s; launching hedged backup candidate in parallel...");
+        tryCandidate(1);
+      }
+    }, 4500);
+    timers.push(hedgeTimer);
   });
 }
 
