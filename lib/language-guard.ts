@@ -5,7 +5,7 @@ const CONFIDENCE = /\b\d{1,3}\s*%\s*(confidence|probable|probability|sure|convic
 const VERDICT_LINE =
   /\b(i recommend|you should|strong (buy|sell)|this is a (buy|sell)|open a (long|short)|go long|go short|enter (a )?position)\b/gi;
 const SOFT_DIRECTIONAL =
-  /\b(upside bias|downside bias|favors higher prices|favors lower prices|constructive setup|cautious setup|lean(?:s|ing)? long|lean(?:s|ing)? short|history is supportive|history is unsupportive|supportive history|bullish setup|bearish setup|positive price bias|negative price bias|upside possible|downside possible|expect a pullback|bullish case|bearish case|upside case|downside case|further upside|further downside|room for upside|room for downside|tempts? traders|expect the same direction|moderate upside|moderate downside|tilted to the upside|tilted to the downside|on the upside|on the downside|struggles to go higher|may need a pause|tailwinds?|headwinds?)\b/gi;
+  /\b(upside bias|downside bias|favors higher prices|favors lower prices|constructive setup|cautious setup|lean(?:s|ing)? long|lean(?:s|ing)? short|lean(?:s|ing)? constructive|lean(?:s|ing)? cautious|history is supportive|history is unsupportive|supportive history|bullish setup|bearish setup|positive price bias|negative price bias|upside possible|downside possible|expect a pullback|bullish case|bearish case|upside case|downside case|further upside|further downside|room for upside|room for downside|tempts? traders|expect the same direction|moderate upside|moderate downside|tilted to the upside|tilted to the downside|on the upside|on the downside|struggles to go higher|may need a pause|tailwinds?|headwinds?|slight edge|small edge|modest edge|marginal edge|favoring patience|overnight speculation|news sentiment|bullish sentiment|bearish sentiment|remain(?:s|ed|ing)? constructive|remain(?:s|ed|ing)? cautious|is constructive|looks constructive|appears constructive|constructive (?:tone|stance|view|outlook|lean|bias|posture)|cautious (?:tone|stance|view|outlook|lean|bias|posture)|poised (?:to|for)|room to run)\b/gi;
 
 function matches(regex: RegExp, text: string): boolean {
   regex.lastIndex = 0;
@@ -30,6 +30,30 @@ function demystifyJargon(text: string): string {
 
 function banSoftDirectional(text: string): string {
   return text
+    .replace(/\b(a\s+)?(slight|small|modest|marginal)\s+edge\s+to\s+(the\s+)?(upward|downward)(\s+movement)?\b/gi, "a split historical distribution")
+    .replace(/\b(a\s+)?(slight|small|modest|marginal)\s+edge\s+(to|toward|for)\s+(the\s+)?(upside|downside|higher|lower)\b/gi, "a split historical distribution")
+    .replace(/\b(slight|small|modest|marginal)\s+edge\b/gi, "split outcome")
+    .replace(/\bhas\s+an\s+edge\b/gi, "shows mixed outcomes")
+    .replace(/\bgives\s+an\s+edge\b/gi, "shows historical variation")
+    .replace(/\bfavoring\s+patience\s+over\s+(overnight\s+)?speculation\b/gi, "noting differences between 24-hour token trading and cash market sessions")
+    .replace(/\bfavor(?:s|ing)?\s+patience\b/gi, "comparing session liquidity")
+    .replace(/\bpatience\s+over\s+(overnight\s+)?speculation\b/gi, "differences between 24-hour token trading and cash sessions")
+    .replace(/\bovernight\s+speculation\b/gi, "overnight token trading")
+    .replace(/\b(bullish|bearish|positive|negative|constructive|cautious)\s+news\s+sentiment\b/gi, "recent news coverage")
+    .replace(/\bnews\s+sentiment\s+is\s+(bullish|bearish|positive|negative|constructive|cautious)\b/gi, "news headlines reflect recent developments")
+    .replace(/\bnews\s+sentiment\b/gi, "news coverage")
+    .replace(/\b(bullish|bearish)\s+sentiment\b/gi, "sentiment readings")
+    .replace(/\bremain(?:s|ed|ing)?\s+constructive\b/gi, "recorded recent gains")
+    .replace(/\bremain(?:s|ed|ing)?\s+cautious\b/gi, "recorded recent declines")
+    .replace(/\b(is|looks|appears)\s+constructive\b/gi, "reflects recent price levels")
+    .replace(/\bconstructive\s+(tone|stance|view|outlook|lean|bias|posture)\b/gi, "historical price data")
+    .replace(/\bcautious\s+(tone|stance|view|outlook|lean|bias|posture)\b/gi, "historical price data")
+    .replace(/\blean(?:s|ing)?\s+constructive\b/gi, "shows positive recent sessions")
+    .replace(/\blean(?:s|ing)?\s+cautious\b/gi, "shows negative recent sessions")
+    .replace(/\btempts?\s+traders\s+to\s+expect\s+the\s+same\s+direction(\s+to\s+continue)?\b/gi, "produced a split distribution rather than a uniform move")
+    .replace(/\btempts?\s+traders\s+to\s+expect\b/gi, "shows past outcomes were split")
+    .replace(/\btempts?\s+traders\b/gi, "shows mixed historical results")
+    .replace(/\bexpect\s+the\s+same\s+direction(\s+to\s+continue)?\b/gi, "historical outcomes were split")
     .replace(/\b(moderate\s+)?upside\s+possible\b/gi, "past sessions showed positive follow-through")
     .replace(/\b(moderate\s+)?downside\s+possible\b/gi, "past sessions showed negative follow-through")
     .replace(/\bexpect\s+a\s+pullback\s+before\s+further\s+upside\b/gi, "prices fluctuated across past sessions")
@@ -38,9 +62,6 @@ function banSoftDirectional(text: string): string {
     .replace(/\bexpect\s+a\s+pullback\b/gi, "prices may fluctuate")
     .replace(/\bfurther\s+upside\b/gi, "higher price points")
     .replace(/\bfurther\s+downside\b/gi, "lower price points")
-    .replace(/\btempts?\s+traders\s+to\s+expect\s+the\s+same\s+direction(\s+to\s+continue)?\b/gi, "produced a split distribution rather than a uniform move")
-    .replace(/\btempts?\s+traders\s+to\s+expect\b/gi, "shows past outcomes were split")
-    .replace(/\bexpect\s+the\s+same\s+direction(\s+to\s+continue)?\b/gi, "historical outcomes were split")
     .replace(/\bon\s+the\s+downside\s+to\s+([^.\n]+?)\s+on\s+the\s+upside\b/gi, "to $1")
     .replace(/\bon\s+the\s+upside\b/gi, "")
     .replace(/\bon\s+the\s+downside\b/gi, "")
@@ -60,6 +81,8 @@ function banSoftDirectional(text: string): string {
     .replace(/\btilted\s+to\s+the\s+(upside|downside)\b/gi, "mixed across the sample")
     .replace(/\bstruggles\s+to\s+go\s+higher\b/gi, "is trading near recent levels")
     .replace(/\bmay\s+need\s+a\s+pause\b/gi, "has recorded recent gains")
+    .replace(/\bpoised\s+(to|for)\b/gi, "positioned around")
+    .replace(/\broom\s+to\s+run\b/gi, "historical price spread")
     .replace(/\b(moderate\s+)?upside\b/gi, "upward movement")
     .replace(/\b(moderate\s+)?downside\b/gi, "downward movement");
 }
@@ -72,6 +95,8 @@ export function cleanHistoricalSummary(text: string | undefined | null): string 
   s = s.replace(/^(the\s+)?(upside|downside)\s+case[:\s—–-]*/i, "");
   s = s.replace(/^the\s+evidence\s+remains\s+mixed[:\s—–-]*/i, "");
   s = s.replace(/^prices\s+moved\s+(higher|lower)\s+in\s+some\s+past\s+sessions[:\s—–-]*/i, "");
+  s = s.replace(/^(with\s+a\s+)?(slight|small|modest)\s+edge\s+to\s+[^,.:—–-]+[,.:—–-]*/i, "");
+  s = s.replace(/^(showing\s+a\s+|a\s+)?split\s+historical\s+distribution[:\s—–-]*/i, "");
   s = s.trim();
   if (s.length > 0) {
     s = s.charAt(0).toUpperCase() + s.slice(1);

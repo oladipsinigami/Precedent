@@ -107,8 +107,8 @@ export function describeTrend(last: number, sma20?: number, sma50?: number, sma2
 export function describeMomentum(rsi14?: number, macdLine?: number, macdSignal?: number): string {
   const bits: string[] = [];
   if (rsi14 !== undefined) {
-    if (rsi14 >= 70) bits.push(`Short-term strength score (RSI) is high at ${rsi14.toFixed(1)} out of 100, meaning recent gains have been fast and prices often pause here`);
-    else if (rsi14 <= 30) bits.push(`Short-term strength score (RSI) is low at ${rsi14.toFixed(1)} out of 100, meaning recent drops have been fast and prices often pause here`);
+    if (rsi14 >= 70) bits.push(`Short-term strength score (RSI) is high at ${rsi14.toFixed(1)} out of 100, reflecting rapid recent price gains relative to the 14-period baseline`);
+    else if (rsi14 <= 30) bits.push(`Short-term strength score (RSI) is low at ${rsi14.toFixed(1)} out of 100, reflecting rapid recent price drops relative to the 14-period baseline`);
     else bits.push(`Short-term strength score (RSI) is in the middle at ${rsi14.toFixed(1)} out of 100`);
   }
   if (macdLine !== undefined && macdSignal !== undefined) {
