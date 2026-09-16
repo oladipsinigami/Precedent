@@ -11,50 +11,45 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
-  const rawOpenRouterKey =
-    process.env.OPENROUTER_API_KEY ||
-    process.env.OPENROUTER_KEY ||
-    (process.env.OPENAI_API_KEY?.startsWith("sk-or-") ? process.env.OPENAI_API_KEY : undefined);
-  const openRouterKey = rawOpenRouterKey && rawOpenRouterKey !== "[SENSITIVE]" ? rawOpenRouterKey : undefined;
+  const rawOpenCodeKey =
+    process.env.OPENCODE_API_KEY ||
+    "[REDACTED_API_KEY]";
+  const openCodeKey =
+    rawOpenCodeKey && rawOpenCodeKey !== "[SENSITIVE]" ? rawOpenCodeKey : undefined;
 
-  // 1. Always prioritize free OpenRouter models whenever an OpenRouter API key is available
-  if (openRouterKey) {
+  // 1. Prioritize OpenCode Zen models
+  if (openCodeKey) {
     const client = new OpenAI({
-      apiKey: openRouterKey,
-      baseURL: "https://openrouter.ai/api/v1",
-      maxRetries: 0, // Fail fast on rate-limited or overloaded free endpoints to immediately try the next model
+      apiKey: openCodeKey,
+      baseURL: process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/v1",
+      maxRetries: 0,
       defaultHeaders: {
         "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
         "X-Title": "Precedent Research Desk",
       },
     });
 
-    // Curated ordered list of verified fast, active free models on OpenRouter:
-    // 1. inclusionai/ling-3.0-flash-vl:free (Consistent ~4.9s response, clean JSON, no rate-limiting)
-    // 2. cohere/north-mini-code:free (Consistent ~6.5s response, strict JSON adherence, secondary provider)
-    // 3. liquid/lfm-2.5-2.6b:free (Lightweight tertiary fallback)
-    const freeCandidateSlugs = [
-      process.env.OPENROUTER_MODEL,
-      "inclusionai/ling-3.0-flash-vl:free",
-      "cohere/north-mini-code:free",
-      "liquid/lfm-2.5-2.6b:free",
+    const candidateModels = [
+      process.env.OPENCODE_MODEL,
+      "claude-haiku-4-5",
+      "gpt-5.4-mini",
+      "gemini-3.5-flash",
+      "deepseek-v4-flash",
     ].filter(Boolean) as string[];
 
-    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs)).slice(0, 3);
-    for (const slug of uniqueSlugs) {
-      const cleanLabel = slug.startsWith("openrouter/") ? slug : `openrouter/${slug}`;
+    const uniqueModels = Array.from(new Set(candidateModels)).slice(0, 3);
+    for (const model of uniqueModels) {
       available.push({
-        label: cleanLabel,
-        model: slug,
+        label: `opencode/${model}`,
+        model,
         client,
       });
     }
 
-    // Do not default to paid models when an OpenRouter key is present
     return available;
   }
 
-  // 2. Secondary providers (only when OpenRouter key is not set, never hard-preferred)
+  // 2. Secondary providers (only when OpenCode is not set)
   if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith("sk-or-")) {
     const model = process.env.OPENAI_MODEL || "gpt-4o";
     available.push({
@@ -137,7 +132,7 @@ export async function synthesize(opts: {
   }
   const fallback = deterministicBriefing({ ...opts, flags });
   const llms = providers();
-  if (!llms.length) return guardBriefing({ ...fallback, isFallback: true });
+  if (!llms.length) return guardBriefing({ ...fallback, isFallback: true, model: "Precedent Quantitative Desk" });
 
   const profile = STYLES[opts.style];
   const system = `You are Precedent, an API engine providing friendly research notes for tokenized US stocks on Bitget.
@@ -243,13 +238,11 @@ ${SCHEMA}
     return guardBriefing(normalizeBriefing(briefing, fallback));
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Synthesis] All hedged free candidates failed: ${errMsg}`);
-    const primaryAttempted = llms[0]?.label || "openrouter/inclusionai/ling-3.0-flash-vl:free";
-    const fallbackModelLabel = `${primaryAttempted} (fell back to deterministic synthesizer)`;
+    console.warn(`[Synthesis] All hedged synthesis candidates failed: ${errMsg}`);
     return guardBriefing({
       ...fallback,
       isFallback: true,
-      model: fallbackModelLabel,
+      model: "Precedent Quantitative Desk",
     });
   }
 

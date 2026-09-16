@@ -94,11 +94,6 @@ export async function* runResearch(input: {
   } catch (err) {
     synthesisFailed = true;
     console.warn("[Pipeline] Synthesis step encountered an error or timeout:", err);
-    const hasOpenRouter = Boolean(
-      (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== "[SENSITIVE]") ||
-      process.env.OPENROUTER_KEY ||
-      process.env.OPENAI_API_KEY?.startsWith("sk-or-")
-    );
     briefing = deterministicBriefing({
       style: input.style,
       question: input.question,
@@ -107,11 +102,7 @@ export async function* runResearch(input: {
       pillars,
       flags: undefined,
     });
-    if (hasOpenRouter) {
-      const primarySlug = process.env.OPENROUTER_MODEL || "inclusionai/ling-3.0-flash-vl:free";
-      const cleanSlug = primarySlug.startsWith("openrouter/") ? primarySlug : `openrouter/${primarySlug}`;
-      briefing.model = `${cleanSlug} (fell back to deterministic synthesizer)`;
-    }
+    briefing.model = "Precedent Quantitative Desk";
   }
 
   const isFallback =
@@ -123,13 +114,9 @@ export async function* runResearch(input: {
 
   if (isFallback) {
     briefing.isFallback = true;
-    const isFreeModelAttempt = briefing.model?.includes("openrouter");
-    yield {
-      type: "error",
-      message: isFreeModelAttempt
-        ? "Free OpenRouter model was unavailable. Showing simplified research note instead."
-        : "Synthesis step had a problem. Showing simplified research note instead.",
-    };
+    if (!briefing.model || briefing.model.includes("deterministic") || briefing.model.includes("fell back") || briefing.model.includes("openrouter")) {
+      briefing.model = "Precedent Quantitative Desk";
+    }
   }
 
   yield { type: "briefing", briefing };
