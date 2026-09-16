@@ -17,7 +17,7 @@ export const STYLES: Record<
     horizon: "Hours to the next cash open/close. Overnight rToken gaps matter more than the 10-day analog band.",
     depth: "Keep the memo short. Lead with tape, realized vol, and 1-day analog range. Fundamentals only as a catalyst check.",
     analogHorizon: "1d",
-    framing: "Write as a pre-open / session brief. Emphasize gap risk while US cash is closed and the 7×24 rToken window is still live.",
+    framing: "Pre-open and session brief emphasizing overnight gap risk while US cash is closed and the 7×24 rToken window is live.",
   },
   swing: {
     label: "Swing trader",
@@ -25,7 +25,7 @@ export const STYLES: Record<
     horizon: "5–10 sessions. This is the default analog window.",
     depth: "Full four-pillar memo. Weight historical analogs and tension equally with the current tape.",
     analogHorizon: "5d",
-    framing: "Write as a swing briefing. Translate analog 5d/10d excess ranges into what would have to happen for the thesis to fail over the next week.",
+    framing: "Multi-session swing briefing evaluating historical 5-day analog ranges and key invalidation levels into next week.",
   },
   event: {
     label: "Event-driven / macro",
@@ -33,7 +33,7 @@ export const STYLES: Record<
     horizon: "The event window, including weekend and after-hours rToken trade.",
     depth: "Lead with catalysts, guidance language, and macro headlines. Use analogs as a distribution around similar post-event tapes, not as a directional call.",
     analogHorizon: "5d",
-    framing: "Write as an event brief. Separate what is known in filings/headlines from what the 7×24 market can reprice before cash opens.",
+    framing: "Catalyst and macro briefing separating confirmed filings from what the 7×24 venue can reprice before the cash session.",
   },
   position: {
     label: "Position",
@@ -41,7 +41,7 @@ export const STYLES: Record<
     horizon: "20–60 sessions. Multi-quarter filings matter more than one RSI print.",
     depth: "Lead with filings, earnings trajectory, and 10-day analog bands. Technicals as regime, not as a trigger.",
     analogHorizon: "10d",
-    framing: "Write as an investment-committee style note. Stress-test whether the analog range is wide enough to invalidate a longer-dated thesis.",
+    framing: "Longer-horizon investment assessment stress-testing multi-week analog distribution against fundamental SEC filing trends.",
   },
 };
 

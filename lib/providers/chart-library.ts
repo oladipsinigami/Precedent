@@ -41,5 +41,5 @@ export type ChartLibraryPacket = {
 
 export async function chartLibraryState(symbol: string): Promise<ChartLibraryPacket> {
   const url = `https://chartlibrary.io/api/v1/state-packet?symbol=${encodeURIComponent(symbol)}`;
-  return fetchJson<ChartLibraryPacket>(url, { timeoutMs: 3000, cacheTtlMs: 5 * 60_000 });
+  return fetchJson<ChartLibraryPacket>(url, { timeoutMs: 8000, cacheTtlMs: 5 * 60_000 });
 }

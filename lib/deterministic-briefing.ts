@@ -1,4 +1,5 @@
 import { fmtPct } from "./http";
+import { guardBriefing } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
@@ -23,7 +24,8 @@ export function deterministicBriefing(opts: {
 }): Briefing {
   const { pillars, name, style, regime, flags } = opts;
   const profile = STYLES[style] ?? STYLES.swing;
-  const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget)\b/i.test(opts.question);
+  const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget|session|intraday|open|close|gap)\b/i.test(opts.question);
+  const isDayOrOvernight = style === "day" || asksAboutOvernight;
   const analogHorizon = profile.analogHorizon;
   const ranges = pillars?.analogs?.ranges ?? [];
   const band = ranges.find((r) => r.horizon === analogHorizon) ?? ranges[0];
@@ -127,14 +129,14 @@ export function deterministicBriefing(opts: {
   const newsLean = pillars?.news?.headlines?.[0]?.lean;
   const xLean = pillars?.news?.social?.x?.[0]?.lean;
 
-  if (asksAboutOvernight || pillars?.technicals?.rTokenGap) {
+  if (isDayOrOvernight || pillars?.technicals?.rTokenGap) {
     tension.push({
       left: "Bitget trades 24 hours a day on crypto exchange rails.",
       right: pillars?.technicals?.rTokenGap
         ? `The regular US stock market is closed overnight, leaving a price difference: ${pillars.technicals.rTokenGap}.`
         : "The regular US stock market is closed overnight and only trades during daytime hours.",
       whyItMatters:
-        "Overnight prices trade on lighter volume. When the regular New York market opens, prices often snap back quickly, which creates basis risk.",
+        "Overnight prices trade on lighter volume on 24-hour rails, while the daytime cash market provides primary equity liquidity.",
     });
   }
 
@@ -144,14 +146,14 @@ export function deterministicBriefing(opts: {
       left: `Recent price action has trended ${dir} in native trading.`,
       right: `Similar past chart patterns only went up ${Math.round(band.pUp * band.n)} out of ${band.n} times.`,
       whyItMatters:
-        "Recent momentum often tempts traders to expect the same direction to continue, but historical outcomes were split rather than one-sided.",
+        "Recent price action and historical analog follow-through are separate measurements; past patterns produced a split distribution rather than a uniform move.",
     });
   }
 
   if (band && (band.p90 - band.p10) >= 3) {
     tension.push({
       left: `The stock is currently trading around ${pillars?.technicals?.native?.last !== undefined ? `$${pillars.technicals.native.last.toFixed(2)}` : "its current price"}.`,
-      right: `In past similar charts, outcomes over ${analogHorizon} ranged from ${fmtPct(band.p10)} on the downside to ${fmtPct(band.p90)} on the upside.`,
+      right: `In past similar charts, outcomes over ${analogHorizon} ranged from ${fmtPct(band.p10)} to ${fmtPct(band.p90)}.`,
       whyItMatters:
         "The historical range shows that both positive and negative moves occurred from this pattern, so a plan must account for both.",
     });
@@ -171,7 +173,7 @@ export function deterministicBriefing(opts: {
       left: `Official news headlines lean ${newsLean}.`,
       right: `Social media discussions lean ${xLean}.`,
       whyItMatters:
-        "News reporters and social media traders focus on different factors, which can create erratic short-term swings.",
+        "News reporters and social media discussions track different information sources and participant groups.",
     });
   }
 
@@ -180,7 +182,7 @@ export function deterministicBriefing(opts: {
       left: `Company reports show quarterly performance (latest diluted EPS ${pillars.fundamentals.eps.value}).`,
       right: "Daily market prices fluctuate continuously based on short-term trading.",
       whyItMatters:
-        "Solid company earnings do not prevent short-term price drops, and short-term price swings do not change quarterly earnings.",
+        "SEC-filed financial statements record historical company performance, while market prices reflect continuous daily trading.",
     });
   }
 
@@ -199,16 +201,22 @@ export function deterministicBriefing(opts: {
     followed: `next session ${fmtPct(a.ret1d)}; 5 sessions ${fmtPct(a.ret5d)}; 10 sessions ${fmtPct(a.ret10d)} (cash close-to-close)`,
   }));
 
-  const whatWeDidText = asksAboutOvernight
+  const whatWeDidText = style === "day"
+    ? `We compared the current chart with past charts that had a similar shape, focusing on the 1-session horizon into the next cash open. We specifically checked the 24-hour Bitget token price against the regular New York market close to assess overnight gap and basis risk. We also checked price trends and recent news.`
+    : style === "position"
+    ? `We compared the current chart with past charts over a multi-week horizon. We focused on company filings, earnings trajectory, and 10-day analog distributions, checking the 24-hour Bitget token price for context.`
+    : style === "event"
+    ? `We compared the current chart with past charts around similar event windows. We specifically evaluated the 24-hour Bitget token price against the regular market close, along with upcoming catalysts, company earnings, and recent news.`
+    : asksAboutOvernight
     ? `We compared the current chart with past charts that had a similar shape. Because you asked about overnight trading, we specifically checked the 24-hour Bitget token price against the regular New York market close. We also checked company earnings and recent news.`
     : `We compared the current chart with past charts that had a similar shape. We also checked company earnings, price trends, Bitget trading, and recent news.`;
 
-  const otherChecked = asksAboutOvernight
+  const otherChecked = isDayOrOvernight
     ? [
         pillars?.technicals?.rTokenGap
           ? `24-hour Bitget price vs regular stock close: ${pillars.technicals.rTokenGap}.`
           : "Bitget trades 24 hours a day, while the regular US stock market closes overnight.",
-        "Overnight basis risk: Bitget prices can move on lighter volume overnight, which may snap back when the regular New York session opens.",
+        "Overnight basis risk: Bitget 24-hour token trading continues overnight while regular US cash markets are closed.",
         pillars?.fundamentals?.eps
           ? `Company earnings: diluted EPS was ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
           : "Company earnings data was limited in this run.",
@@ -225,7 +233,7 @@ export function deterministicBriefing(opts: {
           : "Recent news coverage was included where available.",
       ];
 
-  const takeaways = asksAboutOvernight
+  const takeaways = isDayOrOvernight
     ? [
         "Bitget trades 7×24, so overnight prices can differ from regular market closing prices until New York trading opens.",
         band
@@ -243,7 +251,7 @@ export function deterministicBriefing(opts: {
         "Historical patterns show possibilities, but never predict what will happen next.",
       ];
 
-  const reflectionQuestions = asksAboutOvernight
+  const reflectionQuestions = isDayOrOvernight
     ? [
         "If the 24-hour Bitget price moves sharply overnight while regular US stock markets are closed, will you exit immediately or wait for the New York open?",
         band
@@ -259,7 +267,7 @@ export function deterministicBriefing(opts: {
         "Are you making this decision based on verified facts, or fear of missing out?",
       ];
 
-  return {
+  const result: Briefing = {
     title: `${name.rToken} — ${profile.label} stress test`,
     whatWeDid: whatWeDidText,
     historicalStressTest: {
@@ -275,14 +283,19 @@ export function deterministicBriefing(opts: {
       })),
       examples: (pillars?.analogs?.closest ?? [])
         .map((a) => {
-          const outcome = formatAnalogOutcome(a);
+          const outcome = formatAnalogOutcome(a, analogHorizon);
           if (!outcome) return null;
+          const whenLabel = a.sameName
+            ? `${a.ticker} (${a.date})`
+            : a.ticker.startsWith(name.native) || name.native.startsWith(a.ticker)
+            ? `${a.ticker} (${a.date}, related)`
+            : `${a.ticker} (${a.date}, similar chart)`;
           return {
-            when: a.date,
+            when: whenLabel,
             whatHappened: outcome,
           };
         })
-        .filter((ex): ex is { when: string; whatHappened: string } => ex !== null)
+        .filter((ex): ex is { when: string; whatHappened: string } => ex !== null && !/\b(n\/?a|null|undefined)\b/i.test(ex.whatHappened))
         .slice(0, 3),
       importantNote: "This is only what happened in the past. It does not tell us what will happen this time.",
     },
@@ -293,7 +306,7 @@ export function deterministicBriefing(opts: {
     })),
     simpleTakeAways: takeaways,
     questionsOnlyYouCanAnswer: reflectionQuestions,
-    styleNote: `${profile.framing} Horizon in force: ${profile.horizon} Regime frame: ${regime}.`,
+    styleNote: `${profile.framing} Target horizon: ${profile.horizon} Regime frame: ${regime}.`,
     model: "deterministic-synthesizer",
     isFallback: true,
     regime,
@@ -304,7 +317,23 @@ export function deterministicBriefing(opts: {
       setup: pillars?.analogs?.state
         ? `Current Chart Library state “${pillars.analogs.state}” on ${pillars.analogs.session}. Previous: “${pillars.analogs.prevState}”. Regime frame: ${regime}.`
         : "Chart Library state was unavailable; closest-name follow-through still listed where Yahoo history exists.",
-      analogs: analogRows,
+      analogs: (pillars?.analogs?.closest ?? []).slice(0, 5).map((a) => {
+        const returns = [
+          typeof a.ret1d === "number" && !Number.isNaN(a.ret1d) ? `next day ${fmtPct(a.ret1d)}` : null,
+          typeof a.ret5d === "number" && !Number.isNaN(a.ret5d) ? `5 days ${fmtPct(a.ret5d)}` : null,
+          typeof a.ret10d === "number" && !Number.isNaN(a.ret10d) ? `10 days ${fmtPct(a.ret10d)}` : null,
+        ].filter(Boolean);
+        return {
+          ticker: a.ticker,
+          date: a.date,
+          similarity: a.sameName
+            ? "Same stock with a similar chart shape"
+            : a.ticker.startsWith(name.native) || name.native.startsWith(a.ticker)
+            ? "Related asset with a similar chart shape"
+            : `Different stock with a similar chart shape (distance: ${a.distance.toFixed(3)})`,
+          followed: returns.length ? `${returns.join("; ")} (cash close-to-close)` : "Follow-through data pending",
+        };
+      }),
       baseRates: ranges.map((r) => ({
         horizon: r.horizon,
         range: `p10 ${fmtPct(r.p10)} · median ${fmtPct(r.p50)} · p90 ${fmtPct(r.p90)} · share of positive excess ${Math.round(r.pUp * 100)}% of the sample`,
@@ -344,26 +373,48 @@ export function deterministicBriefing(opts: {
     },
     sources: collectSources(pillars),
   };
+  return guardBriefing(result);
 }
 
-function formatAnalogOutcome(a: { ticker: string; ret1d: number | null; ret5d: number | null; ret10d?: number | null }): string | null {
-  if (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) {
-    const abs5d = Math.abs(a.ret5d).toFixed(1);
-    const verb = a.ret5d > 0.05 ? "rose" : a.ret5d < -0.05 ? "fell" : "stayed roughly flat";
-    const amount = a.ret5d > 0.05 || a.ret5d < -0.05 ? `about ${abs5d}%` : `(${a.ret5d >= 0 ? "+" : ""}${a.ret5d.toFixed(1)}%)`;
-    return `${a.ticker} ${verb} ${amount} over the next 5 trading days.`;
+export function formatAnalogOutcome(
+  a: { ticker: string; ret1d: number | null; ret5d: number | null; ret10d?: number | null },
+  targetHorizon: "1d" | "5d" | "10d" = "5d"
+): string | null {
+  const format1d = () => {
+    if (typeof a.ret1d === "number" && !Number.isNaN(a.ret1d)) {
+      const abs1d = Math.abs(a.ret1d).toFixed(1);
+      const verb = a.ret1d > 0.05 ? "rose" : a.ret1d < -0.05 ? "fell" : "stayed roughly flat";
+      const amount = a.ret1d > 0.05 || a.ret1d < -0.05 ? `about ${abs1d}%` : `(${a.ret1d >= 0 ? "+" : ""}${a.ret1d.toFixed(1)}%)`;
+      return `${verb} ${amount} the next day.`;
+    }
+    return null;
+  };
+
+  const format5d = () => {
+    if (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) {
+      const abs5d = Math.abs(a.ret5d).toFixed(1);
+      const verb = a.ret5d > 0.05 ? "rose" : a.ret5d < -0.05 ? "fell" : "stayed roughly flat";
+      const amount = a.ret5d > 0.05 || a.ret5d < -0.05 ? `about ${abs5d}%` : `(${a.ret5d >= 0 ? "+" : ""}${a.ret5d.toFixed(1)}%)`;
+      return `${verb} ${amount} over the next 5 days.`;
+    }
+    return null;
+  };
+
+  const format10d = () => {
+    if (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)) {
+      const abs10d = Math.abs(a.ret10d).toFixed(1);
+      const verb = a.ret10d > 0.05 ? "rose" : a.ret10d < -0.05 ? "fell" : "stayed roughly flat";
+      const amount = a.ret10d > 0.05 || a.ret10d < -0.05 ? `about ${abs10d}%` : `(${a.ret10d >= 0 ? "+" : ""}${a.ret10d.toFixed(1)}%)`;
+      return `${verb} ${amount} over the next 10 days.`;
+    }
+    return null;
+  };
+
+  if (targetHorizon === "1d") {
+    return format1d() ?? format5d() ?? format10d();
   }
-  if (typeof a.ret1d === "number" && !Number.isNaN(a.ret1d)) {
-    const abs1d = Math.abs(a.ret1d).toFixed(1);
-    const verb = a.ret1d > 0.05 ? "rose" : a.ret1d < -0.05 ? "fell" : "stayed roughly flat";
-    const amount = a.ret1d > 0.05 || a.ret1d < -0.05 ? `about ${abs1d}%` : `(${a.ret1d >= 0 ? "+" : ""}${a.ret1d.toFixed(1)}%)`;
-    return `${a.ticker} ${verb} ${amount} the next day.`;
+  if (targetHorizon === "10d") {
+    return format10d() ?? format5d() ?? format1d();
   }
-  if (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)) {
-    const abs10d = Math.abs(a.ret10d).toFixed(1);
-    const verb = a.ret10d > 0.05 ? "rose" : a.ret10d < -0.05 ? "fell" : "stayed roughly flat";
-    const amount = a.ret10d > 0.05 || a.ret10d < -0.05 ? `about ${abs10d}%` : `(${a.ret10d >= 0 ? "+" : ""}${a.ret10d.toFixed(1)}%)`;
-    return `${a.ticker} ${verb} ${amount} over the next 10 trading days.`;
-  }
-  return null;
+  return format5d() ?? format1d() ?? format10d();
 }

@@ -74,7 +74,7 @@ export async function* runResearch(input: {
     };
   }
 
-  const SYNTHESIS_TIMEOUT_MS = 50_000;
+  const SYNTHESIS_TIMEOUT_MS = 55_000;
   let briefing: Briefing;
   let synthesisFailed = false;
 
@@ -91,10 +91,11 @@ export async function* runResearch(input: {
         setTimeout(() => reject(new Error("Synthesis call timed out")), SYNTHESIS_TIMEOUT_MS),
       ),
     ]);
-  } catch {
+  } catch (err) {
     synthesisFailed = true;
+    console.warn("[Pipeline] Synthesis step encountered an error or timeout:", err);
     const hasOpenRouter = Boolean(
-      process.env.OPENROUTER_API_KEY ||
+      (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== "[SENSITIVE]") ||
       process.env.OPENROUTER_KEY ||
       process.env.OPENAI_API_KEY?.startsWith("sk-or-")
     );
@@ -107,7 +108,9 @@ export async function* runResearch(input: {
       flags: undefined,
     });
     if (hasOpenRouter) {
-      briefing.model = "openrouter/free (fell back to deterministic synthesizer)";
+      const primarySlug = process.env.OPENROUTER_MODEL || "liquid/lfm-2.5-2.6b:free";
+      const cleanSlug = primarySlug.startsWith("openrouter/") ? primarySlug : `openrouter/${primarySlug}`;
+      briefing.model = `${cleanSlug} (fell back to deterministic synthesizer)`;
     }
   }
 

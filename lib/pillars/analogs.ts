@@ -40,18 +40,28 @@ export async function runAnalogs(
     // target's precomputed RMT community rank first at equal shape distance.
     // (Per-analog-date historical regime is not observable, so the regime
     // label frames the memo and the analog search rather than filtering it.)
+    // Prefer same-ticker matches, then highly similar (related ticker or RMT community), then distance
     const ranked = [...(analogs.closest ?? [])].sort((a, b) => {
+      const aSame = a[0] === name.native ? 0 : 1;
+      const bSame = b[0] === name.native ? 0 : 1;
+      if (aSame !== bSame) return aSame - bSame;
+
+      const aRelated = a[0].startsWith(name.native) || name.native.startsWith(a[0]) ? 0 : 1;
+      const bRelated = b[0].startsWith(name.native) || name.native.startsWith(b[0]) ? 0 : 1;
+      if (aRelated !== bRelated) return aRelated - bRelated;
+
       const aIn = members.has(a[0]) ? 0 : 1;
       const bIn = members.has(b[0]) ? 0 : 1;
       if (aIn !== bIn) return aIn - bIn;
+
       return a[2] - b[2];
     });
-    const poolRaw = ranked.slice(0, 10);
+    const poolRaw = ranked.slice(0, 15);
     const uniqueTickers = [...new Set([name.native, ...poolRaw.map((x) => x[0])])];
     const charts = await Promise.all(
       uniqueTickers.map(async (ticker) => {
         try {
-          const { bars } = await yahooChart(ticker, "5y", "1d");
+          const { bars } = await yahooChart(ticker, "10y", "1d");
           return [ticker, bars] as const;
         } catch {
           return [ticker, []] as const;
@@ -73,11 +83,28 @@ export async function runAnalogs(
       };
     });
 
-    // Prefer examples that have complete 5-day / 1-day (and 10-day) forward returns
-    const closest: AnalogFollowThrough[] = [...poolComputed].sort((a, b) => {
+    // Only show examples that have clear, complete forward outcomes
+    const validPool = poolComputed.filter(
+      (a) =>
+        (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) ||
+        (typeof a.ret1d === "number" && !Number.isNaN(a.ret1d)) ||
+        (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)),
+    );
+
+    // Prefer same-ticker or highly similar examples with complete forward returns
+    const closest: AnalogFollowThrough[] = [...validPool].sort((a, b) => {
+      const aSame = a.sameName ? 0 : 1;
+      const bSame = b.sameName ? 0 : 1;
+      if (aSame !== bSame) return aSame - bSame;
+
+      const aRelated = a.ticker.startsWith(name.native) || name.native.startsWith(a.ticker) || members.has(a.ticker) ? 0 : 1;
+      const bRelated = b.ticker.startsWith(name.native) || name.native.startsWith(b.ticker) || members.has(b.ticker) ? 0 : 1;
+      if (aRelated !== bRelated) return aRelated - bRelated;
+
       const aScore = (a.ret5d !== null ? 4 : 0) + (a.ret1d !== null ? 2 : 0) + (a.ret10d !== null ? 1 : 0);
       const bScore = (b.ret5d !== null ? 4 : 0) + (b.ret1d !== null ? 2 : 0) + (b.ret10d !== null ? 1 : 0);
       if (aScore !== bScore) return bScore - aScore;
+
       return a.distance - b.distance;
     }).slice(0, 5);
     const conditioned = members.size > 0 && closest.some((c) => members.has(c.ticker));

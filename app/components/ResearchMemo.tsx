@@ -130,7 +130,8 @@ export function ResearchMemo({
                 (example) =>
                   example?.when &&
                   example?.whatHappened &&
-                  !/\b(n\/?a|null|undefined)\b/i.test(example.whatHappened) &&
+                  !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(example.whatHappened) &&
+                  !/\b(n\/?a|null|undefined)\b/i.test(example.when) &&
                   /\d/.test(example.whatHappened),
               )
               .slice(0, 3);

@@ -11,10 +11,11 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
-  const openRouterKey =
+  const rawOpenRouterKey =
     process.env.OPENROUTER_API_KEY ||
     process.env.OPENROUTER_KEY ||
     (process.env.OPENAI_API_KEY?.startsWith("sk-or-") ? process.env.OPENAI_API_KEY : undefined);
+  const openRouterKey = rawOpenRouterKey && rawOpenRouterKey !== "[SENSITIVE]" ? rawOpenRouterKey : undefined;
 
   // 1. Always prioritize free OpenRouter models whenever an OpenRouter API key is available
   if (openRouterKey) {
@@ -28,21 +29,16 @@ function providers() {
       },
     });
 
-    // Curated list of reliable, currently active free model slugs on OpenRouter in priority order
-    // Fast lightweight models (e.g. 2.6B) are prioritized first to minimize queue delay and prevent timeouts
+    // Curated short ordered list of 2 reliable, active free generative models on OpenRouter
+    // 1. liquid/lfm-2.5-2.6b:free — lightweight, ultra-responsive 2.6B model with fast queue assignment
+    // 2. nvidia/nemotron-3.5-lightning:free — fast 1M context free reasoning model
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
       "liquid/lfm-2.5-2.6b:free",
       "nvidia/nemotron-3.5-lightning:free",
-      "nex-agi/nex-n2.5-mini:free",
-      "openrouter/free",
-      "inclusionai/ling-3.0-flash-fin:free",
-      "google/gemma-4-31b-it:free",
-      "thinkingmachines/inkling-small:free",
-      "google/gemma-4-26b-a4b-it:free",
     ].filter(Boolean) as string[];
 
-    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs));
+    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs)).slice(0, 2);
     for (const slug of uniqueSlugs) {
       const cleanLabel = slug.startsWith("openrouter/") ? slug : `openrouter/${slug}`;
       available.push({
@@ -104,6 +100,22 @@ const SCHEMA = `{
   "questionsOnlyYouCanAnswer": string[]
 }`;
 
+type RetailBriefing = {
+  title?: string;
+  whatWeDid?: string;
+  historicalStressTest?: {
+    summary?: string;
+    sampleSize?: number;
+    results?: { period: string; wentUp: string; typicalMove: string; median: string }[];
+    examples?: { when: string; whatHappened: string }[];
+    importantNote?: string;
+  };
+  otherThingsWeChecked?: string[];
+  whereThingsDoNotAgree?: { conflict: string; whyItMatters: string }[];
+  simpleTakeAways?: string[];
+  questionsOnlyYouCanAnswer?: string[];
+};
+
 export async function synthesize(opts: {
   style: TradingStyle;
   question: string;
@@ -126,23 +138,25 @@ export async function synthesize(opts: {
 
 HARD RULES
 - Never use the words BUY, SELL, LONG, SHORT.
-  - Never give a directional verdict or a confidence percentage.
-  - Never use soft directional language such as upside/downside bias, favors higher/lower prices, constructive/cautious setup, leaning a side, or history being supportive/unsupportive.
-  - Never say “upside possible”, “expect a pullback before further upside”, “moderate upside”, “bullish case”, “upside case”, “further upside”, “leaning”, “favors”, “constructive”, or “cautious outlook”.
-  - Describe price levels and historical ranges only as facts about the retrieved data, never as suggestions about what will happen next.
-  - The only forward-looking language allowed is inside the “questionsOnlyYouCanAnswer” section.
-  - Never output a confidence percentage as a conclusion or headline.
-  - Historical results are only what happened in the past. They are not predictions.
-  - If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
+- Never give a directional verdict or a confidence percentage.
+- Absolutely ZERO soft directional, interpretive, or forward-looking language anywhere in the memo (the only exception is questionsOnlyYouCanAnswer):
+  - Strictly forbidden phrases: “upside possible”, “downside possible”, “further upside”, “further downside”, “room for upside”, “room for downside”, “expect a pullback before further upside”, “expect a pullback before…”, “expect a pullback”, “pullback”, “tempts traders to expect the same direction”, “bullish case”, “bearish case”, “upside case”, “downside case”, “constructive case”, “cautious case”, “bullish setup”, “bearish setup”, “constructive setup”, “cautious setup”, “upside bias”, “downside bias”, “positive price bias”, “negative price bias”, “favors higher prices”, “favors lower prices”, “leaning higher”, “leaning lower”, “leaning”, “favors”, “constructive”, “cautious outlook”, “moderate upside”, “moderate downside”, “tilt”, “supportive history”, “history is supportive”, “may need a pause”, “struggles to go higher”.
+- Describe price levels and historical ranges ONLY as objective facts about past and present data:
+  - Say: “Past outcomes ranged from -X% to +Y%” (never say “on the downside to ... on the upside”, never say “upside potential”, never say “room to run”).
+  - State the sample size and exact count: “went up X times out of Y” and “usually between A% and B%”.
+  - Historical results are only what happened in the past. They are never predictions or suggestions.
+- Forward-looking language is strictly forbidden in title, whatWeDid, historicalStressTest, otherThingsWeChecked, whereThingsDoNotAgree, and simpleTakeAways.
+- The ONLY section allowed to look forward is “questionsOnlyYouCanAnswer”, which must contain reflective questions for the human trader (e.g. “What is your exit plan if price moves outside the typical historical range?”), never directional forecasts or recommendations.
+- If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
 - Native cash tape and rToken 7×24 tape are related but not identical. If no rToken print was provided, do not fabricate one.
 - If the question mentions overnight trading, 7×24 trading, Bitget versus cash, or a basis difference, make the current Bitget-versus-regular-stock comparison one of the clearest beginner-friendly facts in the memo and explain why the difference matters while cash markets are closed.
-  - Frame depth, horizon, and language to the trader's style.
-  - Use short sentences and everyday words, as if explaining the chart to a smart friend who has never studied charts.
-  - Write the entire memo as if you are a patient friend helping a beginner understand the research.
-  - Never use mean reversion, MACD, RSI, overbought, oversold, consolidation, resistance band, support zone, momentum, bullish, bearish, stretched, or overextended without an immediate plain-English explanation in the same sentence.
-  - Prefer everyday wording such as “the price has risen a lot recently and may need a pause,” “the short-term strength indicator is high,” and “the price is near a level where it often struggles to go higher.”
-  - Do not leave intermediate technical-analysis jargon unexplained. If a technical term is necessary, explain it immediately in simple words.
-  - Every section must help a beginner understand what the information means before deciding whether to open a position.
+- Frame depth, horizon, and language to the trader's style.
+- Use short sentences and everyday words, as if explaining the chart to a smart friend who has never studied charts.
+- Write the entire memo as if you are a patient friend helping a beginner understand the research.
+- Never use mean reversion, MACD, RSI, overbought, oversold, consolidation, resistance band, support zone, momentum, bullish, bearish, stretched, or overextended without an immediate plain-English explanation in the same sentence.
+- Prefer everyday factual wording such as “the price has moved upward in recent sessions,” “the short-term strength indicator is high,” and “the price is currently trading near previous chart highs.” Never predict a pause, continuation, bounce, or pullback.
+- Do not leave intermediate technical-analysis jargon unexplained. If a technical term is necessary, explain it immediately in simple words.
+- Every section must help a beginner understand what the information means before deciding whether to open a position.
 
 CONTEXT
   - The selected style is ${profile.label}, with a ${profile.horizon} horizon.
@@ -155,6 +169,7 @@ ${profile.framing}
 OUTPUT
 Return JSON only, matching: ${SCHEMA}
   HistoricalStressTest is the most important section. For every available horizon, use this exact simple format: “Next day: went up 7 times out of 11. Usually between –1.8% and +2.4%. Middle result around +0.6%.” Replace the numbers with the retrieved values. Keep the three horizon cards when data exists, and make “went up X times out of Y” and “usually between A% and B%” the most prominent facts. Never lead with “moderate upside possible” or any similar interpretive or directional wording. State the sample size and explain when results are mixed or the sample is small. Do not expose internal percentile labels.
+  For "examples" in historicalStressTest, only include past examples from the retrieved data that have clear, complete forward outcomes. For each example, set "when" to the ticker and date (e.g. “AAPL (2022-01-25)” or “SN (2026-07-02, similar chart)”) and "whatHappened" in plain language (e.g. “rose about 2.8% over the next 5 days”). Never output “n/a”, “moved n/a”, or empty outcomes. If cross-ticker matches are used, keep them short and clearly labeled.
   Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. When the retrieved data contains disagreement, always include 1–3 real conflicts in whereThingsDoNotAgree. Write each conflict in plain, practical language: name the two facts that do not match, then explain why a beginner should care without predicting what happens next. For example: “The recent price has moved a lot, but the short-term strength indicator is already high.” Or: “The 24-hour Bitget price and the regular stock price are almost the same right now, but past similar cases sometimes showed a larger overnight difference.” Do not invent a conflict when the data does not support one. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
 
   const compactPillars = {
@@ -184,10 +199,7 @@ Return JSON only, matching: ${SCHEMA}
     analogs: opts.pillars.analogs?.ok ? {
       ranges: opts.pillars.analogs.ranges,
       sample: opts.pillars.analogs.sample,
-      closest: opts.pillars.analogs.closest
-        ?.filter((c) => (c.ret5d !== null && !Number.isNaN(c.ret5d)) || (c.ret1d !== null && !Number.isNaN(c.ret1d)))
-        .slice(0, 3)
-        .map((c) => ({ ticker: c.ticker, date: c.date, ret1d: c.ret1d, ret5d: c.ret5d })),
+      closest: fallback.historicalStressTest.examples,
     } : { ok: false },
     marketStructure: opts.pillars.marketStructure?.ok ? {
       communityId: opts.pillars.marketStructure.communityId,
@@ -195,7 +207,7 @@ Return JSON only, matching: ${SCHEMA}
     } : { ok: false },
   };
 
-  const user = JSON.stringify(
+  const user = `Retrieved Data:\n${JSON.stringify(
     {
       question: opts.question,
       name: { native: opts.name.native, rToken: opts.name.rToken, company: opts.name.name },
@@ -205,71 +217,61 @@ Return JSON only, matching: ${SCHEMA}
     },
     null,
     2,
-  );
+  )}\n\nIMPORTANT: Output valid JSON only matching the schema. Start your response immediately with "{" and do not include any reasoning, conversational text, or markdown code blocks outside the JSON.`;
 
   const attempted: { label: string; error: string }[] = [];
-  const PER_MODEL_TIMEOUT_MS = 10_000;
+  const PER_MODEL_TIMEOUT_MS = 18_000;
 
   for (const llm of llms) {
     try {
       console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model})...`);
-      const { text, actualModel } = await complete(
+      const { parsed, actualModel } = await completeAndParseWithRetry(
         llm.client,
         llm.model,
         system,
         user,
         PER_MODEL_TIMEOUT_MS,
       );
-      const parsed = parseModelJson(text) as RetailBriefing;
       const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
-      const effectiveModelLabel = actualModel && actualModel !== llm.model
-        ? `${llm.label} (${actualModel})`
-        : llm.label;
+      const effectiveModelLabel =
+        actualModel &&
+        actualModel !== llm.model &&
+        actualModel !== llm.model.replace(":free", "")
+          ? `${llm.label} (${actualModel})`
+          : llm.label;
       const briefing: Briefing = {
         ...adapted,
         model: effectiveModelLabel,
         sources: collectSources(opts.pillars),
         isFallback: false,
       };
-      console.log(`[Synthesis] Successfully generated memo using ${effectiveModelLabel}.`);
+      console.log(`[Synthesis] Successfully generated full LLM memo using ${effectiveModelLabel}.`);
       return guardBriefing(normalizeBriefing(briefing, fallback));
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Synthesis] Model provider ${llm.label} failed: ${errMsg}`);
+      console.warn(`[Synthesis] Candidate ${llm.label} failed: ${errMsg}`);
       attempted.push({ label: llm.label, error: errMsg });
       continue;
     }
   }
 
   // All providers failed or timed out. Gracefully fall back to deterministic briefing.
-  const primaryAttempted = attempted[0]?.label ?? "model";
+  const primaryAttempted = attempted[0]?.label ?? (llms[0]?.label || "openrouter/liquid/lfm-2.5-2.6b:free");
   const fallbackModelLabel = attempted.length > 0
     ? `${primaryAttempted} (fell back to deterministic synthesizer)`
-    : "deterministic-synthesizer";
+    : (llms[0]?.label ? `${llms[0].label} (fell back to deterministic synthesizer)` : "deterministic-synthesizer");
 
-  console.info(`[Synthesis] Model calls failed or unavailable. Using deterministic briefing: ${fallbackModelLabel}`);
+  console.warn(
+    `[Synthesis] All free model candidates failed. Fallback engaged (${fallbackModelLabel}). Failure details: ${attempted
+      .map((a) => `${a.label}: "${a.error}"`)
+      .join(", ")}`
+  );
 
   return guardBriefing({
     ...fallback,
     isFallback: true,
     model: fallbackModelLabel,
   });
-
-  type RetailBriefing = {
-    title?: string;
-    whatWeDid?: string;
-    historicalStressTest?: {
-      summary?: string;
-      sampleSize?: number;
-      results?: { period: string; wentUp: string; typicalMove: string; median: string }[];
-      examples?: { when: string; whatHappened: string }[];
-      importantNote?: string;
-    };
-    otherThingsWeChecked?: string[];
-    whereThingsDoNotAgree?: { conflict: string; whyItMatters: string }[];
-    simpleTakeAways?: string[];
-    questionsOnlyYouCanAnswer?: string[];
-  };
 
   function adaptRetailBriefing(
     parsed: RetailBriefing,
@@ -327,8 +329,10 @@ Return JSON only, matching: ${SCHEMA}
           (item) =>
             item?.when &&
             item?.whatHappened &&
-            !/\b(n\/?a|null|undefined)\b/i.test(item.whatHappened) &&
-            /\d/.test(item.whatHappened),
+            !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(item.whatHappened) &&
+            !/\b(n\/?a|null|undefined)\b/i.test(item.when) &&
+            /\d/.test(item.whatHappened) &&
+            /\b(rose|fell|stayed|gained|dropped|moved)\b/i.test(item.whatHappened),
         ).slice(0, 3);
         return validParsed.length ? validParsed : fallback.historicalStressTest.examples;
       })(),
@@ -341,16 +345,31 @@ Return JSON only, matching: ${SCHEMA}
       pillar: (["fundamentals", "technicals", "news"][index] ?? "news") as Briefing["evidence"][number]["pillar"],
     }));
 
+    const profile = STYLES[opts.style];
+    let resolvedTitle = parsed.title || fallback.title;
+    if (resolvedTitle && !resolvedTitle.toLowerCase().includes(profile.label.toLowerCase())) {
+      resolvedTitle = resolvedTitle.replace(
+        /(Day trader|Swing trader|Event-driven \/ macro|Event-driven|Position trader|Position|Day|Swing)\s*(?:trader\s*)?stress test/i,
+        `${profile.label} stress test`
+      );
+      if (!resolvedTitle.toLowerCase().includes(profile.label.toLowerCase())) {
+        const tokenMatch = resolvedTitle.match(/^([rR]?[A-Za-z0-9]+)\s*[—\-:]\s*/);
+        resolvedTitle = tokenMatch
+          ? `${tokenMatch[1]} — ${profile.label} stress test`
+          : fallback.title;
+      }
+    }
+
     return {
       ...fallback,
-      title: parsed.title || fallback.title,
+      title: resolvedTitle,
       whatWeDid: parsed.whatWeDid || fallback.whatWeDid,
       historicalStressTest,
       otherThingsWeChecked,
       whereThingsDoNotAgree,
       simpleTakeAways,
       questionsOnlyYouCanAnswer,
-      styleNote: parsed.whatWeDid || fallback.styleNote,
+      styleNote: fallback.styleNote,
       regime: opts.regime,
       flags,
       evidence: evidence?.length ? evidence : fallback.evidence,
@@ -380,12 +399,65 @@ Return JSON only, matching: ${SCHEMA}
   }
 }
 
+function isTransientError(err: unknown): boolean {
+  if (!err) return false;
+  const anyErr = err as any;
+  const status = anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status;
+  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
+  const msg = (anyErr.message || String(err)).toLowerCase();
+  // Do not retry hard timeouts on the same candidate model to avoid hanging; fail fast to the next candidate model
+  if (msg.includes("timeout") || msg.includes("timed out") || anyErr?.name === "AbortError") return false;
+  return (
+    msg.includes("429") ||
+    msg.includes("rate limit") ||
+    msg.includes("quota") ||
+    msg.includes("500") ||
+    msg.includes("502") ||
+    msg.includes("503") ||
+    msg.includes("504") ||
+    msg.includes("overloaded") ||
+    msg.includes("temporarily unavailable") ||
+    msg.includes("empty model output") ||
+    msg.includes("no json") ||
+    msg.includes("unexpected token") ||
+    msg.includes("json at position") ||
+    msg.includes("syntaxerror")
+  );
+}
+
+async function completeAndParseWithRetry(
+  client: OpenAI,
+  model: string,
+  system: string,
+  user: string,
+  timeoutMs: number = 18_000,
+): Promise<{ parsed: RetailBriefing; actualModel?: string }> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const { text, actualModel } = await complete(client, model, system, user, timeoutMs);
+      const parsed = parseModelJson(text) as RetailBriefing;
+      return { parsed, actualModel };
+    } catch (err: unknown) {
+      lastErr = err;
+      if (attempt === 1 && isTransientError(err)) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Synthesis] Transient failure on ${model} (attempt 1: "${errMsg}"); retrying attempt 2 in 1500ms...`);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 async function complete(
   client: OpenAI,
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 10_000,
+  timeoutMs: number = 18_000,
 ): Promise<{ text: string; actualModel?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -395,7 +467,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: 1500,
+        max_tokens: 2500,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -404,8 +476,14 @@ async function complete(
       { signal: controller.signal },
     );
     const msg = chat.choices[0]?.message;
-    const text = msg?.content || (msg as any)?.reasoning_content || (msg as any)?.reasoning;
-    if (text) return { text, actualModel: chat.model };
+    const content = typeof msg?.content === "string" ? msg.content.trim() : "";
+    const reasoning = (msg as any)?.reasoning_content || (msg as any)?.reasoning || "";
+    const text = content || reasoning;
+    if (text) {
+      console.log(`[Synthesis] Model ${model} responded: length ${text.length}, finish_reason: ${chat.choices[0]?.finish_reason}, actualModel: ${chat.model}`);
+      return { text, actualModel: chat.model };
+    }
+    throw new Error("empty model output");
   } catch (err: any) {
     if (err?.name === "AbortError" || controller.signal.aborted) {
       throw new Error(`synthesis timeout (${timeoutMs / 1000}s)`);
@@ -431,7 +509,6 @@ async function complete(
   } finally {
     clearTimeout(timer);
   }
-  throw new Error("empty model output");
 }
 
 function parseModelJson(text: string): any {
@@ -439,27 +516,56 @@ function parseModelJson(text: string): any {
   try {
     return JSON.parse(jsonStr);
   } catch (err) {
-    // Clean trailing commas and control characters commonly returned by free models
+    // Clean trailing commas, dangling control characters, and truncated endings commonly returned by free models
     const sanitized = jsonStr
       .replace(/,\s*([}\]])/g, "$1")
       .replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
     try {
       return JSON.parse(sanitized);
     } catch {
+      for (const suffix of ["}", "]}", "]}}", "]}}}", "\"}", "\"]}"]) {
+        try {
+          return JSON.parse(sanitized + suffix);
+        } catch {}
+      }
       throw err;
     }
   }
 }
 
 function extractJson(text: string): string {
-  // Strip reasoning blocks from models that emit <think>...</think> before JSON
-  const stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  const fenced = stripped.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) return fenced[1].trim();
+  // 1. Check for fenced markdown code block first
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) {
+    const candidate = fenced[1].trim();
+    if (candidate.startsWith("{") && candidate.endsWith("}")) {
+      return candidate;
+    }
+  }
+
+  // 2. Strip closed reasoning blocks (<think>...</think>)
+  let stripped = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // 3. If unclosed <think> tag exists, test if JSON exists before or within it
+  if (stripped.includes("<think>")) {
+    const beforeThink = stripped.slice(0, stripped.indexOf("<think>")).trim();
+    if (beforeThink.includes("{") && beforeThink.includes("}")) {
+      stripped = beforeThink;
+    } else {
+      stripped = stripped.replace(/<\/?think>/gi, "").trim();
+    }
+  }
+
   const start = stripped.indexOf("{");
   const end = stripped.lastIndexOf("}");
   if (start >= 0 && end > start) return stripped.slice(start, end + 1);
-  throw new Error("no json");
+
+  // 4. Fallback search on original text
+  const rawStart = text.indexOf("{");
+  const rawEnd = text.lastIndexOf("}");
+  if (rawStart >= 0 && rawEnd > rawStart) return text.slice(rawStart, rawEnd + 1);
+
+  throw new Error(`no json (response length: ${text.length}, preview: "${text.slice(0, 100).replace(/\s+/g, " ")}")`);
 }
 
 function validFlags(f: unknown): f is NonNullable<Briefing["flags"]> {

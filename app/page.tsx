@@ -45,6 +45,31 @@ function adaptQuestionToInstrument(question: string, previous: Instrument | unde
   return `${question.trim()} Focus instrument: ${next.rToken} (${next.native}, ${next.name}).`;
 }
 
+function adaptQuestionToStyle(question: string, previousStyle: TradingStyle, nextStyle: TradingStyle) {
+  if (previousStyle === nextStyle) return question;
+
+  const stylePhrases: Record<TradingStyle, { intro: string; horizonPhrase: string }> = {
+    day: { intro: "I'm a day trader.", horizonPhrase: "into the next cash session open" },
+    swing: { intro: "I'm a swing trader.", horizonPhrase: "into next week" },
+    event: { intro: "I'm an event-driven trader.", horizonPhrase: "around the upcoming catalyst" },
+    position: { intro: "I'm a position trader.", horizonPhrase: "over the coming weeks" },
+  };
+
+  const prev = stylePhrases[previousStyle];
+  const next = stylePhrases[nextStyle];
+
+  let updated = question;
+  const introRegex = /\bI(?:'m| am) an? (?:day|swing|event-driven|position) trader\b/i;
+  if (introRegex.test(updated)) {
+    updated = updated.replace(introRegex, next.intro);
+  }
+  if (prev && next) {
+    updated = updated.replace(new RegExp(escapeRegExp(prev.horizonPhrase), "gi"), next.horizonPhrase);
+  }
+
+  return updated;
+}
+
 const EMPTY_PILLARS: PillarState = {
   fundamentals: "idle",
   technicals: "idle",
@@ -221,7 +246,9 @@ export default function Home() {
   }
 
   function handleStyleChange(nextStyle: TradingStyle) {
+    const prevStyle = style;
     setStyle(nextStyle);
+    setQuestion((current) => adaptQuestionToStyle(current, prevStyle, nextStyle));
     if (briefing) {
       setBriefing(reweightBriefing(briefing, nextStyle, pillarData));
     }
