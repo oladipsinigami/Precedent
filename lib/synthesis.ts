@@ -230,61 +230,28 @@ ${SCHEMA}
     2,
   )}\n\nCRITICAL: Output raw JSON only. Do not write any thoughts, preamble, or markdown outside the JSON. Start your response immediately with "{" and end with "}".`;
 
-  const attempted: { label: string; error: string }[] = [];
-
-  for (let idx = 0; idx < llms.length; idx++) {
-    const llm = llms[idx];
-    // Allocate timeout budget: primary gets 25s, subsequent candidates get 20s or 18s
-    const candidateTimeoutMs = idx === 0 ? 25_000 : (idx === 1 ? 20_000 : 18_000);
-    try {
-      console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model}, timeout: ${candidateTimeoutMs / 1000}s)...`);
-      const { parsed, actualModel } = await completeAndParseWithRetry(
-        llm.client,
-        llm.model,
-        system,
-        user,
-        candidateTimeoutMs,
-      );
-      const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
-      const effectiveModelLabel =
-        actualModel &&
-        actualModel !== llm.model &&
-        actualModel !== llm.model.replace(":free", "")
-          ? `${llm.label} (${actualModel})`
-          : llm.label;
-      const briefing: Briefing = {
-        ...adapted,
-        model: effectiveModelLabel,
-        sources: collectSources(opts.pillars),
-        isFallback: false,
-      };
-      console.log(`[Synthesis] Successfully generated full LLM memo using ${effectiveModelLabel}.`);
-      return guardBriefing(normalizeBriefing(briefing, fallback));
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Synthesis] Candidate ${llm.label} failed: ${errMsg}`);
-      attempted.push({ label: llm.label, error: errMsg });
-      continue;
-    }
+  try {
+    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 36_000);
+    const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
+    const briefing: Briefing = {
+      ...adapted,
+      model: effectiveModelLabel,
+      sources: collectSources(opts.pillars),
+      isFallback: false,
+    };
+    console.log(`[Synthesis] Successfully generated full LLM memo using ${effectiveModelLabel}.`);
+    return guardBriefing(normalizeBriefing(briefing, fallback));
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Synthesis] All hedged free candidates failed: ${errMsg}`);
+    const primaryAttempted = llms[0]?.label || "openrouter/inclusionai/ling-3.0-flash-vl:free";
+    const fallbackModelLabel = `${primaryAttempted} (fell back to deterministic synthesizer)`;
+    return guardBriefing({
+      ...fallback,
+      isFallback: true,
+      model: fallbackModelLabel,
+    });
   }
-
-  // All providers failed or timed out. Gracefully fall back to deterministic briefing.
-  const primaryAttempted = attempted[0]?.label ?? (llms[0]?.label || "openrouter/liquid/lfm-2.5-2.6b:free");
-  const fallbackModelLabel = attempted.length > 0
-    ? `${primaryAttempted} (fell back to deterministic synthesizer)`
-    : (llms[0]?.label ? `${llms[0].label} (fell back to deterministic synthesizer)` : "deterministic-synthesizer");
-
-  console.warn(
-    `[Synthesis] All free model candidates failed. Fallback engaged (${fallbackModelLabel}). Failure details: ${attempted
-      .map((a) => `${a.label}: "${a.error}"`)
-      .join(", ")}`
-  );
-
-  return guardBriefing({
-    ...fallback,
-    isFallback: true,
-    model: fallbackModelLabel,
-  });
 
   function adaptRetailBriefing(
     parsed: RetailBriefing,
@@ -439,31 +406,114 @@ function isTransientError(err: unknown): boolean {
   );
 }
 
-async function completeAndParseWithRetry(
-  client: OpenAI,
-  model: string,
+async function hedgeSynthesis(
+  llms: { label: string; model: string; client: OpenAI }[],
   system: string,
   user: string,
-  timeoutMs: number = 25_000,
-): Promise<{ parsed: RetailBriefing; actualModel?: string }> {
-  let lastErr: unknown;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const { text, actualModel } = await complete(client, model, system, user, timeoutMs);
-      const parsed = parseModelJson(text) as RetailBriefing;
-      return { parsed, actualModel };
-    } catch (err: unknown) {
-      lastErr = err;
-      if (attempt === 1 && isTransientError(err)) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.warn(`[Synthesis] Transient failure on ${model} (attempt 1: "${errMsg}"); retrying attempt 2 in 1500ms...`);
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        continue;
+  totalTimeoutMs: number = 36_000,
+): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
+  const controllers = llms.map(() => new AbortController());
+  const timers: NodeJS.Timeout[] = [];
+  const started = new Set<number>();
+
+  return new Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }>((resolve, reject) => {
+    let resolved = false;
+    let pendingCount = llms.length;
+    const errors: { label: string; error: string }[] = [];
+
+    const cleanup = () => {
+      clearTimeout(masterTimer);
+      timers.forEach(clearTimeout);
+    };
+
+    const masterTimer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        controllers.forEach((c) => c.abort());
+        cleanup();
+        reject(new Error(`All synthesis candidates timed out after ${totalTimeoutMs / 1000}s`));
       }
-      throw err;
+    }, totalTimeoutMs);
+
+    const tryCandidate = async (index: number) => {
+      if (resolved || index >= llms.length || started.has(index)) return;
+      started.add(index);
+      const llm = llms[index];
+      const controller = controllers[index];
+      const candidateTimeoutMs = 22_000;
+
+      console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
+
+      try {
+        const { text, actualModel } = await complete(
+          llm.client,
+          llm.model,
+          system,
+          user,
+          candidateTimeoutMs,
+          controller.signal,
+        );
+        const parsed = parseModelJson(text) as RetailBriefing;
+        if (!resolved) {
+          resolved = true;
+          cleanup();
+          // Abort all other running candidates immediately
+          controllers.forEach((c, i) => {
+            if (i !== index) c.abort();
+          });
+          const effectiveModelLabel =
+            actualModel &&
+            actualModel !== llm.model &&
+            actualModel !== llm.model.replace(":free", "")
+              ? `${llm.label} (${actualModel})`
+              : llm.label;
+          console.log(`[Synthesis] Candidate [${index + 1}] ${llm.label} won the race (${effectiveModelLabel})!`);
+          resolve({ parsed, effectiveModelLabel });
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Synthesis] Candidate [${index + 1}] ${llm.label} failed: ${errMsg}`);
+        errors.push({ label: llm.label, error: errMsg });
+        pendingCount--;
+        if (!resolved) {
+          // If this candidate failed fast and next hasn't started, launch next immediately!
+          if (index + 1 < llms.length && !started.has(index + 1)) {
+            tryCandidate(index + 1);
+          } else if (pendingCount <= 0) {
+            cleanup();
+            reject(new Error(errors.map((e) => `${e.label}: ${e.error}`).join(", ")));
+          }
+        }
+      }
+    };
+
+    // Immediately start primary model
+    tryCandidate(0);
+
+    // If candidate 0 does not finish in 6.5s, hedge-spawn candidate 1!
+    if (llms.length > 1) {
+      timers.push(
+        setTimeout(() => {
+          if (!resolved) {
+            console.log(`[Synthesis] Primary candidate taking >6.5s; hedge-spawning candidate 2 in parallel...`);
+            tryCandidate(1);
+          }
+        }, 6500)
+      );
     }
-  }
-  throw lastErr;
+
+    // If neither finishes in 14s, hedge-spawn candidate 2 (or 3)!
+    if (llms.length > 2) {
+      timers.push(
+        setTimeout(() => {
+          if (!resolved) {
+            console.log(`[Synthesis] Candidates taking >14s; hedge-spawning candidate 3 in parallel...`);
+            tryCandidate(2);
+          }
+        }, 14000)
+      );
+    }
+  });
 }
 
 async function complete(
@@ -471,10 +521,19 @@ async function complete(
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 25_000,
+  timeoutMs: number = 22_000,
+  externalSignal?: AbortSignal,
 ): Promise<{ text: string; actualModel?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timer);
+      throw new Error("aborted");
+    }
+    externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
 
   try {
     const chat = await client.chat.completions.create(
