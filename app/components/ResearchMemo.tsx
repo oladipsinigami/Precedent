@@ -39,16 +39,23 @@ export function ResearchMemo({
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.22em] text-[#425828]">
-                Beginner-friendly research note
-              </span>
+              {briefing.isFallback ? (
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#d97706]/40 bg-[#d97706]/15 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#b45309]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#d97706]" />
+                  Simplified research note
+                </span>
+              ) : (
+                <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] sm:tracking-[0.22em] text-[#425828]">
+                  Beginner-friendly research note
+                </span>
+              )}
               <span className="text-[#88998a]">·</span>
               <span className="font-mono text-[10px] uppercase text-[#637566]">
                 {(() => {
                   let displayModel = briefing.model || "Precedent Quantitative Desk";
                   displayModel = displayModel.replace(/\s*\(fell back.*?\)/i, "").trim();
-                  if (displayModel.toLowerCase().includes("deterministic") || displayModel.toLowerCase().includes("openrouter")) {
-                    displayModel = "Precedent Quantitative Desk";
+                  if (briefing.isFallback) {
+                    displayModel = "Precedent Quantitative Desk (fallback)";
                   }
                   return `Engine: ${displayModel}`;
                 })()}
