@@ -178,7 +178,7 @@ ${stressResultsSummary}
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
-    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 52_000);
+    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 26_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
       ...adapted,
@@ -385,7 +385,7 @@ async function hedgeSynthesis(
       started.add(index);
       const llm = llms[index];
       const controller = controllers[index];
-      const candidateTimeoutMs = llm.model.includes("flash") ? 10_000 : 40_000;
+      const candidateTimeoutMs = llm.model.includes("flash") ? 8_000 : 20_000;
 
       console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
 

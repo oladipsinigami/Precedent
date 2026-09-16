@@ -41,6 +41,14 @@ export async function POST(req: Request) {
       const send = (event: unknown) => {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
       };
+      const pingInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(": keepalive\n\n"));
+        } catch {
+          clearInterval(pingInterval);
+        }
+      }, 3000);
+
       let hasSentBriefing = false;
       try {
         for await (const event of runResearch({ style, question, symbol })) {
@@ -50,10 +58,6 @@ export async function POST(req: Request) {
           send(event);
         }
       } catch (err) {
-        send({
-          type: "error",
-          message: "Synthesis step had a problem. Showing simplified research note instead.",
-        });
         if (!hasSentBriefing) {
           try {
             const fallbackName = findName(`${symbol ?? ""} ${question}`);
@@ -80,6 +84,7 @@ export async function POST(req: Request) {
         }
         send({ type: "done" });
       } finally {
+        clearInterval(pingInterval);
         controller.close();
       }
     },
