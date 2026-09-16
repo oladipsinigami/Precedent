@@ -480,32 +480,8 @@ async function hedgeSynthesis(
       }
     };
 
-    // Immediately start primary model
+    // Start primary candidate; failover immediately triggers on error or timeout
     tryCandidate(0);
-
-    // If candidate 0 does not finish in 6.5s, hedge-spawn candidate 1!
-    if (llms.length > 1) {
-      timers.push(
-        setTimeout(() => {
-          if (!resolved) {
-            console.log(`[Synthesis] Primary candidate taking >6.5s; hedge-spawning candidate 2 in parallel...`);
-            tryCandidate(1);
-          }
-        }, 6500)
-      );
-    }
-
-    // If neither finishes in 14s, hedge-spawn candidate 2 (or 3)!
-    if (llms.length > 2) {
-      timers.push(
-        setTimeout(() => {
-          if (!resolved) {
-            console.log(`[Synthesis] Candidates taking >14s; hedge-spawning candidate 3 in parallel...`);
-            tryCandidate(2);
-          }
-        }, 14000)
-      );
-    }
   });
 }
 
@@ -533,7 +509,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: 3000,
+        max_tokens: 1400,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
