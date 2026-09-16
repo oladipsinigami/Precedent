@@ -33,16 +33,13 @@ function providers() {
     const candidateModels = [
       process.env.OPENCODE_MODEL,
       "ling-3.0-flash-fin-free",
-      "ling-3.0-flash-fin-free",
-      "nemotron-3-ultra-free",
+      "nemotron-3.5-lightning-free",
     ].filter(Boolean) as string[];
 
-    let lingCount = 0;
-    for (const model of candidateModels) {
-      if (model.includes("ling")) lingCount++;
-      const label = lingCount > 1 ? `opencode/${model} (retry)` : `opencode/${model}`;
+    const uniqueModels = [...new Set(candidateModels)];
+    for (const model of uniqueModels) {
       available.push({
-        label,
+        label: `opencode/${model}`,
         model,
         client,
       });
@@ -175,7 +172,7 @@ ${stressResultsSummary}
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
-    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 26_000);
+    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, 26_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
@@ -188,7 +185,7 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
     return guardBriefing(normalizeBriefing(briefing, fallback));
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Synthesis] All hedged synthesis candidates failed: ${errMsg}`);
+    console.warn(`[Synthesis] All sequential synthesis candidates failed: ${errMsg}. Falling back to deterministic briefing.`);
     return guardBriefing({
       ...fallback,
       isFallback: true,
@@ -330,15 +327,12 @@ function isTransientError(err: unknown): boolean {
   if (!err) return false;
   const anyErr = err as any;
   const status = anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status;
-  // If 429 rate limit occurs, do not sleep and retry the same model.
-  // Fail over immediately to the next candidate model to avoid burning execution budget!
-  if (status === 429) return false;
-  if (typeof status === "number" && status >= 500) return true;
+  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
   const msg = (anyErr.message || String(err)).toLowerCase();
-  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) return false;
-  // Do not retry hard timeouts on the same candidate model to avoid hanging; fail fast to the next candidate model
-  if (msg.includes("timeout") || msg.includes("timed out") || anyErr?.name === "AbortError") return false;
   return (
+    msg.includes("429") ||
+    msg.includes("rate limit") ||
+    msg.includes("quota") ||
     msg.includes("500") ||
     msg.includes("502") ||
     msg.includes("503") ||
@@ -352,103 +346,11 @@ function isTransientError(err: unknown): boolean {
     msg.includes("no json") ||
     msg.includes("unexpected token") ||
     msg.includes("json at position") ||
-    msg.includes("syntaxerror")
+    msg.includes("syntaxerror") ||
+    msg.includes("timeout") ||
+    msg.includes("timed out") ||
+    anyErr?.name === "AbortError"
   );
-}
-
-async function hedgeSynthesis(
-  llms: { label: string; model: string; client: OpenAI }[],
-  system: string,
-  user: string,
-  totalTimeoutMs: number = 52_000,
-): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
-  const controllers = llms.map(() => new AbortController());
-  const timers: NodeJS.Timeout[] = [];
-  const started = new Set<number>();
-
-  return new Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }>((resolve, reject) => {
-    let resolved = false;
-    let pendingCount = llms.length;
-    const errors: { label: string; error: string }[] = [];
-
-    const cleanup = () => {
-      clearTimeout(masterTimer);
-      timers.forEach(clearTimeout);
-    };
-
-    const masterTimer = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        controllers.forEach((c) => c.abort());
-        cleanup();
-        reject(new Error(`All synthesis candidates timed out after ${totalTimeoutMs / 1000}s`));
-      }
-    }, totalTimeoutMs);
-
-    const tryCandidate = async (index: number) => {
-      if (resolved || index >= llms.length || started.has(index)) return;
-      started.add(index);
-      const llm = llms[index];
-      const controller = controllers[index];
-      const candidateTimeoutMs = llm.model.includes("flash") ? 14_000 : 22_000;
-
-      console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
-
-      try {
-        const { text, actualModel } = await complete(
-          llm.client,
-          llm.model,
-          system,
-          user,
-          candidateTimeoutMs,
-          controller.signal,
-        );
-        const parsed = parseModelJson(text) as RetailBriefing;
-        if (!resolved) {
-          resolved = true;
-          cleanup();
-          // Abort all other running candidates immediately
-          controllers.forEach((c, i) => {
-            if (i !== index) c.abort();
-          });
-          const effectiveModelLabel =
-            actualModel &&
-            actualModel !== llm.model &&
-            actualModel !== llm.model.replace(":free", "")
-              ? `${llm.label} (${actualModel})`
-              : llm.label;
-          console.log(`[Synthesis] Candidate [${index + 1}] ${llm.label} won the race (${effectiveModelLabel})!`);
-          resolve({ parsed, effectiveModelLabel });
-        }
-      } catch (err: unknown) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.warn(`[Synthesis] Candidate [${index + 1}] ${llm.label} failed: ${errMsg}`);
-        errors.push({ label: llm.label, error: errMsg });
-        pendingCount--;
-        if (!resolved) {
-          // If this candidate failed fast and next hasn't started, launch next immediately!
-          if (index + 1 < llms.length && !started.has(index + 1)) {
-            tryCandidate(index + 1);
-          } else if (pendingCount <= 0) {
-            cleanup();
-            reject(new Error(errors.map((e) => `${e.label}: ${e.error}`).join(", ")));
-          }
-        }
-      }
-    };
-
-    // Start primary candidate immediately
-    tryCandidate(0);
-
-    // If primary candidate takes >4.5s, launch hedged backup candidate in parallel
-    const hedgeTimer = setTimeout(() => {
-      if (!resolved && !started.has(1) && llms.length > 1) {
-        console.log("[Synthesis] Primary candidate taking >4.5s; launching hedged backup candidate in parallel...");
-        tryCandidate(1);
-      }
-    }, 4500);
-    timers.push(hedgeTimer);
-  });
 }
 
 async function complete(
@@ -456,28 +358,20 @@ async function complete(
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 42_000,
-  externalSignal?: AbortSignal,
+  timeoutMs = 12_000,
 ): Promise<{ text: string; actualModel?: string }> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let lastError: unknown;
 
-  if (externalSignal) {
-    if (externalSignal.aborted) {
-      clearTimeout(timer);
-      throw new Error("aborted");
-    }
-    externalSignal.addEventListener("abort", () => controller.abort(), { once: true });
-  }
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const chat = await client.chat.completions.create(
         {
           model,
           temperature: 0.2,
-          max_tokens: model.includes("nemotron") ? 1300 : 4096,
+          max_tokens: model.includes("nemotron") ? 1300 : 3500,
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
@@ -490,6 +384,7 @@ async function complete(
           },
         },
       );
+
       const anyChat = chat as any;
       if (anyChat?.error) {
         const errDetail = anyChat.error.message || anyChat.error.type || JSON.stringify(anyChat.error);
@@ -508,43 +403,82 @@ async function complete(
       }
       const text = content || reasoning;
       if (text) {
-        console.log(`[Synthesis] Model ${model} responded: content length ${content.length}, reasoning length ${reasoning.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
+        console.log(
+          `[Synthesis] Model ${model} responded (length ${text.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model})`,
+        );
         return { text, actualModel: chat.model };
       }
       throw new Error("empty model output");
     } catch (err: any) {
-      if (err?.name === "AbortError" || controller.signal.aborted) {
-        throw new Error(`synthesis timeout (${timeoutMs / 1000}s)`);
-      }
-      if (attempt < 2 && isTransientError(err) && !controller.signal.aborted) {
-        console.warn(`[Synthesis] Transient error on ${model} (attempt 1): ${err.message}. Retrying with fresh session in 600ms...`);
-        await new Promise((r) => setTimeout(r, 600));
+      lastError = err;
+      const isTimeout = err?.name === "AbortError" || controller.signal.aborted;
+      const errorDescription = isTimeout ? `timeout after ${timeoutMs / 1000}s` : err?.message || String(err);
+
+      if (attempt === 1 && isTransientError(err)) {
+        console.warn(`[Synthesis] Model ${model} transient failure on attempt 1 (${errorDescription}). Retrying with fresh session in 700ms...`);
+        await new Promise((r) => setTimeout(r, 700));
         continue;
       }
-      // Only attempt legacy responses API if explicitly available on this client instance
-      if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
-        try {
-          const res = await (client as unknown as { responses: { create: Function } }).responses.create({
-            model,
-            temperature: 0.2,
-            input: [
-              { role: "system", content: system },
-              { role: "user", content: user },
-            ],
-          });
-          const text = (res as { output_text?: string }).output_text;
-          if (text) return { text };
-        } catch {
-          // preserve original error
-        }
-      }
-      throw err;
+      throw new Error(`${model} failed on attempt ${attempt}: ${errorDescription}`);
+    } finally {
+      clearTimeout(timer);
     }
   }
-    throw new Error("synthesis failed after retry");
-  } finally {
-    clearTimeout(timer);
+
+  throw lastError || new Error(`${model} failed after retry`);
+}
+
+async function runSequentialSynthesis(
+  llms: { label: string; model: string; client: OpenAI }[],
+  system: string,
+  user: string,
+  totalTimeoutMs = 26_000,
+): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
+  const errors: string[] = [];
+  const startTime = Date.now();
+
+  for (let i = 0; i < llms.length; i++) {
+    const llm = llms[i];
+    const elapsed = Date.now() - startTime;
+    const remainingTime = totalTimeoutMs - elapsed;
+    if (remainingTime < 6_000) {
+      console.warn(`[Synthesis] Insufficient time remaining (${remainingTime}ms) to attempt ${llm.label}.`);
+      break;
+    }
+
+    // Short, well-calibrated timeout per candidate: 11s for flash models, 14s for other models
+    const candidateTimeout = Math.min(
+      llm.model.includes("flash") ? 11_000 : 14_000,
+      remainingTime - 1_500,
+    );
+
+    console.log(`[Synthesis] Attempting candidate [${i + 1}/${llms.length}]: ${llm.label} (timeout ${candidateTimeout / 1000}s)...`);
+
+    try {
+      const { text, actualModel } = await complete(
+        llm.client,
+        llm.model,
+        system,
+        user,
+        candidateTimeout,
+      );
+      const parsed = parseModelJson(text) as RetailBriefing;
+      const effectiveModelLabel =
+        actualModel &&
+        actualModel !== llm.model &&
+        actualModel !== llm.model.replace(":free", "")
+          ? `${llm.label} (${actualModel})`
+          : llm.label;
+      console.log(`[Synthesis] Model ${llm.label} succeeded in ${((Date.now() - startTime) / 1000).toFixed(1)}s!`);
+      return { parsed, effectiveModelLabel };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Synthesis] Candidate ${llm.label} failed: ${msg}`);
+      errors.push(`${llm.label}: ${msg}`);
+    }
   }
+
+  throw new Error(`All candidate free models failed: ${errors.join(" | ")}`);
 }
 
 function parseModelJson(text: string): any {
