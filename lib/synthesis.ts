@@ -226,7 +226,7 @@ ${SCHEMA}
   )}\n\nCRITICAL: Output raw JSON only. Do not write any thoughts, preamble, or markdown outside the JSON. Start your response immediately with "{" and end with "}".`;
 
   try {
-    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 36_000);
+    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 48_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
       ...adapted,
@@ -403,7 +403,7 @@ async function hedgeSynthesis(
   llms: { label: string; model: string; client: OpenAI }[],
   system: string,
   user: string,
-  totalTimeoutMs: number = 36_000,
+  totalTimeoutMs: number = 48_000,
 ): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
   const controllers = llms.map(() => new AbortController());
   const timers: NodeJS.Timeout[] = [];
@@ -433,7 +433,7 @@ async function hedgeSynthesis(
       started.add(index);
       const llm = llms[index];
       const controller = controllers[index];
-      const candidateTimeoutMs = 22_000;
+      const candidateTimeoutMs = 32_000;
 
       console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
 
@@ -546,12 +546,21 @@ async function complete(
         },
       },
     );
-    const msg = chat.choices[0]?.message;
+    const anyChat = chat as any;
+    if (anyChat?.error) {
+      const errDetail = anyChat.error.message || anyChat.error.type || JSON.stringify(anyChat.error);
+      throw new Error(`OpenCode error: ${errDetail}`);
+    }
+    const choices = anyChat?.choices;
+    if (!Array.isArray(choices) || !choices.length) {
+      throw new Error(`OpenCode returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
+    }
+    const msg = choices[0]?.message;
     const content = typeof msg?.content === "string" ? msg.content.trim() : "";
-    const reasoning = (msg as any)?.reasoning_content || (msg as any)?.reasoning || "";
+    const reasoning = msg?.reasoning || msg?.reasoning_content || "";
     const text = content || reasoning;
     if (text) {
-      console.log(`[Synthesis] Model ${model} responded: length ${text.length}, finish_reason: ${chat.choices[0]?.finish_reason}, actualModel: ${chat.model}`);
+      console.log(`[Synthesis] Model ${model} responded: length ${text.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
       return { text, actualModel: chat.model };
     }
     throw new Error("empty model output");
