@@ -339,6 +339,9 @@ function isTransientError(err: unknown): boolean {
     msg.includes("504") ||
     msg.includes("overloaded") ||
     msg.includes("temporarily unavailable") ||
+    msg.includes("endpoint is unavailable") ||
+    msg.includes("upstream request failed") ||
+    msg.includes("server_error") ||
     msg.includes("empty model output") ||
     msg.includes("no json") ||
     msg.includes("unexpected token") ||
@@ -462,67 +465,77 @@ async function complete(
   }
 
   try {
-    const chat = await client.chat.completions.create(
-      {
-        model,
-        temperature: 0.2,
-        max_tokens: model.includes("nemotron") ? 1300 : 4096,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      },
-      {
-        signal: controller.signal,
-        headers: {
-          "x-session-id": `ses_prec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        },
-      },
-    );
-    const anyChat = chat as any;
-    if (anyChat?.error) {
-      const errDetail = anyChat.error.message || anyChat.error.type || JSON.stringify(anyChat.error);
-      throw new Error(`OpenCode error: ${errDetail}`);
-    }
-    const choices = anyChat?.choices;
-    if (!Array.isArray(choices) || !choices.length) {
-      throw new Error(`OpenCode returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
-    }
-    const msg = choices[0]?.message;
-    let content = typeof msg?.content === "string" ? msg.content.trim() : "";
-    const reasoning = typeof msg?.reasoning === "string" ? msg.reasoning.trim() : "";
-    if (!content && reasoning) {
-      const jsonBlock = reasoning.match(/\{[\s\S]*\}/);
-      if (jsonBlock) content = jsonBlock[0];
-    }
-    const text = content || reasoning;
-    if (text) {
-      console.log(`[Synthesis] Model ${model} responded: content length ${content.length}, reasoning length ${reasoning.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
-      return { text, actualModel: chat.model };
-    }
-    throw new Error("empty model output");
-  } catch (err: any) {
-    if (err?.name === "AbortError" || controller.signal.aborted) {
-      throw new Error(`synthesis timeout (${timeoutMs / 1000}s)`);
-    }
-    // Only attempt legacy responses API if explicitly available on this client instance
-    if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
-      try {
-        const res = await (client as unknown as { responses: { create: Function } }).responses.create({
+    for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const chat = await client.chat.completions.create(
+        {
           model,
           temperature: 0.2,
-          input: [
+          max_tokens: model.includes("nemotron") ? 1300 : 4096,
+          messages: [
             { role: "system", content: system },
             { role: "user", content: user },
           ],
-        });
-        const text = (res as { output_text?: string }).output_text;
-        if (text) return { text };
-      } catch {
-        // preserve original error
+        },
+        {
+          signal: controller.signal,
+          headers: {
+            "x-session-id": `ses_prec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          },
+        },
+      );
+      const anyChat = chat as any;
+      if (anyChat?.error) {
+        const errDetail = anyChat.error.message || anyChat.error.type || JSON.stringify(anyChat.error);
+        throw new Error(`OpenCode error: ${errDetail}`);
       }
+      const choices = anyChat?.choices;
+      if (!Array.isArray(choices) || !choices.length) {
+        throw new Error(`OpenCode returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
+      }
+      const msg = choices[0]?.message;
+      let content = typeof msg?.content === "string" ? msg.content.trim() : "";
+      const reasoning = typeof msg?.reasoning === "string" ? msg.reasoning.trim() : "";
+      if (!content && reasoning) {
+        const jsonBlock = reasoning.match(/\{[\s\S]*\}/);
+        if (jsonBlock) content = jsonBlock[0];
+      }
+      const text = content || reasoning;
+      if (text) {
+        console.log(`[Synthesis] Model ${model} responded: content length ${content.length}, reasoning length ${reasoning.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
+        return { text, actualModel: chat.model };
+      }
+      throw new Error("empty model output");
+    } catch (err: any) {
+      if (err?.name === "AbortError" || controller.signal.aborted) {
+        throw new Error(`synthesis timeout (${timeoutMs / 1000}s)`);
+      }
+      if (attempt < 2 && isTransientError(err) && !controller.signal.aborted) {
+        console.warn(`[Synthesis] Transient error on ${model} (attempt 1): ${err.message}. Retrying with fresh session in 600ms...`);
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+      // Only attempt legacy responses API if explicitly available on this client instance
+      if ("responses" in client && typeof (client as unknown as { responses?: { create?: Function } }).responses?.create === "function") {
+        try {
+          const res = await (client as unknown as { responses: { create: Function } }).responses.create({
+            model,
+            temperature: 0.2,
+            input: [
+              { role: "system", content: system },
+              { role: "user", content: user },
+            ],
+          });
+          const text = (res as { output_text?: string }).output_text;
+          if (text) return { text };
+        } catch {
+          // preserve original error
+        }
+      }
+      throw err;
     }
-    throw err;
+  }
+    throw new Error("synthesis failed after retry");
   } finally {
     clearTimeout(timer);
   }
