@@ -140,7 +140,8 @@ export async function synthesize(opts: {
   if (!llms.length) return guardBriefing({ ...fallback, isFallback: true });
 
   const profile = STYLES[opts.style];
-  const system = `You are Precedent, a friendly research helper for tokenized US stocks on Bitget. You explain the retrieved facts to a complete beginner. The human makes the decision. You never do.
+  const system = `You are Precedent, an API engine providing friendly research notes for tokenized US stocks on Bitget.
+CRITICAL FORMAT RULE: You must output RAW JSON ONLY. Never output any preamble, analysis notes, or reasoning like "Let me analyze...". Start your reply immediately with "{" and end with "}".
 
 HARD RULES
 - Never use the words BUY, SELL, LONG, SHORT.
@@ -185,7 +186,7 @@ ${SCHEMA}
       eps: opts.pillars.fundamentals.eps,
       latestFilings: opts.pillars.fundamentals.latestFilings?.slice(0, 2),
       catalysts: opts.pillars.fundamentals.catalysts?.slice(0, 3),
-      notes: opts.pillars.fundamentals.notes?.slice(0, 3),
+      notes: opts.pillars.fundamentals.notes?.slice(0, 2),
     } : { ok: false },
     technicals: opts.pillars.technicals?.ok ? {
       native: opts.pillars.technicals.native,
@@ -194,19 +195,22 @@ ${SCHEMA}
       trend: opts.pillars.technicals.trend,
       momentum: opts.pillars.technicals.momentum,
       volatility: opts.pillars.technicals.volatility,
-      levels: opts.pillars.technicals.levels,
+      levels: {
+        support: opts.pillars.technicals.levels?.support?.slice(0, 3),
+        resistance: opts.pillars.technicals.levels?.resistance?.slice(0, 3),
+      },
       indicators: opts.pillars.technicals.indicators,
-      notes: opts.pillars.technicals.notes?.slice(0, 3),
+      notes: opts.pillars.technicals.notes?.slice(0, 2),
     } : { ok: false },
     news: opts.pillars.news?.ok ? {
-      headlines: opts.pillars.news.headlines?.slice(0, 4).map((h) => ({ title: h.title, publisher: h.publisher, tag: h.tag })),
+      headlines: opts.pillars.news.headlines?.slice(0, 3).map((h) => ({ title: h.title, publisher: h.publisher, tag: h.tag })),
       macro: opts.pillars.news.macro?.slice(0, 2),
       aggregateLean: opts.pillars.news.aggregateLean,
     } : { ok: false },
     analogs: opts.pillars.analogs?.ok ? {
-      ranges: opts.pillars.analogs.ranges,
+      ranges: opts.pillars.analogs.ranges?.slice(0, 3),
       sample: opts.pillars.analogs.sample,
-      closest: fallback.historicalStressTest.examples,
+      closest: fallback.historicalStressTest.examples?.slice(0, 3),
     } : { ok: false },
     marketStructure: opts.pillars.marketStructure?.ok ? {
       communityId: opts.pillars.marketStructure.communityId,
@@ -224,7 +228,7 @@ ${SCHEMA}
     },
     null,
     2,
-  )}\n\nIMPORTANT: Output valid JSON only matching the schema. Start your response immediately with "{" and do not include any reasoning, conversational text, or markdown code blocks outside the JSON.`;
+  )}\n\nCRITICAL: Output raw JSON only. Do not write any thoughts, preamble, or markdown outside the JSON. Start your response immediately with "{" and end with "}".`;
 
   const attempted: { label: string; error: string }[] = [];
 
@@ -477,7 +481,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: 2500,
+        max_tokens: 3000,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
