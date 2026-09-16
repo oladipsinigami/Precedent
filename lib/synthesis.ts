@@ -141,6 +141,7 @@ export async function synthesize(opts: {
 CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be concise: keep string values under 25 words. Do not output markdown code blocks or conversational commentary. Start immediately with "{" and end with "}".
 Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "went up X times out of Y", "historical range was -A% to +B%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
 Technical Glossing: Explain any technical term once in plain language on first mention (e.g. "RSI (a short-term strength score from 0 to 100)"), then use only the short name ("RSI") for later mentions. Avoid repeating the same parenthetical explanation multiple times. Prefer shorter sentences overall.
+Past Examples Guidance: Provide 2 to 3 past examples in "historicalStressTest.examples" based on the retrieved examples. Prefer same-ticker historical occurrences when available. State each outcome clearly in plain language (e.g. "rose about 2.8% over the next 5 days"). Never output "n/a", undefined, or empty outcomes.
 
 SCHEMA:
 ${SCHEMA}`;
@@ -154,7 +155,7 @@ ${SCHEMA}`;
     .map((r) => `  * ${r.period}: ${r.wentUp}, ${r.typicalMove}, median ${r.median}`)
     .join("\n");
   const stressExamplesSummary = stress.examples
-    .slice(0, 2)
+    .slice(0, 3)
     .map((e) => `${e.when}: ${e.whatHappened}`)
     .join("; ");
 
@@ -256,7 +257,11 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
             /\d/.test(item.whatHappened) &&
             /\b(rose|fell|stayed|gained|dropped|moved)\b/i.test(item.whatHappened),
         ).slice(0, 3);
-        return validParsed.length ? validParsed : fallback.historicalStressTest.examples;
+        const hasSameTicker = (list: { when: string }[]) => list.some((e) => e.when.startsWith(opts.name.native));
+        if (hasSameTicker(fallback.historicalStressTest.examples) && !hasSameTicker(validParsed)) {
+          return fallback.historicalStressTest.examples.slice(0, 3);
+        }
+        return validParsed.length >= 2 ? validParsed : fallback.historicalStressTest.examples.slice(0, 3);
       })(),
       importantNote: stress?.importantNote || fallback.historicalStressTest.importantNote,
     };
