@@ -2,6 +2,7 @@ import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, TradingStyle } from "./types";
 import { fmtPct } from "./http";
 import { formatAnalogOutcome } from "./deterministic-briefing";
+import { guardBriefing } from "./language-guard";
 
 export function reweightBriefing(
   briefing: Briefing,
@@ -74,7 +75,7 @@ export function reweightBriefing(
     examples: updatedExamples.length ? updatedExamples : briefing.historicalStressTest.examples,
   };
 
-  return {
+  return guardBriefing({
     ...briefing,
     title: newTitle.includes(profile.label) ? newTitle : `${briefing.title} [${profile.label}]`,
     whatWeDid: updatedWhatWeDid,
@@ -85,5 +86,5 @@ export function reweightBriefing(
       forStyle: styleConsiderations,
       invalidation: invalidationConsiderations,
     },
-  };
+  });
 }

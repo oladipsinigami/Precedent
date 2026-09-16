@@ -169,9 +169,10 @@ export function deterministicBriefing(opts: {
   }
 
   if (newsLean && xLean && newsLean !== "mixed" && xLean !== "mixed" && newsLean !== xLean) {
+    const describeLean = (l: string) => (l === "constructive" ? "positive" : l === "cautious" ? "cautious" : l);
     tension.push({
-      left: `Official news headlines lean ${newsLean}.`,
-      right: `Social media discussions lean ${xLean}.`,
+      left: `Official news headlines show ${describeLean(newsLean)} coverage.`,
+      right: `Social media discussions show ${describeLean(xLean)} coverage.`,
       whyItMatters:
         "News reporters and social media discussions track different information sources and participant groups.",
     });
@@ -362,7 +363,7 @@ export function deterministicBriefing(opts: {
           ? `A move outside the usual historical range for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) would be different from the cases in this sample.`
           : "Without analog bands, invalidation has to be defined by the trader’s own level — the desk will not invent one.",
         pillars?.fundamentals?.catalysts?.[0]
-          ? `A new 8-K that changes the last-known filing picture (latest on tape: ${pillars.fundamentals.catalysts[0]}) would reopen the fundamental case.`
+          ? `A new 8-K that changes the last-known filing picture (latest on tape: ${pillars.fundamentals.catalysts[0]}) would reopen the fundamental picture.`
           : "Watch the next 8-K; the current filing tape is the last known state.",
       ],
       questions: [
