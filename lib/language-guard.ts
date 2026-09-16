@@ -14,18 +14,132 @@ function matches(regex: RegExp, text: string): boolean {
   return result;
 }
 
-function demystifyJargon(text: string): string {
-  return text
-    .replace(/\bmean\s+reversion(?!\s*\([^)]*average\))/gi, "mean reversion (the tendency of prices to return toward their historical average)")
-    .replace(/\bRSI\s+stretch(?!\s*\([^)]*extreme\))/gi, "RSI stretch (a condition where the short-term strength indicator reached an extreme)")
-    .replace(/\bMACD(?!\s*\([^)]*trend-speed\))/gi, "MACD (a trend-speed indicator)")
-    .replace(/\b(?!RSI\s+stretch\b)RSI\b(?!\s*\([^)]*strength\))(?!\s*score)(?!\s*14)/gi, "RSI (a short-term strength score from 0 to 100)")
-    .replace(/\boverextended(?!\s*\([^)]*average\))/gi, "overextended (moved unusually far away from its recent average)")
-    .replace(/\bconsolidation(?!\s*\([^)]*sideways\))/gi, "consolidation (a period where price moves sideways in a tight range)")
-    .replace(/\bresistance\s+(band|zone|level)(?!\s*\([^)]*selling\))/gi, "resistance $1 (a price level where historical selling activity previously concentrated)")
-    .replace(/\bsupport\s+(zone|band|level)(?!\s*\([^)]*buying\))/gi, "support $1 (a price level where historical buying activity previously concentrated)")
-    .replace(/\boverbought(?!\s*\([^)]*fast\))/gi, "overbought (where recent gains were unusually fast relative to the baseline)")
-    .replace(/\boversold(?!\s*\([^)]*fast\))/gi, "oversold (where recent drops were unusually fast relative to the baseline)");
+function demystifyTerm(
+  text: string,
+  key: string,
+  matcher: RegExp,
+  gloss: string | ((match: string, ...args: string[]) => string),
+  shortName: string | ((match: string, ...args: string[]) => string),
+  seen: Set<string>,
+): string {
+  if (seen.has(key)) {
+    if (typeof shortName === "function") {
+      return text.replace(matcher, (m, ...a) => shortName(m, ...a));
+    }
+    return text.replace(matcher, shortName);
+  }
+  let firstFound = false;
+  return text.replace(matcher, (match, ...args) => {
+    if (!firstFound) {
+      firstFound = true;
+      seen.add(key);
+      return typeof gloss === "function" ? (gloss as Function)(match, ...args) : gloss;
+    }
+    return typeof shortName === "function" ? (shortName as Function)(match, ...args) : shortName;
+  });
+}
+
+function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
+  let out = text;
+
+  if (/\bshort-term\s+strength\s+(score|indicator)\s*\([^)]*RSI[^)]*\)/i.test(out)) {
+    seen.add("RSI");
+  }
+  if (/\btrend-speed\s+indicator\s*\([^)]*MACD[^)]*\)/i.test(out)) {
+    seen.add("MACD");
+  }
+
+  out = demystifyTerm(
+    out,
+    "RSI_stretch",
+    /(?<!\()\bRSI\s+stretch(?:\s*\([^)]*\))?(?!\))/gi,
+    "RSI stretch (a condition where the short-term strength indicator reached an extreme)",
+    "RSI stretch",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "RSI",
+    /(?<!\()\b(?!RSI\s+stretch\b)RSI(?:\s*\([^)]*\))?(?!\))/gi,
+    "RSI (a short-term strength score from 0 to 100)",
+    "RSI",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "MACD",
+    /(?<!\()\bMACD(?:\s*\([^)]*\))?(?!\))/gi,
+    "MACD (a trend-speed indicator)",
+    "MACD",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "overbought",
+    /\boverbought(?:\s*\([^)]*\))?/gi,
+    "overbought (where recent gains were unusually fast relative to the baseline)",
+    "overbought",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "oversold",
+    /\boversold(?:\s*\([^)]*\))?/gi,
+    "oversold (where recent drops were unusually fast relative to the baseline)",
+    "oversold",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "mean_reversion",
+    /\bmean\s+reversion(?:\s*\([^)]*\))?/gi,
+    "mean reversion (the tendency of prices to return toward their historical average)",
+    "mean reversion",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "overextended",
+    /\boverextended(?:\s*\([^)]*\))?/gi,
+    "overextended (moved unusually far away from its recent average)",
+    "overextended",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "consolidation",
+    /\bconsolidation(?:\s*\([^)]*\))?/gi,
+    "consolidation (a period where price moves sideways in a tight range)",
+    "consolidation",
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "resistance",
+    /\bresistance\s+(band|zone|level)(?:\s*\([^)]*\))?/gi,
+    (_m, type) => `resistance ${type} (a price level where historical selling activity previously concentrated)`,
+    (_m, type) => `resistance ${type}`,
+    seen,
+  );
+
+  out = demystifyTerm(
+    out,
+    "support",
+    /\bsupport\s+(zone|band|level)(?:\s*\([^)]*\))?/gi,
+    (_m, type) => `support ${type} (a price level where historical buying activity previously concentrated)`,
+    (_m, type) => `support ${type}`,
+    seen,
+  );
+
+  return out;
 }
 
 function banSoftDirectional(text: string): string {
@@ -87,9 +201,9 @@ function banSoftDirectional(text: string): string {
     .replace(/\b(moderate\s+)?downside\b/gi, "downward movement");
 }
 
-export function cleanHistoricalSummary(text: string | undefined | null): string {
+export function cleanHistoricalSummary(text: string | undefined | null, seen: Set<string> = new Set()): string {
   if (!text || typeof text !== "string") return "";
-  let s = rewrite(text);
+  let s = rewrite(text, seen);
   s = s.replace(/^(moderate\s+)?(upside|downside)(\s+possible)?[:\s—–-]*/i, "");
   s = s.replace(/^(bullish|bearish|constructive|cautious)(\s+(case|setup|lean|outlook|bias))?[:\s—–-]*/i, "");
   s = s.replace(/^(the\s+)?(upside|downside)\s+case[:\s—–-]*/i, "");
@@ -104,13 +218,13 @@ export function cleanHistoricalSummary(text: string | undefined | null): string 
   return s;
 }
 
-function rewrite(text: string | undefined | null): string {
+function rewrite(text: string | undefined | null, seen: Set<string> = new Set()): string {
   if (!text || typeof text !== "string") return "";
   let out = text
     .replace(CONFIDENCE, "an unstated conviction (removed)")
     .replace(VERDICT_LINE, "this desk does not take a side");
   out = banSoftDirectional(out);
-  out = demystifyJargon(out);
+  out = demystifyJargon(out, seen);
   out = out.replace(VERDICT, (m) => {
     const lower = m.toLowerCase();
     if (lower === "buy") return "purchasing";
@@ -122,23 +236,25 @@ function rewrite(text: string | undefined | null): string {
   return out;
 }
 
-function scrubList(items: string[] | undefined | null): string[] {
-  return (items ?? []).map(rewrite).filter((line) => !/this desk does not take a side/i.test(line) || line.length > 40);
+function scrubList(items: string[] | undefined | null, seen: Set<string> = new Set()): string[] {
+  return (items ?? []).map((t) => rewrite(t, seen)).filter((line) => !/this desk does not take a side/i.test(line) || line.length > 40);
 }
 
 export function guardBriefing(briefing: Briefing): Briefing {
+  const seenGlossary = new Set<string>();
+
   return {
     ...briefing,
-    title: rewrite(briefing.title).replace(/the (constructive|cautious) case/gi, "setup").trim() || "Research Memo",
-    whatWeDid: rewrite(briefing.whatWeDid),
+    title: rewrite(briefing.title, seenGlossary).replace(/the (constructive|cautious) case/gi, "setup").trim() || "Research Memo",
+    whatWeDid: rewrite(briefing.whatWeDid, seenGlossary),
     historicalStressTest: {
       ...briefing.historicalStressTest,
-      summary: cleanHistoricalSummary(briefing.historicalStressTest?.summary) || "Historical cases show a range of past outcomes for context.",
+      summary: cleanHistoricalSummary(briefing.historicalStressTest?.summary, seenGlossary) || "Historical cases show a range of past outcomes for context.",
       results: (briefing.historicalStressTest?.results ?? []).map((result) => ({
         ...result,
-        wentUp: rewrite(result?.wentUp),
-        typicalMove: rewrite(result?.typicalMove),
-        median: rewrite(result?.median),
+        wentUp: rewrite(result?.wentUp, seenGlossary),
+        typicalMove: rewrite(result?.typicalMove, seenGlossary),
+        median: rewrite(result?.median, seenGlossary),
       })),
       examples: (briefing.historicalStressTest?.examples ?? [])
         .filter(
@@ -151,47 +267,47 @@ export function guardBriefing(briefing: Briefing): Briefing {
         )
         .map((example) => ({
           ...example,
-          when: rewrite(example?.when),
-          whatHappened: rewrite(example?.whatHappened),
+          when: rewrite(example?.when, seenGlossary),
+          whatHappened: rewrite(example?.whatHappened, seenGlossary),
         })),
-      importantNote: rewrite(briefing.historicalStressTest?.importantNote),
+      importantNote: rewrite(briefing.historicalStressTest?.importantNote, seenGlossary),
     },
-    otherThingsWeChecked: scrubList(briefing.otherThingsWeChecked),
+    otherThingsWeChecked: scrubList(briefing.otherThingsWeChecked, seenGlossary),
     whereThingsDoNotAgree: (briefing.whereThingsDoNotAgree ?? []).map((item) => ({
-      conflict: rewrite(item?.conflict),
-      whyItMatters: rewrite(item?.whyItMatters),
+      conflict: rewrite(item?.conflict, seenGlossary),
+      whyItMatters: rewrite(item?.whyItMatters, seenGlossary),
     })),
-    simpleTakeAways: scrubList(briefing.simpleTakeAways),
-    questionsOnlyYouCanAnswer: scrubList(briefing.questionsOnlyYouCanAnswer),
-    styleNote: rewrite(briefing.styleNote),
+    simpleTakeAways: scrubList(briefing.simpleTakeAways, seenGlossary),
+    questionsOnlyYouCanAnswer: scrubList(briefing.questionsOnlyYouCanAnswer, seenGlossary),
+    styleNote: rewrite(briefing.styleNote, seenGlossary),
     flags: briefing.flags
       ? {
           ...briefing.flags,
-          balanceSheet: scrubList(briefing.flags.balanceSheet),
+          balanceSheet: scrubList(briefing.flags.balanceSheet, seenGlossary),
           analogQuality: briefing.flags.analogQuality,
         }
       : undefined,
-    evidence: (briefing.evidence ?? []).map((e) => ({ ...e, claim: rewrite(e?.claim) })),
+    evidence: (briefing.evidence ?? []).map((e) => ({ ...e, claim: rewrite(e?.claim, seenGlossary) })),
     tension: (briefing.tension ?? []).map((t) => ({
-      left: rewrite(t?.left),
-      right: rewrite(t?.right),
-      whyItMatters: rewrite(t?.whyItMatters),
+      left: rewrite(t?.left, seenGlossary),
+      right: rewrite(t?.right, seenGlossary),
+      whyItMatters: rewrite(t?.whyItMatters, seenGlossary),
     })),
     historicalAnalog: {
       ...briefing.historicalAnalog,
-      setup: rewrite(briefing.historicalAnalog?.setup),
+      setup: rewrite(briefing.historicalAnalog?.setup, seenGlossary),
       analogs: (briefing.historicalAnalog?.analogs ?? []).map((a) => ({
         ...a,
-        followed: rewrite(a?.followed),
-        similarity: rewrite(a?.similarity),
+        followed: rewrite(a?.followed, seenGlossary),
+        similarity: rewrite(a?.similarity, seenGlossary),
       })),
-      baseRates: (briefing.historicalAnalog?.baseRates ?? []).map((b) => ({ ...b, note: rewrite(b?.note), range: rewrite(b?.range) })),
-      caveat: rewrite(briefing.historicalAnalog?.caveat),
+      baseRates: (briefing.historicalAnalog?.baseRates ?? []).map((b) => ({ ...b, note: rewrite(b?.note, seenGlossary), range: rewrite(b?.range, seenGlossary) })),
+      caveat: rewrite(briefing.historicalAnalog?.caveat, seenGlossary),
     },
     considerations: {
-      forStyle: scrubList(briefing.considerations?.forStyle),
-      invalidation: scrubList(briefing.considerations?.invalidation),
-      questions: scrubList(briefing.considerations?.questions),
+      forStyle: scrubList(briefing.considerations?.forStyle, seenGlossary),
+      invalidation: scrubList(briefing.considerations?.invalidation, seenGlossary),
+      questions: scrubList(briefing.considerations?.questions, seenGlossary),
     },
   };
 }
