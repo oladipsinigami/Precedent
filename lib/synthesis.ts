@@ -226,7 +226,7 @@ ${SCHEMA}
   )}\n\nCRITICAL: Output raw JSON only. Do not write any thoughts, preamble, or markdown outside the JSON. Start your response immediately with "{" and end with "}".`;
 
   try {
-    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 48_000);
+    const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 52_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const briefing: Briefing = {
       ...adapted,
@@ -403,7 +403,7 @@ async function hedgeSynthesis(
   llms: { label: string; model: string; client: OpenAI }[],
   system: string,
   user: string,
-  totalTimeoutMs: number = 48_000,
+  totalTimeoutMs: number = 52_000,
 ): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
   const controllers = llms.map(() => new AbortController());
   const timers: NodeJS.Timeout[] = [];
@@ -433,7 +433,7 @@ async function hedgeSynthesis(
       started.add(index);
       const llm = llms[index];
       const controller = controllers[index];
-      const candidateTimeoutMs = 32_000;
+      const candidateTimeoutMs = 42_000;
 
       console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
 
@@ -490,7 +490,7 @@ async function complete(
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 22_000,
+  timeoutMs: number = 42_000,
   externalSignal?: AbortSignal,
 ): Promise<{ text: string; actualModel?: string }> {
   const controller = new AbortController();
@@ -509,7 +509,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: 1400,
+        max_tokens: 1100,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
