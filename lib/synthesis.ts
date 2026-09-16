@@ -26,15 +26,15 @@ function providers() {
       defaultHeaders: {
         "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
         "X-Title": "Precedent Research Desk",
+        "x-session-id": `ses_prec_${Math.random().toString(36).slice(2)}`,
       },
     });
 
     const candidateModels = [
       process.env.OPENCODE_MODEL,
-      "claude-haiku-4-5",
-      "gpt-5.4-mini",
-      "gemini-3.5-flash",
-      "deepseek-v4-flash",
+      "nemotron-3-ultra-free",
+      "nemotron-3.5-lightning-free",
+      "mimo-v2.5-free",
     ].filter(Boolean) as string[];
 
     const uniqueModels = Array.from(new Set(candidateModels)).slice(0, 3);
@@ -539,7 +539,12 @@ async function complete(
           { role: "user", content: user },
         ],
       },
-      { signal: controller.signal },
+      {
+        signal: controller.signal,
+        headers: {
+          "x-session-id": `ses_prec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        },
+      },
     );
     const msg = chat.choices[0]?.message;
     const content = typeof msg?.content === "string" ? msg.content.trim() : "";
