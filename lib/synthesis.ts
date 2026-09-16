@@ -29,16 +29,18 @@ function providers() {
       },
     });
 
-    // Curated short ordered list of 2 reliable, active free generative models on OpenRouter
-    // 1. liquid/lfm-2.5-2.6b:free — lightweight, ultra-responsive 2.6B model with fast queue assignment
-    // 2. nvidia/nemotron-3.5-lightning:free — fast 1M context free reasoning model
+    // Curated ordered list of 3 reliable, active free models on OpenRouter across diverse providers:
+    // 1. liquid/lfm-2.5-2.6b:free (Liquid AI - lightweight, fast generation)
+    // 2. google/gemma-4-26b-a4b-it:free (Google - high instruction quality, standard JSON)
+    // 3. nvidia/nemotron-3.5-lightning:free (NVIDIA - fast reasoning backup)
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
       "liquid/lfm-2.5-2.6b:free",
+      "google/gemma-4-26b-a4b-it:free",
       "nvidia/nemotron-3.5-lightning:free",
     ].filter(Boolean) as string[];
 
-    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs)).slice(0, 2);
+    const uniqueSlugs = Array.from(new Set(freeCandidateSlugs)).slice(0, 3);
     for (const slug of uniqueSlugs) {
       const cleanLabel = slug.startsWith("openrouter/") ? slug : `openrouter/${slug}`;
       available.push({
@@ -85,19 +87,23 @@ function providers() {
 }
 
 const SCHEMA = `{
-  "title": string,
-  "whatWeDid": string,
+  "title": "Clear memo title here",
+  "whatWeDid": "One sentence explaining the data checked",
   "historicalStressTest": {
-    "summary": string,
-    "sampleSize": number,
-    "results": [{ "period": "Next day"|"Next 5 trading days"|"Next 10 trading days", "wentUp": string, "typicalMove": string, "median": string }],
-    "examples": [{ "when": string, "whatHappened": string }],
-    "importantNote": string
+    "summary": "Objective past data description",
+    "sampleSize": 12,
+    "results": [
+      { "period": "Next day", "wentUp": "went up 7 times out of 12", "typicalMove": "usually between -1.5% and +2.1%", "median": "+0.4%" },
+      { "period": "Next 5 trading days", "wentUp": "went up 8 times out of 12", "typicalMove": "usually between -2.2% and +3.5%", "median": "+1.1%" },
+      { "period": "Next 10 trading days", "wentUp": "went up 7 times out of 12", "typicalMove": "usually between -3.1% and +4.0%", "median": "+1.5%" }
+    ],
+    "examples": [{ "when": "AAPL (2023-04-12)", "whatHappened": "rose about 2.1% over the next 5 days" }],
+    "importantNote": "Historical results are past occurrences only, not predictions."
   },
-  "otherThingsWeChecked": string[],
-  "whereThingsDoNotAgree": [{ "conflict": string, "whyItMatters": string }],
-  "simpleTakeAways": string[],
-  "questionsOnlyYouCanAnswer": string[]
+  "otherThingsWeChecked": ["First observation", "Second observation"],
+  "whereThingsDoNotAgree": [{ "conflict": "Fact A vs Fact B", "whyItMatters": "Why it matters" }],
+  "simpleTakeAways": ["First takeaway", "Second takeaway"],
+  "questionsOnlyYouCanAnswer": ["First question", "Second question"]
 }`;
 
 type RetailBriefing = {
@@ -167,7 +173,8 @@ ${profile.label}. Horizon: ${profile.horizon}
 ${profile.framing}
 
 OUTPUT
-Return JSON only, matching: ${SCHEMA}
+Return a valid JSON object only matching this exact schema (all values must be valid JSON strings, numbers, or arrays — never write type keywords like "string" or "number"):
+${SCHEMA}
   HistoricalStressTest is the most important section. For every available horizon, use this exact simple format: “Next day: went up 7 times out of 11. Usually between –1.8% and +2.4%. Middle result around +0.6%.” Replace the numbers with the retrieved values. Keep the three horizon cards when data exists, and make “went up X times out of Y” and “usually between A% and B%” the most prominent facts. Never lead with “moderate upside possible” or any similar interpretive or directional wording. State the sample size and explain when results are mixed or the sample is small. Do not expose internal percentile labels.
   For "examples" in historicalStressTest, only include past examples from the retrieved data that have clear, complete forward outcomes. For each example, set "when" to the ticker and date (e.g. “AAPL (2022-01-25)” or “SN (2026-07-02, similar chart)”) and "whatHappened" in plain language (e.g. “rose about 2.8% over the next 5 days”). Never output “n/a”, “moved n/a”, or empty outcomes. If cross-ticker matches are used, keep them short and clearly labeled.
   Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. When the retrieved data contains disagreement, always include 1–3 real conflicts in whereThingsDoNotAgree. Write each conflict in plain, practical language: name the two facts that do not match, then explain why a beginner should care without predicting what happens next. For example: “The recent price has moved a lot, but the short-term strength indicator is already high.” Or: “The 24-hour Bitget price and the regular stock price are almost the same right now, but past similar cases sometimes showed a larger overnight difference.” Do not invent a conflict when the data does not support one. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
@@ -220,17 +227,19 @@ Return JSON only, matching: ${SCHEMA}
   )}\n\nIMPORTANT: Output valid JSON only matching the schema. Start your response immediately with "{" and do not include any reasoning, conversational text, or markdown code blocks outside the JSON.`;
 
   const attempted: { label: string; error: string }[] = [];
-  const PER_MODEL_TIMEOUT_MS = 18_000;
 
-  for (const llm of llms) {
+  for (let idx = 0; idx < llms.length; idx++) {
+    const llm = llms[idx];
+    // Allocate timeout budget: primary gets 25s, subsequent candidates get 20s or 18s
+    const candidateTimeoutMs = idx === 0 ? 25_000 : (idx === 1 ? 20_000 : 18_000);
     try {
-      console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model})...`);
+      console.log(`[Synthesis] Attempting synthesis with ${llm.label} (${llm.model}, timeout: ${candidateTimeoutMs / 1000}s)...`);
       const { parsed, actualModel } = await completeAndParseWithRetry(
         llm.client,
         llm.model,
         system,
         user,
-        PER_MODEL_TIMEOUT_MS,
+        candidateTimeoutMs,
       );
       const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
       const effectiveModelLabel =
@@ -403,14 +412,15 @@ function isTransientError(err: unknown): boolean {
   if (!err) return false;
   const anyErr = err as any;
   const status = anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status;
-  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
+  // If 429 rate limit occurs, do not sleep and retry the same model.
+  // Fail over immediately to the next candidate model to avoid burning execution budget!
+  if (status === 429) return false;
+  if (typeof status === "number" && status >= 500) return true;
   const msg = (anyErr.message || String(err)).toLowerCase();
+  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) return false;
   // Do not retry hard timeouts on the same candidate model to avoid hanging; fail fast to the next candidate model
   if (msg.includes("timeout") || msg.includes("timed out") || anyErr?.name === "AbortError") return false;
   return (
-    msg.includes("429") ||
-    msg.includes("rate limit") ||
-    msg.includes("quota") ||
     msg.includes("500") ||
     msg.includes("502") ||
     msg.includes("503") ||
@@ -430,7 +440,7 @@ async function completeAndParseWithRetry(
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 18_000,
+  timeoutMs: number = 25_000,
 ): Promise<{ parsed: RetailBriefing; actualModel?: string }> {
   let lastErr: unknown;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -457,7 +467,7 @@ async function complete(
   model: string,
   system: string,
   user: string,
-  timeoutMs: number = 18_000,
+  timeoutMs: number = 25_000,
 ): Promise<{ text: string; actualModel?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -512,7 +522,14 @@ async function complete(
 }
 
 function parseModelJson(text: string): any {
-  const jsonStr = extractJson(text);
+  let jsonStr = extractJson(text);
+
+  // Pre-sanitize unquoted TypeScript type annotations if an LLM wrote `: string`, `: number`, `: boolean`
+  jsonStr = jsonStr
+    .replace(/:\s*string\b/gi, ': ""')
+    .replace(/:\s*number\b/gi, ': 0')
+    .replace(/:\s*boolean\b/gi, ': false');
+
   try {
     return JSON.parse(jsonStr);
   } catch (err) {
