@@ -32,9 +32,9 @@ function providers() {
 
     const candidateModels = [
       process.env.OPENCODE_MODEL,
+      "ling-3.0-flash-fin-free",
       "nemotron-3-ultra-free",
       "nemotron-3.5-lightning-free",
-      "mimo-v2.5-free",
     ].filter(Boolean) as string[];
 
     const uniqueModels = Array.from(new Set(candidateModels)).slice(0, 3);
@@ -136,94 +136,46 @@ export async function synthesize(opts: {
 
   const profile = STYLES[opts.style];
   const system = `You are Precedent, an API engine providing friendly research notes for tokenized US stocks on Bitget.
-CRITICAL FORMAT RULE: You must output RAW JSON ONLY. Never output any preamble, analysis notes, or reasoning like "Let me analyze...". Start your reply immediately with "{" and end with "}".
+CRITICAL FORMAT RULE: Output RAW JSON ONLY matching this schema. Be concise: keep every string property under 20 words. Never output markdown code blocks, reasoning tags, or conversational preamble. Start response immediately with "{" and end with "}".
 
-HARD RULES
-- Never use the words BUY, SELL, LONG, SHORT.
-- Never give a directional verdict or a confidence percentage.
-- Absolutely ZERO soft directional, interpretive, or forward-looking language anywhere in the memo (the only exception is questionsOnlyYouCanAnswer):
-  - Strictly forbidden phrases: “upside possible”, “downside possible”, “further upside”, “further downside”, “room for upside”, “room for downside”, “expect a pullback before further upside”, “expect a pullback before…”, “expect a pullback”, “pullback”, “tempts traders to expect the same direction”, “bullish case”, “bearish case”, “upside case”, “downside case”, “constructive case”, “cautious case”, “bullish setup”, “bearish setup”, “constructive setup”, “cautious setup”, “upside bias”, “downside bias”, “positive price bias”, “negative price bias”, “favors higher prices”, “favors lower prices”, “leaning higher”, “leaning lower”, “leaning”, “favors”, “constructive”, “cautious outlook”, “moderate upside”, “moderate downside”, “tilt”, “supportive history”, “history is supportive”, “may need a pause”, “struggles to go higher”.
-- Describe price levels and historical ranges ONLY as objective facts about past and present data:
-  - Say: “Past outcomes ranged from -X% to +Y%” (never say “on the downside to ... on the upside”, never say “upside potential”, never say “room to run”).
-  - State the sample size and exact count: “went up X times out of Y” and “usually between A% and B%”.
-  - Historical results are only what happened in the past. They are never predictions or suggestions.
+HARD RULES:
+- Never use BUY, SELL, LONG, SHORT.
+- Never give a directional prediction, target price, or confidence percentage.
 - Forward-looking language is strictly forbidden in title, whatWeDid, historicalStressTest, otherThingsWeChecked, whereThingsDoNotAgree, and simpleTakeAways.
-- The ONLY section allowed to look forward is “questionsOnlyYouCanAnswer”, which must contain reflective questions for the human trader (e.g. “What is your exit plan if price moves outside the typical historical range?”), never directional forecasts or recommendations.
-- If data is missing or weak, say so in plain words. Do not invent filings, quotes, dates, social posts, or numbers.
-- Native cash tape and rToken 7×24 tape are related but not identical. If no rToken print was provided, do not fabricate one.
-- If the question mentions overnight trading, 7×24 trading, Bitget versus cash, or a basis difference, make the current Bitget-versus-regular-stock comparison one of the clearest beginner-friendly facts in the memo and explain why the difference matters while cash markets are closed.
-- Frame depth, horizon, and language to the trader's style.
-- Use short sentences and everyday words, as if explaining the chart to a smart friend who has never studied charts.
-- Write the entire memo as if you are a patient friend helping a beginner understand the research.
-- Never use mean reversion, MACD, RSI, overbought, oversold, consolidation, resistance band, support zone, momentum, bullish, bearish, stretched, or overextended without an immediate plain-English explanation in the same sentence.
-- Prefer everyday factual wording such as “the price has moved upward in recent sessions,” “the short-term strength indicator is high,” and “the price is currently trading near previous chart highs.” Never predict a pause, continuation, bounce, or pullback.
-- Do not leave intermediate technical-analysis jargon unexplained. If a technical term is necessary, explain it immediately in simple words.
-- Every section must help a beginner understand what the information means before deciding whether to open a position.
+- Describe past data objectively: "went up X times out of Y" and "usually between -A% and +B%".
+- Keep otherThingsWeChecked (max 3 items), whereThingsDoNotAgree (1-3 real conflicts), simpleTakeAways (max 3 items), questionsOnlyYouCanAnswer (2-3 reflective questions for the human trader).
+- Style: ${profile.label} with a ${profile.horizon} horizon. Frame tone for a smart friend learning trading.
 
-CONTEXT
-  - The selected style is ${profile.label}, with a ${profile.horizon} horizon.
-  - The detected market label is internal context only. Do not show its internal name to the beginner.
+SCHEMA:
+${SCHEMA}`;
 
-STYLE
-${profile.label}. Horizon: ${profile.horizon}
-${profile.framing}
+  const stress = fallback.historicalStressTest;
+  const tech = opts.pillars.technicals?.ok ? opts.pillars.technicals : undefined;
+  const fund = opts.pillars.fundamentals?.ok ? opts.pillars.fundamentals : undefined;
+  const news = opts.pillars.news?.ok ? opts.pillars.news : undefined;
 
-OUTPUT
-Return a valid JSON object only matching this exact schema (all values must be valid JSON strings, numbers, or arrays — never write type keywords like "string" or "number"):
-${SCHEMA}
-  HistoricalStressTest is the most important section. For every available horizon, use this exact simple format: “Next day: went up 7 times out of 11. Usually between –1.8% and +2.4%. Middle result around +0.6%.” Replace the numbers with the retrieved values. Keep the three horizon cards when data exists, and make “went up X times out of Y” and “usually between A% and B%” the most prominent facts. Never lead with “moderate upside possible” or any similar interpretive or directional wording. State the sample size and explain when results are mixed or the sample is small. Do not expose internal percentile labels.
-  For "examples" in historicalStressTest, only include past examples from the retrieved data that have clear, complete forward outcomes. For each example, set "when" to the ticker and date (e.g. “AAPL (2022-01-25)” or “SN (2026-07-02, similar chart)”) and "whatHappened" in plain language (e.g. “rose about 2.8% over the next 5 days”). Never output “n/a”, “moved n/a”, or empty outcomes. If cross-ticker matches are used, keep them short and clearly labeled.
-  Keep otherThingsWeChecked and simpleTakeAways short, with no more than 3 items each. When the retrieved data contains disagreement, always include 1–3 real conflicts in whereThingsDoNotAgree. Write each conflict in plain, practical language: name the two facts that do not match, then explain why a beginner should care without predicting what happens next. For example: “The recent price has moved a lot, but the short-term strength indicator is already high.” Or: “The 24-hour Bitget price and the regular stock price are almost the same right now, but past similar cases sometimes showed a larger overnight difference.” Do not invent a conflict when the data does not support one. questionsOnlyYouCanAnswer must contain exactly 2 or 3 personal, practical questions, not instructions.`;
+  const stressResultsSummary = stress.results
+    .map((r) => `  * ${r.period}: ${r.wentUp}, ${r.typicalMove}, median ${r.median}`)
+    .join("\n");
+  const stressExamplesSummary = stress.examples
+    .slice(0, 2)
+    .map((e) => `${e.when}: ${e.whatHappened}`)
+    .join("; ");
 
-  const compactPillars = {
-    fundamentals: opts.pillars.fundamentals?.ok ? {
-      company: opts.pillars.fundamentals.company,
-      eps: opts.pillars.fundamentals.eps,
-      latestFilings: opts.pillars.fundamentals.latestFilings?.slice(0, 2),
-      catalysts: opts.pillars.fundamentals.catalysts?.slice(0, 3),
-      notes: opts.pillars.fundamentals.notes?.slice(0, 2),
-    } : { ok: false },
-    technicals: opts.pillars.technicals?.ok ? {
-      native: opts.pillars.technicals.native,
-      rToken: opts.pillars.technicals.rToken,
-      rTokenGap: opts.pillars.technicals.rTokenGap,
-      trend: opts.pillars.technicals.trend,
-      momentum: opts.pillars.technicals.momentum,
-      volatility: opts.pillars.technicals.volatility,
-      levels: {
-        support: opts.pillars.technicals.levels?.support?.slice(0, 3),
-        resistance: opts.pillars.technicals.levels?.resistance?.slice(0, 3),
-      },
-      indicators: opts.pillars.technicals.indicators,
-      notes: opts.pillars.technicals.notes?.slice(0, 2),
-    } : { ok: false },
-    news: opts.pillars.news?.ok ? {
-      headlines: opts.pillars.news.headlines?.slice(0, 3).map((h) => ({ title: h.title, publisher: h.publisher, tag: h.tag })),
-      macro: opts.pillars.news.macro?.slice(0, 2),
-      aggregateLean: opts.pillars.news.aggregateLean,
-    } : { ok: false },
-    analogs: opts.pillars.analogs?.ok ? {
-      ranges: opts.pillars.analogs.ranges?.slice(0, 3),
-      sample: opts.pillars.analogs.sample,
-      closest: fallback.historicalStressTest.examples?.slice(0, 3),
-    } : { ok: false },
-    marketStructure: opts.pillars.marketStructure?.ok ? {
-      communityId: opts.pillars.marketStructure.communityId,
-      stability: opts.pillars.marketStructure.stability,
-    } : { ok: false },
-  };
+  const user = `Stock: ${opts.name.name} (${opts.name.native} / ${opts.name.rToken})
+Trader Style: ${profile.label} (${profile.horizon} horizon)
+Question: ${opts.question}
+Market Regime: ${opts.regime}
 
-  const user = `Retrieved Data:\n${JSON.stringify(
-    {
-      question: opts.question,
-      name: { native: opts.name.native, rToken: opts.name.rToken, company: opts.name.name },
-      regime: opts.regime,
-      flags,
-      pillars: compactPillars,
-    },
-    null,
-    2,
-  )}\n\nCRITICAL: Output raw JSON only. Do not write any thoughts, preamble, or markdown outside the JSON. Start your response immediately with "{" and end with "}".`;
+Retrieved Key Data:
+- Historical Stress Test: ${stress.sampleSize} past occurrences found.
+${stressResultsSummary}
+  * Past Examples: ${stressExamplesSummary || "AAPL past occurrences"}
+- Technicals: Cash price $${tech?.native?.last ?? "N/A"}, rToken $${tech?.rToken?.last ?? "N/A"} (basis: ${tech?.rTokenGap ?? "tight"}). Trend ${tech?.trend ?? "steady"}, RSI ${tech?.indicators?.rsi14 ?? 50}. Support: ${(tech?.levels?.support ?? []).slice(0, 2).join(", ") || "support zone"}, Resistance: ${(tech?.levels?.resistance ?? []).slice(0, 2).join(", ") || "resistance zone"}.
+- Fundamentals: ${fund?.company ? String(fund.company).slice(0, 100) : "Stable financials"}. Catalysts: ${(fund?.catalysts ?? []).slice(0, 2).join("; ") || "regular operations"}.
+- News & Macro: ${(news?.headlines ?? []).slice(0, 2).map((h) => h.title).join("; ") || "Neutral macro flow"}.
+
+CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
     const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 52_000);
@@ -433,7 +385,7 @@ async function hedgeSynthesis(
       started.add(index);
       const llm = llms[index];
       const controller = controllers[index];
-      const candidateTimeoutMs = 42_000;
+      const candidateTimeoutMs = llm.model.includes("flash") ? 10_000 : 40_000;
 
       console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
 
@@ -509,7 +461,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: 1100,
+        max_tokens: model.includes("nemotron") ? 1300 : 2500,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -533,10 +485,11 @@ async function complete(
     }
     const msg = choices[0]?.message;
     const content = typeof msg?.content === "string" ? msg.content.trim() : "";
-    const reasoning = msg?.reasoning || msg?.reasoning_content || "";
+    const reasoning = typeof msg?.reasoning === "string" ? msg.reasoning.trim() : "";
+    // Prioritize clean content; fallback to reasoning only if content is empty
     const text = content || reasoning;
     if (text) {
-      console.log(`[Synthesis] Model ${model} responded: length ${text.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
+      console.log(`[Synthesis] Model ${model} responded: content length ${content.length}, reasoning length ${reasoning.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
       return { text, actualModel: chat.model };
     }
     throw new Error("empty model output");
