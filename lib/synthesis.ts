@@ -33,14 +33,16 @@ function providers() {
     const candidateModels = [
       process.env.OPENCODE_MODEL,
       "ling-3.0-flash-fin-free",
+      "ling-3.0-flash-fin-free",
       "nemotron-3-ultra-free",
-      "nemotron-3.5-lightning-free",
     ].filter(Boolean) as string[];
 
-    const uniqueModels = Array.from(new Set(candidateModels)).slice(0, 3);
-    for (const model of uniqueModels) {
+    let lingCount = 0;
+    for (const model of candidateModels) {
+      if (model.includes("ling")) lingCount++;
+      const label = lingCount > 1 ? `opencode/${model} (retry)` : `opencode/${model}`;
       available.push({
-        label: `opencode/${model}`,
+        label,
         model,
         client,
       });
@@ -135,16 +137,9 @@ export async function synthesize(opts: {
   if (!llms.length) return guardBriefing({ ...fallback, isFallback: true, model: "Precedent Quantitative Desk" });
 
   const profile = STYLES[opts.style];
-  const system = `You are Precedent, an API engine providing friendly research notes for tokenized US stocks on Bitget.
-CRITICAL FORMAT RULE: Output RAW JSON ONLY matching this schema. Be concise: keep every string property under 20 words. Never output markdown code blocks, reasoning tags, or conversational preamble. Start response immediately with "{" and end with "}".
-
-HARD RULES:
-- Never use BUY, SELL, LONG, SHORT.
-- Never give a directional prediction, target price, or confidence percentage.
-- Forward-looking language is strictly forbidden in title, whatWeDid, historicalStressTest, otherThingsWeChecked, whereThingsDoNotAgree, and simpleTakeAways.
-- Describe past data objectively: "went up X times out of Y" and "usually between -A% and +B%".
-- Keep otherThingsWeChecked (max 3 items), whereThingsDoNotAgree (1-3 real conflicts), simpleTakeAways (max 3 items), questionsOnlyYouCanAnswer (2-3 reflective questions for the human trader).
-- Style: ${profile.label} with a ${profile.horizon} horizon. Frame tone for a smart friend learning trading.
+  const system = `You are Precedent, an objective quantitative research desk providing structured research memos for tokenized US stocks on Bitget.
+CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be concise: keep string values under 25 words. Do not output markdown code blocks or conversational commentary. Start immediately with "{" and end with "}".
+Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe past occurrences neutrally (e.g. "went up X times out of Y"). Do not predict future prices or provide trade recommendations.
 
 SCHEMA:
 ${SCHEMA}`;
@@ -180,13 +175,14 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
   try {
     const { parsed, effectiveModelLabel } = await hedgeSynthesis(llms, system, user, 26_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
+    const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
       ...adapted,
-      model: effectiveModelLabel,
+      model: cleanLabel,
       sources: collectSources(opts.pillars),
       isFallback: false,
     };
-    console.log(`[Synthesis] Successfully generated full LLM memo using ${effectiveModelLabel}.`);
+    console.log(`[Synthesis] Successfully generated full LLM memo using ${cleanLabel}.`);
     return guardBriefing(normalizeBriefing(briefing, fallback));
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -385,7 +381,7 @@ async function hedgeSynthesis(
       started.add(index);
       const llm = llms[index];
       const controller = controllers[index];
-      const candidateTimeoutMs = llm.model.includes("flash") ? 8_000 : 20_000;
+      const candidateTimeoutMs = llm.model.includes("flash") ? 14_000 : 22_000;
 
       console.log(`[Synthesis] Hedged runner launching [${index + 1}/${llms.length}] ${llm.label}...`);
 
@@ -461,7 +457,7 @@ async function complete(
       {
         model,
         temperature: 0.2,
-        max_tokens: model.includes("nemotron") ? 1300 : 2500,
+        max_tokens: model.includes("nemotron") ? 1300 : 4096,
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -484,9 +480,12 @@ async function complete(
       throw new Error(`OpenCode returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
     }
     const msg = choices[0]?.message;
-    const content = typeof msg?.content === "string" ? msg.content.trim() : "";
+    let content = typeof msg?.content === "string" ? msg.content.trim() : "";
     const reasoning = typeof msg?.reasoning === "string" ? msg.reasoning.trim() : "";
-    // Prioritize clean content; fallback to reasoning only if content is empty
+    if (!content && reasoning) {
+      const jsonBlock = reasoning.match(/\{[\s\S]*\}/);
+      if (jsonBlock) content = jsonBlock[0];
+    }
     const text = content || reasoning;
     if (text) {
       console.log(`[Synthesis] Model ${model} responded: content length ${content.length}, reasoning length ${reasoning.length}, finish_reason: ${choices[0]?.finish_reason}, actualModel: ${chat.model}`);
