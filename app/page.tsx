@@ -189,7 +189,7 @@ export default function Home() {
         fallbackBriefing.isFallback = true;
         setPillarData(resolvedBundle);
         setBriefing(fallbackBriefing);
-        setError("Synthesis step had a problem. Showing simplified research note instead.");
+        setError("");
         setView("results");
       } else {
         setError(errorMessage || "The research run could not complete. Please try again.");
