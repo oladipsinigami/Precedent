@@ -108,7 +108,7 @@ export async function* runResearch(input: {
       flags: undefined,
     });
     if (hasOpenRouter) {
-      const primarySlug = process.env.OPENROUTER_MODEL || "liquid/lfm-2.5-2.6b:free";
+      const primarySlug = process.env.OPENROUTER_MODEL || "inclusionai/ling-3.0-flash-vl:free";
       const cleanSlug = primarySlug.startsWith("openrouter/") ? primarySlug : `openrouter/${primarySlug}`;
       briefing.model = `${cleanSlug} (fell back to deterministic synthesizer)`;
     }

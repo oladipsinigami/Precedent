@@ -29,15 +29,15 @@ function providers() {
       },
     });
 
-    // Curated ordered list of 3 reliable, active free models on OpenRouter across diverse providers:
-    // 1. liquid/lfm-2.5-2.6b:free (Liquid AI - lightweight, fast generation)
-    // 2. google/gemma-4-26b-a4b-it:free (Google - high instruction quality, standard JSON)
-    // 3. nvidia/nemotron-3.5-lightning:free (NVIDIA - fast reasoning backup)
+    // Curated ordered list of verified fast, active free models on OpenRouter:
+    // 1. inclusionai/ling-3.0-flash-vl:free (Consistent ~4.9s response, clean JSON, no rate-limiting)
+    // 2. cohere/north-mini-code:free (Consistent ~6.5s response, strict JSON adherence, secondary provider)
+    // 3. liquid/lfm-2.5-2.6b:free (Lightweight tertiary fallback)
     const freeCandidateSlugs = [
       process.env.OPENROUTER_MODEL,
+      "inclusionai/ling-3.0-flash-vl:free",
+      "cohere/north-mini-code:free",
       "liquid/lfm-2.5-2.6b:free",
-      "google/gemma-4-26b-a4b-it:free",
-      "nvidia/nemotron-3.5-lightning:free",
     ].filter(Boolean) as string[];
 
     const uniqueSlugs = Array.from(new Set(freeCandidateSlugs)).slice(0, 3);
