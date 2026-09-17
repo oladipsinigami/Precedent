@@ -146,9 +146,11 @@ ${SCHEMA}`;
   const fund = opts.pillars.fundamentals?.ok ? opts.pillars.fundamentals : undefined;
   const news = opts.pillars.news?.ok ? opts.pillars.news : undefined;
 
-  const stressResultsSummary = stress.results
-    .map((r) => `  * ${r.period}: ${r.wentUp}, ${r.typicalMove}, median ${r.median}`)
-    .join("\n");
+  const stressResultsSummary = stress.sampleSize > 0 && stress.results.length > 0
+    ? stress.results
+        .map((r) => `  * ${r.period}: ${r.wentUp}, ${r.typicalMove}, median ${r.median}`)
+        .join("\n")
+    : "  * Historical comparison was not available in this run (0 past occurrences found).";
   const stressExamplesSummary = stress.examples
     .slice(0, 3)
     .map((e) => `${e.when}: ${e.whatHappened}`)
@@ -160,9 +162,9 @@ Question: ${opts.question}
 Market Regime: ${opts.regime}
 
 Retrieved Key Data:
-- Historical Stress Test: ${stress.sampleSize} past occurrences found.
+- Historical Stress Test: ${stress.sampleSize > 0 ? `${stress.sampleSize} past occurrences found.` : "Historical comparison was not available in this run."}
 ${stressResultsSummary}
-  * Past Examples: ${stressExamplesSummary || "AAPL past occurrences"}
+  * Past Examples: ${stressExamplesSummary || (stress.sampleSize > 0 ? "AAPL past occurrences" : "None (historical data unavailable)")}
 - Technicals: Cash price $${tech?.native?.last ?? "N/A"}, rToken $${tech?.rToken?.last ?? "N/A"} (basis: ${tech?.rTokenGap ?? "tight"}). Trend ${tech?.trend ?? "steady"}, RSI ${tech?.indicators?.rsi14 ?? 50}. Support: ${(tech?.levels?.support ?? []).slice(0, 2).join(", ") || "support zone"}, Resistance: ${(tech?.levels?.resistance ?? []).slice(0, 2).join(", ") || "resistance zone"}.
 - Fundamentals: ${fund?.company ? String(fund.company).slice(0, 100) : "Stable financials"}. Catalysts: ${(fund?.catalysts ?? []).slice(0, 2).join("; ") || "regular operations"}.
 - News & Macro: ${(news?.headlines ?? []).slice(0, 2).map((h) => h.title).join("; ") || "Neutral macro flow"}.
@@ -236,13 +238,18 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
       };
     });
 
+    const isDegradedSample = fallback.historicalStressTest.sampleSize === 0;
+
     const historicalStressTest = {
-      summary: cleanSummary,
-      sampleSize: typeof stress?.sampleSize === "number" && Number.isFinite(stress.sampleSize)
+      summary: isDegradedSample ? fallback.historicalStressTest.summary : cleanSummary,
+      sampleSize: isDegradedSample
+        ? 0
+        : typeof stress?.sampleSize === "number" && Number.isFinite(stress.sampleSize)
         ? stress.sampleSize
         : fallback.historicalStressTest.sampleSize,
-      results: normalizedResults,
+      results: isDegradedSample ? [] : normalizedResults,
       examples: (() => {
+        if (isDegradedSample) return [];
         const validParsed = (stress?.examples ?? []).filter(
           (item) =>
             item?.when &&
@@ -258,7 +265,9 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
         }
         return validParsed.length >= 2 ? validParsed : fallback.historicalStressTest.examples.slice(0, 3);
       })(),
-      importantNote: stress?.importantNote || fallback.historicalStressTest.importantNote,
+      importantNote: isDegradedSample
+        ? fallback.historicalStressTest.importantNote
+        : (stress?.importantNote || fallback.historicalStressTest.importantNote),
     };
 
     const evidence = otherThingsWeChecked.slice(0, 3).map((claim, index) => ({
