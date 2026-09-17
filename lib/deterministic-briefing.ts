@@ -161,15 +161,15 @@ export function deterministicBriefing(opts: {
 
   if (rsi !== undefined && rsi >= 60 && pillars?.news?.headlines?.some((h) => h.lean === "cautious")) {
     tension.push({
-      left: `The short-term strength indicator (RSI) is high at ${rsi.toFixed(1)}.`,
-      right: "Recent news headlines include cautious language.",
+      left: `The short-term strength score (RSI) is high at ${rsi.toFixed(1)} out of 100.`,
+      right: "Recent news coverage reflects mixed or risk-oriented headlines.",
       whyItMatters:
-        "The price and recent news do not tell the same story, so a beginner should note the disagreement rather than treat either one as a forecast.",
+        "Recent price strength and cautious headline flow do not point in the same direction, so a beginner should note the disagreement rather than treat either as a directional forecast.",
     });
   }
 
   if (newsLean && xLean && newsLean !== "mixed" && xLean !== "mixed" && newsLean !== xLean) {
-    const describeLean = (l: string) => (l === "constructive" ? "positive" : l === "cautious" ? "cautious" : l);
+    const describeLean = (l: string) => (l === "constructive" ? "positive" : l === "cautious" ? "risk-conscious" : l);
     tension.push({
       left: `Official news headlines show ${describeLean(newsLean)} coverage.`,
       right: `Social media discussions show ${describeLean(xLean)} coverage.`,
@@ -202,7 +202,9 @@ export function deterministicBriefing(opts: {
     followed: `next session ${fmtPct(a.ret1d)}; 5 sessions ${fmtPct(a.ret5d)}; 10 sessions ${fmtPct(a.ret10d)} (cash close-to-close)`,
   }));
 
-  const whatWeDidText = style === "day"
+  const whatWeDidText = (!band || band.n === 0)
+    ? `We evaluated live evidence across corporate filings, technical price action, Bitget 24-hour token trading, and recent news flow. Historical chart comparison was not available in this run, so this simplified research note focuses on verified technical levels, order flow, and fundamental catalysts.`
+    : style === "day"
     ? `We compared the current chart with past charts that had a similar shape, focusing on the 1-session horizon into the next cash open. We specifically checked the 24-hour Bitget token price against the regular New York market close to assess overnight gap and basis risk. We also checked price trends and recent news.`
     : style === "position"
     ? `We compared the current chart with past charts over a multi-week horizon. We focused on company filings, earnings trajectory, and 10-day analog distributions, checking the 24-hour Bitget token price for context.`
@@ -220,12 +222,16 @@ export function deterministicBriefing(opts: {
         "Overnight basis risk: Bitget 24-hour token trading continues overnight while regular US cash markets are closed.",
         pillars?.fundamentals?.eps
           ? `Company earnings: diluted EPS was ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
-          : "Company earnings data was limited in this run.",
+          : pillars?.fundamentals?.latestFilings?.[0]
+          ? `Company filings: latest SEC form on tape is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
+          : "Company filings data was limited in this run.",
       ]
     : [
         pillars?.fundamentals?.eps
           ? `Company earnings: diluted EPS was ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
-          : "Company earnings data was limited in this run.",
+          : pillars?.fundamentals?.latestFilings?.[0]
+          ? `Company filings: latest SEC form on tape is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
+          : "Company filings data was limited in this run.",
         pillars?.technicals?.rTokenGap
           ? `24-hour Bitget price vs regular stock: ${pillars.technicals.rTokenGap}.`
           : "Bitget 24-hour trading operates independently of daytime market hours.",
@@ -237,15 +243,15 @@ export function deterministicBriefing(opts: {
   const takeaways = isDayOrOvernight
     ? [
         "Bitget trades 7×24, so overnight prices can differ from regular market closing prices until New York trading opens.",
-        band
+        band && band.n > 0
           ? `Past similar charts went up ${Math.round(band.pUp * band.n)} out of ${band.n} times, with outcomes spread between ${fmtPct(band.p10)} and ${fmtPct(band.p90)}.`
-          : "Historical comparisons showed mixed results across similar charts.",
+          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and order flow.",
         "Trading during closed cash sessions carries basis risk if liquidity is thin.",
       ]
     : [
-        band
+        band && band.n > 0
           ? `Past similar charts went up ${Math.round(band.pUp * band.n)} out of ${band.n} times, with outcomes spread between ${fmtPct(band.p10)} and ${fmtPct(band.p90)}.`
-          : "Historical comparisons showed mixed results across similar charts.",
+          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and order flow.",
         pillars?.technicals?.rTokenGap
           ? `24-hour Bitget price vs regular stock: ${pillars.technicals.rTokenGap}.`
           : "Bitget 24-hour trading operates independently of daytime market hours.",
@@ -272,7 +278,7 @@ export function deterministicBriefing(opts: {
     title: `${name.rToken} — ${profile.label} stress test`,
     whatWeDid: whatWeDidText,
     historicalStressTest: {
-      summary: band
+      summary: band && band.n > 0
         ? `We found ${band.n} past cases with a similar chart pattern. The results show a wide range of outcomes. History helps provide context, but it cannot tell us what will happen this time.`
         : "Historical comparison was not available in this run because chart pattern feeds returned insufficient matching sessions. Decisions should rely on verified technical support/resistance and fundamental catalysts rather than ungrounded analogs.",
       sampleSize: band?.n ?? 0,
@@ -298,9 +304,7 @@ export function deterministicBriefing(opts: {
         })
         .filter((ex): ex is { when: string; whatHappened: string } => ex !== null && !/\b(n\/?a|null|undefined)\b/i.test(ex.whatHappened))
         .slice(0, 3),
-      importantNote: band
-        ? "This is only what happened in the past. It does not tell us what will happen this time."
-        : "When historical sample data is missing or degraded, never guess past outcomes. Always wait for verified price action.",
+      importantNote: "Historical results are past occurrences only, not predictions.",
     },
     otherThingsWeChecked: otherChecked,
     whereThingsDoNotAgree: tension.slice(0, 3).map((item) => ({
