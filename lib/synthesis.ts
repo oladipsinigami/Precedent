@@ -11,11 +11,11 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
+  // 1. OpenCode Zen models (when OPENCODE_API_KEY is configured)
   const rawOpenCodeKey = process.env.OPENCODE_API_KEY?.trim();
   const openCodeKey =
     rawOpenCodeKey && rawOpenCodeKey !== "[SENSITIVE]" ? rawOpenCodeKey : undefined;
 
-  // 1. Prioritize OpenCode Zen models
   if (openCodeKey) {
     const client = new OpenAI({
       apiKey: openCodeKey,
@@ -34,42 +34,102 @@ function providers() {
       "nemotron-3.5-lightning-free",
     ].filter(Boolean) as string[];
 
-    const uniqueModels = [...new Set(candidateModels)];
-    for (const model of uniqueModels) {
+    for (const model of [...new Set(candidateModels)]) {
       available.push({
         label: `opencode/${model}`,
         model,
         client,
       });
     }
-
-    return available;
   }
 
-  // 2. Secondary providers (only when OpenCode is not set)
-  if (process.env.OPENAI_API_KEY && !process.env.OPENAI_API_KEY.startsWith("sk-or-")) {
-    const model = process.env.OPENAI_MODEL || "gpt-4o";
-    available.push({
-      label: model,
-      model,
-      client: new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+  // 2. OpenRouter models (when OPENROUTER_API_KEY is configured)
+  const rawOpenRouterKey =
+    process.env.OPENROUTER_API_KEY?.trim() ||
+    process.env.OPENROUTER_KEY?.trim() ||
+    (process.env.OPENAI_API_KEY?.startsWith("sk-or-") ? process.env.OPENAI_API_KEY.trim() : undefined);
+  const openRouterKey =
+    rawOpenRouterKey && rawOpenRouterKey !== "[SENSITIVE]" ? rawOpenRouterKey : undefined;
+
+  if (openRouterKey) {
+    const client = new OpenAI({
+      apiKey: openRouterKey,
+      baseURL: "https://openrouter.ai/api/v1",
+      maxRetries: 0,
+      defaultHeaders: {
+        "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
+        "X-Title": "Precedent Research Desk",
+      },
     });
+
+    const candidateModels = [
+      process.env.OPENROUTER_MODEL,
+      "meta-llama/llama-3.3-70b-instruct:free",
+      "google/gemini-2.0-flash-exp:free",
+      "liquid/lfm-2.5-2.6b:free",
+    ].filter(Boolean) as string[];
+
+    for (const model of [...new Set(candidateModels)]) {
+      available.push({
+        label: model.startsWith("openrouter/") ? model : `openrouter/${model}`,
+        model,
+        client,
+      });
+    }
   }
 
-  if (process.env.XAI_API_KEY) {
+  // 3. TokenHarbor / OpenAI models
+  const rawOpenAIKey = process.env.OPENAI_API_KEY?.trim();
+  const openAIKey =
+    rawOpenAIKey && rawOpenAIKey !== "[SENSITIVE]" && !rawOpenAIKey.startsWith("sk-or-")
+      ? rawOpenAIKey
+      : undefined;
+
+  if (openAIKey) {
+    const isTokenHarbor = openAIKey.startsWith("thk_");
+    const baseURL = isTokenHarbor ? "https://tokenharbor.ai/v1" : undefined;
+    const client = new OpenAI({ apiKey: openAIKey, baseURL, maxRetries: 0 });
+
+    if (isTokenHarbor) {
+      const candidateModels = [
+        process.env.OPENAI_MODEL,
+        "deepseek-v4-flash:free",
+        "mimo-v2.5:free",
+      ].filter(Boolean) as string[];
+
+      for (const model of [...new Set(candidateModels)]) {
+        available.push({
+          label: `tokenharbor/${model}`,
+          model,
+          client,
+        });
+      }
+    } else {
+      const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+      available.push({
+        label: model,
+        model,
+        client,
+      });
+    }
+  }
+
+  // 4. XAI (Grok)
+  if (process.env.XAI_API_KEY?.trim() && process.env.XAI_API_KEY.trim() !== "[SENSITIVE]") {
     available.push({
-      label: "grok-4.5",
+      label: "xai/grok-4.5",
       model: "grok-4.5",
-      client: new OpenAI({ apiKey: process.env.XAI_API_KEY, baseURL: "https://api.x.ai/v1" }),
+      client: new OpenAI({ apiKey: process.env.XAI_API_KEY.trim(), baseURL: "https://api.x.ai/v1" }),
     });
   }
 
-  if (process.env.BITGET_QWEN_API_KEY) {
+  // 5. Bitget Qwen
+  if (process.env.BITGET_QWEN_API_KEY?.trim() && process.env.BITGET_QWEN_API_KEY.trim() !== "[SENSITIVE]") {
     available.push({
-      label: "qwen3.8-max",
+      label: "bitget/qwen3.8-max",
       model: "qwen3.8-max",
       client: new OpenAI({
-        apiKey: process.env.BITGET_QWEN_API_KEY,
+        apiKey: process.env.BITGET_QWEN_API_KEY.trim(),
         baseURL: "https://hackathon.bitgetops.com/v1",
       }),
     });
@@ -172,7 +232,7 @@ ${stressResultsSummary}
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
-    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, 26_000);
+    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, 42_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
@@ -334,8 +394,12 @@ function isTransientError(err: unknown): boolean {
   if (!err) return false;
   const anyErr = err as any;
   const status = anyErr.status ?? anyErr.statusCode ?? anyErr.response?.status;
-  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
+  // Non-recoverable errors: failover immediately to next model without wasting retry time
+  if (status === 401 || status === 403 || status === 404) return false;
   const msg = (anyErr.message || String(err)).toLowerCase();
+  if (msg.includes("401") || msg.includes("403") || msg.includes("404") || msg.includes("not available")) return false;
+
+  if (typeof status === "number" && (status === 429 || status >= 500)) return true;
   return (
     msg.includes("429") ||
     msg.includes("rate limit") ||
@@ -365,7 +429,7 @@ async function complete(
   model: string,
   system: string,
   user: string,
-  timeoutMs = 12_000,
+  timeoutMs = 16_000,
 ): Promise<{ text: string; actualModel?: string }> {
   let lastError: unknown;
 
@@ -378,7 +442,7 @@ async function complete(
         {
           model,
           temperature: 0.2,
-          max_tokens: model.includes("nemotron") ? 1300 : 3500,
+          max_tokens: model.includes("nemotron") ? 1300 : 2500,
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
@@ -395,11 +459,11 @@ async function complete(
       const anyChat = chat as any;
       if (anyChat?.error) {
         const errDetail = anyChat.error.message || anyChat.error.type || JSON.stringify(anyChat.error);
-        throw new Error(`OpenCode error: ${errDetail}`);
+        throw new Error(`Provider error: ${errDetail}`);
       }
       const choices = anyChat?.choices;
       if (!Array.isArray(choices) || !choices.length) {
-        throw new Error(`OpenCode returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
+        throw new Error(`Provider returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
       }
       const msg = choices[0]?.message;
       let content = typeof msg?.content === "string" ? msg.content.trim() : "";
@@ -422,8 +486,8 @@ async function complete(
       const errorDescription = isTimeout ? `timeout after ${timeoutMs / 1000}s` : err?.message || String(err);
 
       if (attempt === 1 && isTransientError(err)) {
-        console.warn(`[Synthesis] Model ${model} transient failure on attempt 1 (${errorDescription}). Retrying with fresh session in 700ms...`);
-        await new Promise((r) => setTimeout(r, 700));
+        console.warn(`[Synthesis] Model ${model} transient failure on attempt 1 (${errorDescription}). Retrying in 500ms...`);
+        await new Promise((r) => setTimeout(r, 500));
         continue;
       }
       throw new Error(`${model} failed on attempt ${attempt}: ${errorDescription}`);
@@ -439,7 +503,7 @@ async function runSequentialSynthesis(
   llms: { label: string; model: string; client: OpenAI }[],
   system: string,
   user: string,
-  totalTimeoutMs = 26_000,
+  totalTimeoutMs = 42_000,
 ): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
   const errors: string[] = [];
   const startTime = Date.now();
@@ -453,9 +517,9 @@ async function runSequentialSynthesis(
       break;
     }
 
-    // Short, well-calibrated timeout per candidate: 11s for flash models, 14s for other models
+    // Short, well-calibrated timeout per candidate: 15s for flash models, 20s for other models
     const candidateTimeout = Math.min(
-      llm.model.includes("flash") ? 11_000 : 14_000,
+      llm.model.includes("flash") ? 15_000 : 20_000,
       remainingTime - 1_500,
     );
 
