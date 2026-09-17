@@ -25,38 +25,6 @@ function overlayFromBars(
   return { id, label, kind, points };
 }
 
-export async function runAnalogs(
-  name: NameCard,
-  opts: { regime?: Regime; communityId?: string; communityMembers?: string[] } = {},
-): Promise<AnalogsPillar> {
-  try {
-    const packet = await chartLibraryState(name.native);
-    if (packet.status !== "ok" || !packet.data?.analogs_of_new_state) {
-      throw new Error("Chart Library returned a non-ok packet");
-    }
-    const analogs = packet.data.analogs_of_new_state;
-    const members = new Set(opts.communityMembers ?? []);
-    // Regime + community conditioning: analogs whose ticker sits in the
-    // target's precomputed RMT community rank first at equal shape distance.
-    // (Per-analog-date historical regime is not observable, so the regime
-    // label frames the memo and the analog search rather than filtering it.)
-    // Prefer same-ticker matches, then highly similar (related ticker or RMT community), then distance
-    const ranked = [...(analogs.closest ?? [])].sort((a, b) => {
-      const aSame = a[0] === name.native ? 0 : 1;
-      const bSame = b[0] === name.native ? 0 : 1;
-      if (aSame !== bSame) return aSame - bSame;
-
-      const aRelated = a[0].startsWith(name.native) || name.native.startsWith(a[0]) ? 0 : 1;
-      const bRelated = b[0].startsWith(name.native) || name.native.startsWith(b[0]) ? 0 : 1;
-      if (aRelated !== bRelated) return aRelated - bRelated;
-
-      const aIn = members.has(a[0]) ? 0 : 1;
-      const bIn = members.has(b[0]) ? 0 : 1;
-      if (aIn !== bIn) return aIn - bIn;
-
-      return a[2] - b[2];
-    });
-    const poolRaw = ranked.slice(0, 15);
 function findSameTickerAnalogs(
   bars: Bar[],
   ticker: string,
@@ -134,7 +102,130 @@ function findSameTickerAnalogs(
   );
 }
 
-    const uniqueTickers = [...new Set([name.native, ...poolRaw.map((x) => x[0])])];
+function computeEmpiricalRanges(
+  bars: Bar[],
+  windowSize = 20,
+): { ranges: AnalogsPillar["ranges"]; sampleN: number } {
+  if (!bars || bars.length < windowSize * 2 + 30) {
+    return { ranges: [], sampleN: 0 };
+  }
+
+  const currentIdx = bars.length - 1;
+  const currentOrigin = bars[currentIdx]?.c;
+  if (!currentOrigin || currentOrigin <= 0) return { ranges: [], sampleN: 0 };
+
+  const currentShape: number[] = [];
+  for (let t = -windowSize; t <= 0; t++) {
+    const b = bars[currentIdx + t];
+    if (!b || b.c <= 0) return { ranges: [], sampleN: 0 };
+    currentShape.push(b.c / currentOrigin);
+  }
+
+  type Candidate = { idx: number; dist: number };
+  const candidates: Candidate[] = [];
+  const scanEnd = bars.length - 15;
+  for (let i = windowSize; i <= scanEnd; i++) {
+    const origin = bars[i]?.c;
+    if (!origin || origin <= 0) continue;
+
+    let sumSq = 0;
+    let valid = true;
+    for (let j = 0; j <= windowSize; j++) {
+      const b = bars[i - windowSize + j];
+      if (!b || b.c <= 0) {
+        valid = false;
+        break;
+      }
+      const diff = b.c / origin - currentShape[j];
+      sumSq += diff * diff;
+    }
+    if (!valid) continue;
+
+    const dist = Math.sqrt(sumSq / (windowSize + 1));
+    candidates.push({ idx: i, dist });
+  }
+
+  candidates.sort((a, b) => a.dist - b.dist);
+
+  const distinct: Candidate[] = [];
+  for (const c of candidates) {
+    if (!distinct.some((d) => Math.abs(d.idx - c.idx) < 5)) {
+      distinct.push(c);
+      if (distinct.length >= 100) break;
+    }
+  }
+
+  if (distinct.length < 10) return { ranges: [], sampleN: 0 };
+
+  function getPercentiles(returns: number[]) {
+    if (!returns.length) return { n: 0, p10: 0, p50: 0, p90: 0, pUp: 0 };
+    returns.sort((a, b) => a - b);
+    const n = returns.length;
+    const p10 = returns[Math.floor(n * 0.10)];
+    const p50 = returns[Math.floor(n * 0.50)];
+    const p90 = returns[Math.floor(n * 0.90)];
+    const upCount = returns.filter((r) => r > 0).length;
+    return { n, p10, p50, p90, pUp: upCount / n };
+  }
+
+  const ret1d: number[] = [];
+  const ret5d: number[] = [];
+  const ret10d: number[] = [];
+
+  for (const c of distinct) {
+    const p0 = bars[c.idx].c;
+    if (bars[c.idx + 1]?.c) ret1d.push(((bars[c.idx + 1].c - p0) / p0) * 100);
+    if (bars[c.idx + 5]?.c) ret5d.push(((bars[c.idx + 5].c - p0) / p0) * 100);
+    if (bars[c.idx + 10]?.c) ret10d.push(((bars[c.idx + 10].c - p0) / p0) * 100);
+  }
+
+  return {
+    ranges: [
+      { horizon: "1d", ...getPercentiles(ret1d) },
+      { horizon: "5d", ...getPercentiles(ret5d) },
+      { horizon: "10d", ...getPercentiles(ret10d) },
+    ],
+    sampleN: distinct.length,
+  };
+}
+
+export async function runAnalogs(
+  name: NameCard,
+  opts: { regime?: Regime; communityId?: string; communityMembers?: string[] } = {},
+): Promise<AnalogsPillar> {
+  const [chartLibResult, selfChartResult] = await Promise.allSettled([
+    chartLibraryState(name.native),
+    yahooChart(name.native, "10y", "1d"),
+  ]);
+
+  const selfBars = selfChartResult.status === "fulfilled" ? selfChartResult.value.bars ?? [] : [];
+  const sameTickerAnalogs = findSameTickerAnalogs(selfBars, name.native);
+
+  const packet = chartLibResult.status === "fulfilled" ? chartLibResult.value : null;
+  const chartLibOk = packet && packet.status === "ok" && packet.data?.analogs_of_new_state && packet.data.analogs_of_new_state.n > 0;
+
+  if (chartLibOk && packet?.data?.analogs_of_new_state) {
+    const analogs = packet.data.analogs_of_new_state;
+    const members = new Set(opts.communityMembers ?? []);
+
+    const ranked = [...(analogs.closest ?? [])].sort((a, b) => {
+      const aSame = a[0] === name.native ? 0 : 1;
+      const bSame = b[0] === name.native ? 0 : 1;
+      if (aSame !== bSame) return aSame - bSame;
+
+      const aRelated = a[0].startsWith(name.native) || name.native.startsWith(a[0]) ? 0 : 1;
+      const bRelated = b[0].startsWith(name.native) || name.native.startsWith(b[0]) ? 0 : 1;
+      if (aRelated !== bRelated) return aRelated - bRelated;
+
+      const aIn = members.has(a[0]) ? 0 : 1;
+      const bIn = members.has(b[0]) ? 0 : 1;
+      if (aIn !== bIn) return aIn - bIn;
+
+      return a[2] - b[2];
+    });
+    const poolRaw = ranked.slice(0, 15);
+
+    const uniqueTickers = [...new Set(poolRaw.map((x) => x[0]))].filter((t) => t !== name.native);
     const charts = await Promise.all(
       uniqueTickers.map(async (ticker) => {
         try {
@@ -145,10 +236,10 @@ function findSameTickerAnalogs(
         }
       }),
     );
-    const byTicker = Object.fromEntries(charts);
-    const selfBars = byTicker[name.native] ?? [];
-
-    const sameTickerAnalogs = findSameTickerAnalogs(selfBars, name.native);
+    const byTicker: Record<string, Bar[]> = {
+      [name.native]: selfBars,
+      ...Object.fromEntries(charts),
+    };
 
     const poolComputed: AnalogFollowThrough[] = [
       ...sameTickerAnalogs,
@@ -166,7 +257,6 @@ function findSameTickerAnalogs(
       }),
     ];
 
-    // Only show examples that have clear, complete forward outcomes
     const validPool = poolComputed.filter(
       (a) =>
         (typeof a.ret5d === "number" && !Number.isNaN(a.ret5d)) ||
@@ -174,7 +264,6 @@ function findSameTickerAnalogs(
         (typeof a.ret10d === "number" && !Number.isNaN(a.ret10d)),
     );
 
-    // Prefer same-ticker or highly similar examples with complete forward returns
     const closest: AnalogFollowThrough[] = [...validPool].sort((a, b) => {
       const aSame = a.sameName ? 0 : 1;
       const bSame = b.sameName ? 0 : 1;
@@ -190,7 +279,6 @@ function findSameTickerAnalogs(
 
       return a.distance - b.distance;
     }).slice(0, 5);
-    const conditioned = members.size > 0 && closest.some((c) => members.has(c.ticker));
 
     const overlay: OverlaySeries[] = [];
     if (selfBars.length) {
@@ -237,16 +325,6 @@ function findSameTickerAnalogs(
       pUp: row.p_up,
     }));
 
-    const caveats = [
-      packet.meta?.note ??
-        "Chart Library bands describe historical excess versus a liquid-stock baseline. They are a range, not a side.",
-      `Sample: ${analogs.n} analogs across ${analogs.symbols} names and ${analogs.sessions} sessions.`,
-      "Follow-through percentages on the five closest names are cash-session closes from Yahoo, not rToken marks.",
-      opts.regime
-        ? `Current regime label “${opts.regime}” frames this memo${opts.communityId ? `; analogs prefer matches in RMT community ${opts.communityId}` : ""}${conditioned ? " and at least one listed analog shares that community" : " but no listed analog shares that community, so ranking fell back to pure chart shape"}.`
-        : "No regime label was available; analogs are pure chart-shape matches.",
-    ];
-
     return {
       ok: true,
       session: packet.data.date,
@@ -262,22 +340,91 @@ function findSameTickerAnalogs(
       },
       overlay,
       sample: { n: analogs.n, symbols: analogs.symbols, sessions: analogs.sessions },
-      caveats,
+      caveats: [
+        packet.meta?.note ?? "Chart Library bands describe historical excess versus a liquid-stock baseline.",
+        `Sample: ${analogs.n} analogs across ${analogs.symbols} names and ${analogs.sessions} sessions.`,
+        "Follow-through percentages on the five closest names are cash-session closes from Yahoo, not rToken marks.",
+      ],
       sources: [
         { label: "Chart Library state-packet", url: `https://chartlibrary.io/api/v1/state-packet?symbol=${name.native}` },
         { label: "Yahoo Finance forward returns on closest analogs" },
       ],
     };
-  } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Analog fetch failed",
-      closest: [],
-      ranges: [],
-      overlay: [],
-      sample: { n: 0, symbols: 0, sessions: 0 },
-      caveats: ["Pattern matching degraded. Do not invent analogs."],
-      sources: [{ label: "Chart Library" }],
-    };
   }
+
+  // Fallback / Self-contained empirical distribution from native Yahoo bars
+  if (selfBars.length >= 70) {
+    const empirical = computeEmpiricalRanges(selfBars);
+    if (empirical.sampleN > 0 && empirical.ranges.length > 0) {
+      const overlay: OverlaySeries[] = [];
+      overlay.push(
+        overlayFromBars(
+          name.native,
+          `${name.native} now`,
+          "current",
+          selfBars,
+          selfBars.length - 1,
+        ),
+      );
+
+      const closest = sameTickerAnalogs.slice(0, 5);
+      for (const analog of closest) {
+        const target = Date.parse(`${analog.date}T20:00:00Z`);
+        let idx = 0;
+        let best = Infinity;
+        selfBars.forEach((b: Bar, i: number) => {
+          const d = Math.abs(b.t * 1000 - target);
+          if (d < best) {
+            best = d;
+            idx = i;
+          }
+        });
+        overlay.push(
+          overlayFromBars(
+            `${analog.ticker}-${analog.date}`,
+            `${analog.ticker} ${analog.date}`,
+            "analog",
+            selfBars,
+            idx,
+          ),
+        );
+      }
+
+      return {
+        ok: true,
+        session: new Date().toISOString().slice(0, 10),
+        state: "native-empirical",
+        prevState: "native-empirical",
+        tape: {},
+        closest,
+        ranges: empirical.ranges,
+        informative: {
+          verdict: "empirical-native",
+          ratioToBase: 1.0,
+          note: "Distribution computed directly from historical price sessions of the same stock.",
+        },
+        overlay,
+        sample: { n: empirical.sampleN, symbols: 1, sessions: empirical.sampleN },
+        caveats: [
+          `Sample: ${empirical.sampleN} historical chart-shape precedents identified from 10 years of daily trading history for ${name.native}.`,
+          "Follow-through percentages reflect actual cash-session close-to-close returns.",
+        ],
+        sources: [
+          { label: `Yahoo Finance 10y historical daily price tape (${name.native})` },
+        ],
+      };
+    }
+  }
+
+  // Graceful degradation when both remote feeds return insufficient data
+  return {
+    ok: false,
+    error: "Historical comparison was not available in this run",
+    closest: [],
+    ranges: [],
+    overlay: [],
+    sample: { n: 0, symbols: 0, sessions: 0 },
+    caveats: ["Historical pattern comparison unavailable this run: sufficient chart data could not be retrieved."],
+    sources: [{ label: "Chart Library" }, { label: "Yahoo Finance" }],
+  };
 }

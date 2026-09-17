@@ -113,24 +113,32 @@ export function ResearchMemo({
               Historical stress test
             </h4>
             <span className="font-mono text-xs text-[#637265]">
-              {briefing.historicalStressTest.sampleSize} past cases
+              {briefing.historicalStressTest.sampleSize > 0
+                ? `${briefing.historicalStressTest.sampleSize} past cases`
+                : "Sample unavailable"}
             </span>
           </div>
           <p className="mt-3 text-sm leading-relaxed text-[#232b25]">
             {briefing.historicalStressTest.summary}
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {briefing.historicalStressTest.results.map((result) => (
-              <div key={result.period} className="rounded border border-[#141918]/10 bg-white/40 p-3">
-                <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
-                  {result.period}
+          {briefing.historicalStressTest.results.length > 0 ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {briefing.historicalStressTest.results.map((result) => (
+                <div key={result.period} className="rounded border border-[#141918]/10 bg-white/40 p-3">
+                  <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                    {result.period}
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-[#1a221c]">{result.wentUp}</p>
+                  <p className="mt-1 text-xs text-[#4f5e51]">{result.typicalMove}</p>
+                  <p className="mt-1 text-xs text-[#637265]">Middle result: {result.median}</p>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-[#1a221c]">{result.wentUp}</p>
-                <p className="mt-1 text-xs text-[#4f5e51]">{result.typicalMove}</p>
-                <p className="mt-1 text-xs text-[#637265]">Middle result: {result.median}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded border border-[#141918]/10 bg-white/50 p-3.5 text-xs leading-relaxed text-[#556457]">
+              <span className="font-semibold text-[#2b382d]">Historical comparison note:</span> No past chart pattern sample met verification standards for this run. Decisions should be grounded in the live technical levels, order tape, and corporate fundamentals detailed below.
+            </div>
+          )}
           {(() => {
             const validExamples = (briefing.historicalStressTest.examples ?? [])
               .filter(

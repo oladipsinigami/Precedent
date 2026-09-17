@@ -274,7 +274,7 @@ export function deterministicBriefing(opts: {
     historicalStressTest: {
       summary: band
         ? `We found ${band.n} past cases with a similar chart pattern. The results show a wide range of outcomes. History helps provide context, but it cannot tell us what will happen this time.`
-        : "The historical comparison was not available in this run, so there is not enough past data to summarize.",
+        : "Historical comparison was not available in this run because chart pattern feeds returned insufficient matching sessions. Decisions should rely on verified technical support/resistance and fundamental catalysts rather than ungrounded analogs.",
       sampleSize: band?.n ?? 0,
       results: ranges.slice(0, 3).map((r) => ({
         period: r.horizon === "1d" ? ("Next day" as const) : r.horizon === "5d" ? ("Next 5 trading days" as const) : ("Next 10 trading days" as const),
@@ -298,7 +298,9 @@ export function deterministicBriefing(opts: {
         })
         .filter((ex): ex is { when: string; whatHappened: string } => ex !== null && !/\b(n\/?a|null|undefined)\b/i.test(ex.whatHappened))
         .slice(0, 3),
-      importantNote: "This is only what happened in the past. It does not tell us what will happen this time.",
+      importantNote: band
+        ? "This is only what happened in the past. It does not tell us what will happen this time."
+        : "When historical sample data is missing or degraded, never guess past outcomes. Always wait for verified price action.",
     },
     otherThingsWeChecked: otherChecked,
     whereThingsDoNotAgree: tension.slice(0, 3).map((item) => ({
@@ -317,7 +319,7 @@ export function deterministicBriefing(opts: {
     historicalAnalog: {
       setup: pillars?.analogs?.state
         ? `Current Chart Library state “${pillars.analogs.state}” on ${pillars.analogs.session}. Previous: “${pillars.analogs.prevState}”. Regime frame: ${regime}.`
-        : "Chart Library state was unavailable; closest-name follow-through still listed where Yahoo history exists.",
+        : "Historical pattern comparison was not available in this run; live technical and fundamental levels are prioritized.",
       analogs: (pillars?.analogs?.closest ?? []).slice(0, 5).map((a) => {
         const returns = [
           typeof a.ret1d === "number" && !Number.isNaN(a.ret1d) ? `next day ${fmtPct(a.ret1d)}` : null,
