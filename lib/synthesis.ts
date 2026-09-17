@@ -11,9 +11,7 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
-  const rawOpenCodeKey =
-    process.env.OPENCODE_API_KEY ||
-    "[REDACTED_API_KEY]";
+  const rawOpenCodeKey = process.env.OPENCODE_API_KEY?.trim();
   const openCodeKey =
     rawOpenCodeKey && rawOpenCodeKey !== "[SENSITIVE]" ? rawOpenCodeKey : undefined;
 
