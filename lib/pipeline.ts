@@ -74,7 +74,7 @@ export async function* runResearch(input: {
     };
   }
 
-  const SYNTHESIS_TIMEOUT_MS = 28_000;
+  const SYNTHESIS_TIMEOUT_MS = 48_000;
   let briefing: Briefing;
   let synthesisFailed = false;
 
@@ -114,7 +114,7 @@ export async function* runResearch(input: {
 
   if (isFallback) {
     briefing.isFallback = true;
-    if (!briefing.model || briefing.model.includes("deterministic") || briefing.model.includes("fell back") || briefing.model.includes("openrouter")) {
+    if (!briefing.model || briefing.model.includes("deterministic") || briefing.model.includes("fell back")) {
       briefing.model = "Precedent Quantitative Desk";
     }
   }
