@@ -114,71 +114,56 @@ Confidence percentages must not be used as a headline or final recommendation ei
 
 ## 4. Required briefing structure
 
-Every completed research response follows this exact structure:
+Every completed research memo follows an editorial, beginner-friendly layout with deep quantitative backing. The memo presents clear, plain-language facts first, supported by collapsible technical accordions and an interactive decision record:
 
-### 01. Evidence
+### 4.1 Document Header & Metadata
+- **Status Banner**: Displays `Beginner-friendly research note` (or `Simplified research note` when the deterministic fallback synthesizer is engaged).
+- **Engine Label**: Transparent model attribution showing the active LLM (e.g. `Engine: opencode/ling-3.0-flash-fin-free`) or deterministic fallback indicator (`Engine: Precedent Quantitative Desk (fallback)`).
+- **Memo Title & Style Note**: A natural-language title summarizing the current setup for the asset, paired with horizon-specific guidance (e.g. 5–10 trading sessions for Swing).
+- **Style & Market Badges**: Badges indicating the selected operating style and market context (`Shown for context only`).
 
-This section states what the retrieved data actually shows.
+### 4.2 Decision Stress Test (Primary Memo)
 
-Evidence can include:
+The primary body of the memo is structured for immediate comprehension:
 
-- SEC filing and XBRL facts;
-- reported EPS and revenue;
-- recent 8-K filings and filing dates;
-- native stock price and change;
-- trend, momentum, volatility, and levels;
-- Bitget rToken venue print and premium or discount versus the native cash tape;
-- recent equity headlines;
-- macro headlines;
-- Chart Library state and historical follow-through bands.
+#### 1. What we did
+A plain-language narrative explaining what data was retrieved and analyzed across corporate filings, technical price action, Bitget rToken venue prints, news/macro context, and historical chart patterns.
 
-Each evidence item includes a source label and pillar label.
+#### 2. Historical Stress Test (“went up X times out of Y”)
+The core quantitative anchor of the research memo:
+- **Sample Size**: Total count of verified historical chart matches found (e.g., `300 past cases`) or an explicit note when historical comparison data is unavailable.
+- **Historical Summary**: Objective, factual summary of past pattern follow-through without directional bias.
+- **Horizon Outcome Cards**: Three structured cards covering standard forward windows ("Next 1 trading day", "Next 5 trading days", "Next 10 trading days"):
+  - **Frequency / Win Rate**: Explicit factual occurrences formatted strictly as **“went up X times out of Y”** (e.g., "went up 147 times out of 300").
+  - **Typical Move**: The middle 80% outcome range (e.g., "usually between -4.8% and +4.7%").
+  - **Middle Result**: The sample median outcome (e.g., "Middle result: -0.1%").
+- **A few past examples**: 2 to 3 verified past occurrences (preferring same-ticker matches like `AAPL (2023-06-15)`) detailing plain-language forward outcomes (e.g., `rose about 0.4% over the next 5 days`). Never displays "n/a", null, or empty outcomes.
+- **Important Note**: Mandatory caveat stating clearly: *"Historical results are past occurrences only, not predictions."*
 
-### 02. Tension
+#### 3. Other things we checked
+A 3-point bulleted list of plain-language factual observations across the other pillars (corporate fundamentals, technical trends/support/resistance, and news flow).
 
-This section identifies disagreement between evidence streams.
+#### 4. Where things do not agree
+Explicitly exposes key tensions and contradictions between different evidence streams rather than blending them into an artificial consensus score:
+- **Conflict**: States the two differing facts side-by-side (e.g., 24-hour crypto exchange price vs. closed cash equity market; upward recent price momentum vs. split historical analog follow-through; stable long-term earnings vs. short-term tape volatility).
+- **Why it matters**: Explains the practical risk or sizing implication for the trader.
 
-Examples:
+#### 5. Simple takeaways
+A 3-point bulleted list of objective, essential observations summarizing the current setup without directional advice or speculative bias.
 
-- price momentum remains firm while recent headlines are cautious;
-- the analog median is close to zero while the outcome range is wide;
-- the native cash tape is available but the rToken venue print is missing;
-- a catalyst is approaching while the historical sample is ambiguous.
+#### 6. Questions only you can answer
+Forward-looking reflection questions tailored to the trader's operating horizon, invalidation criteria, and risk tolerance. Forward-looking language is strictly confined to this section.
 
-The product should not hide disagreement or collapse it into one score. The point is to expose what the trader has to weigh.
+### 4.3 Human Decision Record
+Positioned directly below the research memo, the Human Decision Record is an interactive, browser-local reflection module:
+- Allows the trader to record their personal thesis, planned entry/exit criteria, and what specific evidence would invalidate their setup.
+- Enforces the core product principle: **Research first. Decide yourself.** Precedent never executes trades, manages positions, or transmits orders to an exchange. All decisions remain strictly with the human trader.
 
-### 03. Historical analog
-
-This is the anchor section.
-
-It includes:
-
-- the current Chart Library state;
-- the previous state where available;
-- the three to five closest historical setups;
-- ticker and date for each analog;
-- similarity distance;
-- what followed after one, five, and ten cash sessions;
-- p10, median, and p90 excess-return bands;
-- sample size;
-- share of positive excess outcomes where available;
-- caveats explaining that the data is historical and not a forecast.
-
-The analog data is framed as a base rate and stress-test input. It does not assign a side to the current asset.
-
-### 04. Considerations for the trader
-
-This section adapts the output to the selected style.
-
-It includes:
-
-- implications for the selected trading horizon;
-- what would invalidate the working thesis;
-- what to watch in the rToken versus cash-session relationship;
-- upcoming filing or catalyst conditions;
-- questions the trader should weigh.
-
-The section ends with questions, not a verdict.
+### 4.4 Expandable Technical Accordions
+For quantitative traders who require deep inspection, the memo provides collapsible technical detail sections:
+- **Technical details (01 Evidence & 02 Where the Facts Differ)**: Full source-attributed data (SEC EDGAR XBRL filings, Yahoo Finance technical levels, Bitget rToken tape basis, news sentiment, and Marcenko-Pastur RMT market structure eigenstructure and community stability) alongside full tension statements.
+- **Historical chart details (03 Chart details)**: Chart Library state string, 5-row analog match table with similarity distances, base rates across 1d/5d/10d excess-return bands, quantile distribution range bar (`<UnsignedRanges />`), and normalized SVG trajectory comparison chart (`<AnalogOverlay />`).
+- **Additional technical scoring (04 Additional details)**: Horizon-specific considerations, explicit invalidation triggers, and Structure & Fundamentals flags.
 
 ---
 
@@ -208,8 +193,8 @@ The demo must visibly show:
 - style selection;
 - a specific rToken question;
 - retrieval of all four pillars;
-- the unified four-part memo;
-- the trader retaining the final decision.
+- the unified beginner-friendly memo with expandable technical accordions;
+- the trader retaining the final decision via the Human Decision Record.
 
 ---
 
@@ -1134,24 +1119,30 @@ Each pillar can show:
 
 ### Unified briefing UI
 
-The frontend renders one memo in the required order:
+The frontend renders one cohesive memo in the beginner-friendly layout:
 
-1. Evidence;
-2. Tension;
-3. Historical analog;
-4. Considerations for the trader.
+1. What we did;
+2. Historical stress test (“went up X times out of Y”);
+3. Other things we checked;
+4. Where things do not agree;
+5. Simple takeaways;
+6. Questions only you can answer;
+7. Human Decision Record.
+
+Supported by expandable technical detail accordions:
+- Technical details (Evidence details & Where the Facts Differ);
+- Historical chart details (Setup, Analogs match table, Base-rate cards, Quantile range bar, Normalized trajectory chart);
+- Additional technical scoring (Horizon considerations, Invalidation triggers, Structure & Fundamentals flags).
 
 The memo also shows:
 
-- model used;
+- active model or fallback status;
 - selected style;
-- citations;
-- analog table;
-- base-rate cards;
+- source citations;
 - caveats;
-- human decision layer.
+- interactive human decision layer.
 
-### Human decision layer
+### Human Decision Record
 
 The decision note is intentionally not sent to the backend. It remains in browser component state and is not an execution mechanism.
 
@@ -1264,8 +1255,8 @@ No order execution should be added to this product without an explicit product d
 - LLM synthesis;
 - deterministic synthesis fallback;
 - language guard;
-- unified four-part memo;
-- human decision reflection field;
+- unified beginner-friendly memo with expandable technical accordions;
+- human decision reflection field (Human Decision Record);
 - API input validation;
 - graceful degradation;
 - production build support.
