@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { ResearchMemo } from "./ResearchMemo";
-import { PILLARS, PillarState } from "./PipelineSidebar";
+import { PipelineSummary } from "./PipelineSidebar";
 import { STYLES } from "@/lib/style-profiles";
-import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
+import type { Briefing, PillarBundle, PillarState, TradingStyle } from "@/lib/types";
 
 interface ResultsViewProps {
   briefing: Briefing;
@@ -33,10 +32,6 @@ export function ResultsView({
   meta,
   statuses,
 }: ResultsViewProps) {
-  const [showTelemetryTray, setShowTelemetryTray] = useState(false);
-  const readyCount = PILLARS.filter((p) => statuses[p.id] === "ready").length;
-  const degradedCount = PILLARS.filter((p) => statuses[p.id] === "degraded").length;
-
   return (
     <div className="mx-auto max-w-[1360px] py-4 sm:py-10">
       {/* Top Action & Navigation Strip */}
@@ -45,13 +40,13 @@ export function ResultsView({
         <button
           type="button"
           onClick={onBackToIntake}
-          className="group flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center sm:justify-start gap-2.5 rounded-sm border border-white/[0.12] bg-[#0c1015] px-4 py-2 text-xs font-medium text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-white/[0.04] hover:text-white"
+          className="group flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center sm:justify-start gap-2.5 rounded-sm border border-white/[0.14] bg-[#0c1015] px-4 py-2 text-xs font-semibold text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
         >
-          <span className="font-mono text-sm transition-transform duration-200 group-hover:-translate-x-1">
+          <span className="font-mono text-sm transition-transform duration-200 group-hover:-translate-x-1 text-[#d4ff3f]">
             ←
           </span>
           <span className="font-mono uppercase tracking-wider text-[11px]">
-            Return to Intake Console
+            New Research Formulation
           </span>
         </button>
 
@@ -63,7 +58,7 @@ export function ResultsView({
             <span className="truncate max-w-[120px] sm:max-w-[180px]">{meta?.name ?? "Asset"}</span>
             <span className="text-[#556472]">·</span>
             <span className="rounded bg-[#d4ff3f]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#d4ff3f] shrink-0">
-              Bitget 7×24
+              Bitget 24/7 Market
             </span>
           </div>
 
@@ -73,81 +68,19 @@ export function ResultsView({
           </div>
         </div>
 
-        {/* Right: Evidence Verification Tray Toggle */}
-        <button
-          type="button"
-          onClick={() => setShowTelemetryTray((prev) => !prev)}
-          className="flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-between sm:justify-start gap-2 rounded-sm border border-white/[0.1] bg-white/[0.03] px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-[#a0b0be] transition hover:border-white/20 hover:text-white"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#d4ff3f]" />
-            <span>
-              Pipeline: {readyCount}/5 Ready {degradedCount > 0 ? `(${degradedCount} Degraded)` : ""}
-            </span>
-          </div>
-          <span className="text-xs text-[#718090]">{showTelemetryTray ? "▲ Hide" : "▼ Audit"}</span>
-        </button>
+        {/* Right: Small Expandable Pipeline Summary */}
+        <PipelineSummary statuses={statuses} pillarData={pillarData} />
       </div>
 
-      {/* Expandable Evidence Stream Telemetry Tray */}
-      {showTelemetryTray && (
-        <div className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-[#0c1015]/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl transition-all">
-          <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-            <div className="font-mono text-xs font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#a0b0be]">
-              Evidence Stream Telemetry & Disaggregation
-            </div>
-            <span className="hidden sm:inline font-mono text-[10px] text-[#617180]">
-              All 5 models polled in parallel
-            </span>
-          </div>
 
-          <div className="mt-4 grid grid-cols-2 min-[480px]:grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
-            {PILLARS.map((pillar, idx) => {
-              const status = statuses[pillar.id];
-              return (
-                <div
-                  key={pillar.id}
-                  className="rounded border border-white/[0.06] bg-black/25 p-2.5 sm:p-3"
-                >
-                  <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-wider text-[#637382]">
-                    <span>0{idx + 1}</span>
-                    <span
-                      className={`font-semibold ${
-                        status === "ready"
-                          ? "text-[#d4ff3f]"
-                          : status === "degraded"
-                          ? "text-[#f59e0b]"
-                          : "text-[#75b8ff]"
-                      }`}
-                    >
-                      {status}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs font-medium text-[#d3dce4] truncate">{pillar.label}</div>
-                  <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-[#60707e]">
-                    {pillar.short}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] text-[#637382]">
-            <span className="font-semibold text-[#8b9aa8]">Separation of Sources: </span>
-            Bitget venue order tape is segregated from the underlying cash market. Missing or unavailable sources are flagged as explicit caveats rather than estimated.
-          </div>
-        </div>
-      )}
-
-
-      <div className="mb-6 sm:mb-8 rounded-sm border border-white/[0.07] bg-[#0c1016]/80 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
+      <div className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-[#0c1016]/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
           <div>
-            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8e9ca8]">
-              Operating Frame Re-weighting
+            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9eb0bf]">
+              ✦ Adaptive Perspective Re-weighting
             </div>
-            <div className="text-xs text-[#637382]">
-              Switching perspective adapts the briefing considerations and analog horizons without re-running data feeds.
+            <div className="text-xs text-[#718191] mt-0.5">
+              Switching your operational style recalibrates the analytical lens, analog horizons, and invalidation rules instantly.
             </div>
           </div>
 
@@ -161,7 +94,7 @@ export function ResultsView({
                   onClick={() => onStyleChange(st)}
                   className={`flex min-h-[40px] sm:min-h-0 items-center justify-center rounded-sm border px-3 py-2 sm:px-3.5 sm:py-1.5 font-mono text-xs font-medium transition ${
                     isSelected
-                      ? "border-[#d4ff3f] bg-[#d4ff3f]/10 text-white shadow-[0_0_12px_rgba(212,255,63,0.15)]"
+                      ? "border-[#d4ff3f] bg-[#d4ff3f]/10 text-white shadow-[0_0_14px_rgba(212,255,63,0.18)] font-semibold"
                       : "border-white/[0.08] bg-[#080b0f] text-[#8e9da9] hover:border-white/20 hover:text-white"
                   }`}
                 >
@@ -195,11 +128,11 @@ export function ResultsView({
           className="group flex min-h-[44px] sm:min-h-0 items-center gap-2 font-mono text-xs uppercase tracking-wider text-[#d4ff3f] transition hover:text-white"
         >
           <span className="transition-transform group-hover:-translate-x-1">←</span>
-          <span>Return to Research Intake Console</span>
+          <span>Formulate Another Research Question</span>
         </button>
 
         <div className="text-left sm:text-right text-[11px] text-[#637382]">
-          Precedent Research Desk · All empirical distributions strictly non-directional
+          Precedent Quantitative Desk · Factual evidence streams & non-directional historical distributions
         </div>
       </div>
     </div>

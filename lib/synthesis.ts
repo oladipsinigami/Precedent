@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
-import { guardBriefing, cleanHistoricalSummary } from "./language-guard";
+import { guardBriefing, cleanHistoricalSummary, didLastGuardRewrite } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
@@ -11,39 +11,7 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
-  // 1. OpenCode Zen models (when OPENCODE_API_KEY is configured)
-  const rawOpenCodeKey = process.env.OPENCODE_API_KEY?.trim();
-  const openCodeKey =
-    rawOpenCodeKey && rawOpenCodeKey !== "[SENSITIVE]" ? rawOpenCodeKey : undefined;
-
-  if (openCodeKey) {
-    const client = new OpenAI({
-      apiKey: openCodeKey,
-      baseURL: process.env.OPENCODE_BASE_URL || "https://opencode.ai/zen/v1",
-      maxRetries: 0,
-      defaultHeaders: {
-        "HTTP-Referer": "https://precedent-liard-eight.vercel.app",
-        "X-Title": "Precedent Research Desk",
-        "x-session-id": `ses_prec_${Math.random().toString(36).slice(2)}`,
-      },
-    });
-
-    const candidateModels = [
-      process.env.OPENCODE_MODEL,
-      "ling-3.0-flash-fin-free",
-      "nemotron-3.5-lightning-free",
-    ].filter(Boolean) as string[];
-
-    for (const model of [...new Set(candidateModels)]) {
-      available.push({
-        label: `opencode/${model}`,
-        model,
-        client,
-      });
-    }
-  }
-
-  // 2. OpenRouter models (when OPENROUTER_API_KEY is configured)
+  // 1. OpenRouter models (when OPENROUTER_API_KEY is configured)
   const rawOpenRouterKey =
     process.env.OPENROUTER_API_KEY?.trim() ||
     process.env.OPENROUTER_KEY?.trim() ||
@@ -145,9 +113,9 @@ const SCHEMA = `{
     "summary": "Objective past data description",
     "sampleSize": 12,
     "results": [
-      { "period": "Next day", "wentUp": "went up 7 times out of 12", "typicalMove": "usually between -1.5% and +2.1%", "median": "+0.4%" },
-      { "period": "Next 5 trading days", "wentUp": "went up 8 times out of 12", "typicalMove": "usually between -2.2% and +3.5%", "median": "+1.1%" },
-      { "period": "Next 10 trading days", "wentUp": "went up 7 times out of 12", "typicalMove": "usually between -3.1% and +4.0%", "median": "+1.5%" }
+      { "period": "Next 1 trading day", "wentUp": "Went up 7 times out of 12", "typicalMove": "Typical move: usually between -1.5% and +2.1%", "median": "+0.4%" },
+      { "period": "Next 5 trading days", "wentUp": "Went up 8 times out of 12", "typicalMove": "Typical move: usually between -2.2% and +3.5%", "median": "+1.1%" },
+      { "period": "Next 10 trading days", "wentUp": "Went up 7 times out of 12", "typicalMove": "Typical move: usually between -3.1% and +4.0%", "median": "+1.5%" }
     ],
     "examples": [{ "when": "AAPL (2023-04-12)", "whatHappened": "rose about 2.1% over the next 5 days" }],
     "importantNote": "Historical results are past occurrences only, not predictions."
@@ -194,7 +162,7 @@ export async function synthesize(opts: {
   const profile = STYLES[opts.style];
   const system = `You are Precedent, an objective quantitative research desk providing structured research memos for tokenized US stocks on Bitget.
 CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be concise: keep string values under 25 words. Do not output markdown code blocks or conversational commentary. Start immediately with "{" and end with "}".
-Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "went up X times out of Y", "historical range was -A% to +B%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
+Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "Went up X times out of Y", "Typical move: usually between A% and B%", "Middle result: C%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
 Technical Glossing: Explain any technical term once in plain language on first mention (e.g. "RSI (a short-term strength score from 0 to 100)"), then use only the short name ("RSI") for later mentions. Avoid repeating the same parenthetical explanation multiple times. Prefer shorter sentences overall.
 Past Examples Guidance: Provide 2 to 3 past examples in "historicalStressTest.examples" based on the retrieved examples. Prefer same-ticker historical occurrences when available. State each outcome clearly in plain language (e.g. "rose about 2.8% over the next 5 days"). Never output "n/a", undefined, or empty outcomes.
 
@@ -242,15 +210,23 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
       isFallback: false,
     };
     console.log(`[Synthesis] Successfully generated full LLM memo using ${cleanLabel}.`);
-    return guardBriefing(normalizeBriefing(briefing, fallback));
+    const guarded = guardBriefing(normalizeBriefing(briefing, fallback));
+    if (didLastGuardRewrite()) {
+      console.log(`[Synthesis] Language guard actively sanitized prohibited directional language in LLM memo.`);
+    }
+    return guarded;
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.warn(`[Synthesis] All sequential synthesis candidates failed: ${errMsg}. Falling back to deterministic briefing.`);
-    return guardBriefing({
+    const guardedFallback = guardBriefing({
       ...fallback,
       isFallback: true,
       model: "Precedent Quantitative Desk",
     });
+    if (didLastGuardRewrite()) {
+      console.log(`[Synthesis] Language guard sanitized deterministic fallback memo.`);
+    }
+    return guardedFallback;
   }
 
   function adaptRetailBriefing(
@@ -286,14 +262,20 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
 
     const cleanSummary = cleanHistoricalSummary(stress?.summary) || fallback.historicalStressTest.summary;
     const normalizedResults = fallback.historicalStressTest.results.map((fallbackItem) => {
-      const parsedItem = stress?.results?.find((r) => r.period === fallbackItem.period);
+      const parsedItem = stress?.results?.find(
+        (r) => r.period === fallbackItem.period || (fallbackItem.period === "Next 1 trading day" && r.period === "Next day"),
+      );
       if (!parsedItem) return fallbackItem;
       const hasWentUp = /went\s+up\s+\d+\s+times\s+out\s+of\s+\d+/i.test(parsedItem.wentUp);
       const hasTypical = /usually\s+between/i.test(parsedItem.typicalMove);
+      const cleanWentUp = hasWentUp ? parsedItem.wentUp.replace(/^went up/i, "Went up") : fallbackItem.wentUp;
+      const cleanTypicalMove = hasTypical
+        ? (parsedItem.typicalMove.startsWith("Typical move: ") ? parsedItem.typicalMove : `Typical move: ${parsedItem.typicalMove.replace(/^typical move:\s*/i, "")}`)
+        : fallbackItem.typicalMove;
       return {
         period: fallbackItem.period,
-        wentUp: hasWentUp ? parsedItem.wentUp : fallbackItem.wentUp,
-        typicalMove: hasTypical ? parsedItem.typicalMove : fallbackItem.typicalMove,
+        wentUp: cleanWentUp,
+        typicalMove: cleanTypicalMove,
         median: parsedItem.median || fallbackItem.median,
       };
     });
@@ -310,15 +292,32 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
       results: isDegradedSample ? [] : normalizedResults,
       examples: (() => {
         if (isDegradedSample) return [];
-        const validParsed = (stress?.examples ?? []).filter(
-          (item) =>
-            item?.when &&
-            item?.whatHappened &&
-            !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(item.whatHappened) &&
-            !/\b(n\/?a|null|undefined)\b/i.test(item.when) &&
-            /\d/.test(item.whatHappened) &&
-            /\b(rose|fell|stayed|gained|dropped|moved)\b/i.test(item.whatHappened),
-        ).slice(0, 3);
+        const validParsed = (stress?.examples ?? [])
+          .filter(
+            (item) =>
+              item?.when &&
+              item?.whatHappened &&
+              !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(item.whatHappened) &&
+              !/\b(n\/?a|null|undefined)\b/i.test(item.when) &&
+              /\d/.test(item.whatHappened) &&
+              /\b(rose|fell|stayed|gained|dropped|moved)\b/i.test(item.whatHappened),
+          )
+          .sort((a, b) => {
+            const aSame = a.when.startsWith(opts.name.native) ? 0 : 1;
+            const bSame = b.when.startsWith(opts.name.native) ? 0 : 1;
+            return aSame - bSame;
+          })
+          .map((item) => {
+            const isSame = item.when.startsWith(opts.name.native);
+            if (!isSame && !/cross[- ]ticker/i.test(item.when)) {
+              return {
+                ...item,
+                when: item.when.replace(/\)$/, ", cross-ticker)"),
+              };
+            }
+            return item;
+          })
+          .slice(0, 3);
         const hasSameTicker = (list: { when: string }[]) => list.some((e) => e.when.startsWith(opts.name.native));
         if (hasSameTicker(fallback.historicalStressTest.examples) && !hasSameTicker(validParsed)) {
           return fallback.historicalStressTest.examples.slice(0, 3);
@@ -360,6 +359,7 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
       whereThingsDoNotAgree,
       simpleTakeAways,
       questionsOnlyYouCanAnswer,
+      unverified: fallback.unverified,
       styleNote: fallback.styleNote,
       regime: opts.regime,
       flags,
@@ -517,9 +517,9 @@ async function runSequentialSynthesis(
       break;
     }
 
-    // Short, well-calibrated timeout per candidate: 15s for flash models, 20s for other models
+    // Calibrated timeout per candidate: 28s allows detailed JSON response to stream without premature abortion
     const candidateTimeout = Math.min(
-      llm.model.includes("flash") ? 15_000 : 20_000,
+      28_000,
       remainingTime - 1_500,
     );
 

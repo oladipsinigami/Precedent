@@ -24,11 +24,11 @@ export function ConsiderationsSection({ considerations, scores, aggregate, analo
     <div className="space-y-5">
       <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">Aggregate evidence score</h4>
+          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">✦ Aggregate Evidence Synthesis</h4>
           <span className="font-mono text-lg font-semibold text-[#1f2821]">{aggregate.value === null ? "N/A" : `${aggregate.value} / 100`} <span className="text-[10px] uppercase text-[#738275]">· {aggregate.label}</span></span>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{aggregate.basis}</p>
-        <p className="mt-2 text-xs leading-relaxed text-[#222b24]"><span className="font-semibold">Trend explanation:</span> {agreement} {trajectory} The unresolved questions below define what evidence would change the interpretation.</p>
+        <p className="mt-2 text-xs leading-relaxed text-[#222b24]"><span className="font-semibold text-[#486326]">✦ Synthesis Commentary:</span> {agreement} {trajectory} The unresolved questions below define what evidence would change the thesis.</p>
       </div>
       <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
       {/* Column 1: Operating Frame Considerations */}
@@ -36,7 +36,7 @@ export function ConsiderationsSection({ considerations, scores, aggregate, analo
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#486326]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">
-            Frame Considerations
+            ✦ Horizon Considerations
           </h4>
         </div>
         <ul className="mt-4 space-y-3.5">
@@ -54,7 +54,7 @@ export function ConsiderationsSection({ considerations, scores, aggregate, analo
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#a3442e]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#8f3622]">
-            Invalidation Triggers
+            ✦ Invalidation Triggers
           </h4>
         </div>
         <ul className="mt-4 space-y-3.5">
@@ -72,7 +72,7 @@ export function ConsiderationsSection({ considerations, scores, aggregate, analo
         <div className="flex items-center gap-2 border-b border-[#141918]/10 pb-3">
           <span className="h-2 w-2 rounded-full bg-[#3d6075]" />
           <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#3d6075]">
-            Questions to Weigh
+            ✦ Deliberative Questions
           </h4>
         </div>
         <ul className="mt-4 space-y-3.5">

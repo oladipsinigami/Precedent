@@ -64,7 +64,7 @@ export async function POST(req: Request) {
             const emptyPillars = {
               fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
               technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },
-              news: { ok: false, headlines: [], macro: [], social: { x: [], youtube: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
+              news: { ok: false, headlines: [], macro: [], social: { x: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
               analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
               marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
             };

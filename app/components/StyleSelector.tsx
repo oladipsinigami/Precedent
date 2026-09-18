@@ -15,11 +15,11 @@ export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSe
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-1">
-        <label className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#8e9ca8]">
-          Operating Frame · Synthesis Lens
+        <label className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-[#9eb0bf]">
+          Trader Operating Style & Time Horizon
         </label>
-        <span className="hidden min-[380px]:inline font-mono text-[10px] text-[#556472]">
-          Re-weights perspective
+        <span className="hidden min-[380px]:inline font-mono text-[10px] text-[#637585]">
+          Tailors the analytical lens
         </span>
       </div>
 

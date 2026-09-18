@@ -316,14 +316,21 @@ export async function runAnalogs(
       );
     }
 
-    const ranges = Object.entries(analogs.excess_followed ?? {}).map(([horizon, row]) => ({
-      horizon,
-      n: row.n,
-      p10: row.p10,
-      p50: row.p50,
-      p90: row.p90,
-      pUp: row.p_up,
-    }));
+    const horizonOrder = ["1d", "5d", "10d"];
+    const ranges = Object.entries(analogs.excess_followed ?? {})
+      .map(([horizon, row]) => ({
+        horizon,
+        n: row.n,
+        p10: row.p10,
+        p50: row.p50,
+        p90: row.p90,
+        pUp: row.p_up,
+      }))
+      .sort((a, b) => {
+        const ai = horizonOrder.indexOf(a.horizon);
+        const bi = horizonOrder.indexOf(b.horizon);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
 
     return {
       ok: true,

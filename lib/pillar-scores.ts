@@ -19,7 +19,7 @@ function score(value: number, basis: string): PillarScore {
 }
 
 export function sentimentScore(news?: NewsPillar): PillarScore {
-  if (!news || (!news.headlines.length && !news.social.x.length && !news.social.youtube.length)) {
+  if (!news || (!news.headlines.length && !news.social.x.length)) {
     return { value: null, label: "insufficient", basis: "No usable news or discourse observations were returned." };
   }
   const base = news.aggregateLean === "constructive" ? 72 : news.aggregateLean === "cautious" ? 32 : 50;
@@ -27,7 +27,7 @@ export function sentimentScore(news?: NewsPillar): PillarScore {
   const caveatPenalty = Math.min(12, news.caveats.length * 4);
   return score(
     base + headlineAdjustment - caveatPenalty,
-    `${news.aggregateLean} aggregate lean across ${news.headlines.length} headlines and ${news.social.x.length + news.social.youtube.length} social items${news.caveats.length ? `; ${news.caveats.length} caveat${news.caveats.length === 1 ? "" : "s"}` : ""}.`,
+    `${news.aggregateLean} aggregate lean across ${news.headlines.length} headlines and ${news.social.x.length} social items${news.caveats.length ? `; ${news.caveats.length} caveat${news.caveats.length === 1 ? "" : "s"}` : ""}.`,
   );
 }
 
