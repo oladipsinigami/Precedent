@@ -44,8 +44,17 @@ export async function* runResearch(input: {
   const { regime } = await detectRegime(name);
   yield { type: "meta", style: input.style, symbol: name.native, name: name.name, question: input.question, regime };
 
-  const order: PillarId[] = ["analogs", "technicals", "fundamentals", "news", "marketStructure"];
-  for (const id of order) yield { type: "pillar", id, status: "running" };
+  const initialMessages: Partial<Record<PillarId, string>> = {
+    fundamentals: "Pulling SEC filings…",
+    technicals: "Comparing rToken vs cash session…",
+    news: "Scanning news & macro headlines…",
+    analogs: "Matching historical charts…",
+    marketStructure: "Resolving market structure…",
+  };
+  const order: PillarId[] = ["fundamentals", "technicals", "news", "analogs", "marketStructure"];
+  for (const id of order) {
+    yield { type: "pillar", id, status: "running", message: initialMessages[id] };
+  }
 
   // Market structure resolves first so its community can condition analogs;
   // the remaining four pillars still run in parallel with each other.
@@ -73,6 +82,8 @@ export async function* runResearch(input: {
       data,
     };
   }
+
+  yield { type: "status", stage: "synthesis", message: "Synthesizing research memo…" };
 
   const SYNTHESIS_TIMEOUT_MS = 48_000;
   let briefing: Briefing;

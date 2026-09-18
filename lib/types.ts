@@ -85,6 +85,20 @@ export type FundamentalsPillar = {
     filed: string;
     frame?: string;
   };
+  simfin?: {
+    revenue?: number;
+    netIncome?: number;
+    operatingIncome?: number;
+    grossProfit?: number;
+    eps?: number;
+    grossMargin?: number;
+    operatingMargin?: number;
+    netMargin?: number;
+    freeCashFlow?: number;
+    period?: string;
+    fiscalYear?: number;
+    reportDate?: string;
+  };
   catalysts: string[];
   notes: string[];
   sources: SourceRef[];
@@ -144,7 +158,18 @@ export type NewsPillar = {
   macro: string[];
   social: {
     x: SocialPost[];
-    youtube: YouTubeItem[];
+    reddit?: SocialPost[];
+    polymarket?: SocialPost[];
+  };
+  adanos?: {
+    buzzScore?: number;
+    sentimentScore?: number;
+    redditMentions?: number;
+    xMentions?: number;
+    bullishPct?: number;
+    bearishPct?: number;
+    topSubreddits?: string[];
+    explanation?: string;
   };
   aggregateLean: Lean | "insufficient";
   volumeNote?: string;
@@ -157,7 +182,7 @@ export type Lean = "constructive" | "cautious" | "mixed" | "neutral";
 
 export type SocialPost = {
   id: string;
-  platform: "x";
+  platform: "x" | "reddit" | "polymarket";
   text: string;
   author: string;
   url: string;
@@ -170,21 +195,6 @@ export type SocialPost = {
   };
   lean: Lean;
   engagementScore: number;
-};
-
-export type YouTubeItem = {
-  videoId: string;
-  title: string;
-  channelTitle: string;
-  url: string;
-  publishedAt: string;
-  viewCount?: number;
-  topComments: {
-    text: string;
-    lean: Lean;
-    likeCount?: number;
-  }[];
-  overallLean: Lean;
 };
 
 export type AnalogsPillar = {
@@ -248,7 +258,7 @@ export type Briefing = {
     summary: string;
     sampleSize: number;
     results: {
-      period: "Next day" | "Next 5 trading days" | "Next 10 trading days";
+      period: "Next 1 trading day" | "Next 5 trading days" | "Next 10 trading days" | "Next day";
       wentUp: string;
       typicalMove: string;
       median: string;
@@ -260,6 +270,7 @@ export type Briefing = {
   whereThingsDoNotAgree: { conflict: string; whyItMatters: string }[];
   simpleTakeAways: string[];
   questionsOnlyYouCanAnswer: string[];
+  unverified?: string[];
   // Legacy fields remain as an internal compatibility bridge for existing memo components.
   styleNote: string;
   model: string;
@@ -339,9 +350,13 @@ export type StressTest = {
   };
 };
 
+export type PillarStatus = "pending" | "running" | "ready" | "degraded" | "failed";
+export type PillarState = Record<PillarId, PillarStatus>;
+
 export type ResearchEvent =
   | { type: "meta"; style: TradingStyle; symbol: string; name: string; question: string; regime: Regime }
-  | { type: "pillar"; id: PillarId; status: "running" | "ready" | "degraded"; data?: unknown }
+  | { type: "pillar"; id: PillarId; status: PillarStatus; message?: string; data?: unknown }
+  | { type: "status"; stage: "pillars" | "synthesis" | "complete"; message?: string }
   | { type: "briefing"; briefing: Briefing }
   | { type: "error"; message: string }
   | { type: "done" };

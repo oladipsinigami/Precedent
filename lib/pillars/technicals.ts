@@ -15,9 +15,26 @@ import type { NameCard } from "../universe";
 
 export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
   try {
-    const [{ meta, bars }, rTape] = await Promise.all([yahooChart(name.native, "1y", "1d"), bitgetTape(name)]);
+    const [yahooRes, rTape] = await Promise.all([
+      yahooChart(name.native, "1y", "1d").catch((err) => {
+        console.warn("[technicals] Yahoo chart failed:", err instanceof Error ? err.message : err);
+        return null;
+      }),
+      bitgetTape(name).catch(() => null),
+    ]);
+
+    const bars = yahooRes?.bars && yahooRes.bars.length > 0 ? yahooRes.bars : [];
     const closes = bars.map((b) => b.c);
-    const last = closes[closes.length - 1] ?? meta.regularMarketPrice;
+
+    const last =
+      yahooRes?.meta?.regularMarketPrice ??
+      closes[closes.length - 1] ??
+      0;
+
+    if (!last && bars.length === 0) {
+      throw new Error(`No market data available for ${name.native} from Yahoo Finance.`);
+    }
+
     const sma20 = sma(closes, 20);
     const sma50 = sma(closes, 50);
     const sma200 = sma(closes, 200);
@@ -26,8 +43,16 @@ export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
     const atr14 = atr(bars, 14);
     const vol = realizedVol(closes, 20);
     const levels = swingLevels(bars, 60);
-    const dist52 = meta.fiftyTwoWeekHigh ? ((last - meta.fiftyTwoWeekHigh) / meta.fiftyTwoWeekHigh) * 100 : undefined;
-    const asOf = new Date(meta.regularMarketTime * 1000).toISOString();
+
+    const high52 = yahooRes?.meta?.fiftyTwoWeekHigh;
+    const low52 = yahooRes?.meta?.fiftyTwoWeekLow;
+    const dist52 = high52 ? ((last - high52) / high52) * 100 : undefined;
+    const asOf = yahooRes?.meta?.regularMarketTime
+      ? new Date(yahooRes.meta.regularMarketTime * 1000).toISOString()
+      : new Date().toISOString();
+
+    const changePct = yahooRes?.meta?.regularMarketChangePercent ?? 0;
+    const volume = yahooRes?.meta?.regularMarketVolume ?? 0;
 
     const notes = [
       describeTrend(last, sma20, sma50, sma200),
@@ -39,21 +64,21 @@ export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
     let rTokenGap: string | undefined;
     let premiumPct: number | null | undefined;
     if (rTape) {
-      premiumPct = ((rTape.last - last) / last) * 100;
+      premiumPct = last > 0 ? ((rTape.last - last) / last) * 100 : 0;
       rTokenGap = `Bitget rToken tape ${rTape.symbol} last ${rTape.last} vs native ${last} (${premiumPct >= 0 ? "+" : ""}${premiumPct.toFixed(2)}% vs cash last). Treat as a venue print, not NAV.`;
     } else {
       rTokenGap =
-        "Bitget rToken tape was not reachable from this environment. Native cash session (Yahoo) is the tape; 7×24 implications are framed, not fabricated.";
+        "Bitget rToken tape was not reachable from this environment. Native cash session is the tape; 7×24 implications are framed, not fabricated.";
     }
 
     return {
       ok: true,
       native: {
         last,
-        changePct: meta.regularMarketChangePercent,
-        high52: meta.fiftyTwoWeekHigh,
-        low52: meta.fiftyTwoWeekLow,
-        volume: meta.regularMarketVolume,
+        changePct,
+        high52: high52 ?? 0,
+        low52: low52 ?? 0,
+        volume,
         asOf,
       },
       rToken: rTape
@@ -78,7 +103,7 @@ export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
       spark: closes.slice(-40),
       notes,
       sources: [
-        { label: `Yahoo Finance chart ${name.native}`, url: `https://finance.yahoo.com/quote/${name.native}` },
+        ...(yahooRes ? [{ label: `Yahoo Finance chart ${name.native}`, url: `https://finance.yahoo.com/quote/${name.native}` }] : []),
         ...(rTape ? [{ label: `Bitget ${rTape.symbol}` }] : [{ label: "Bitget public ticker (unreachable this run)" }]),
       ],
     };

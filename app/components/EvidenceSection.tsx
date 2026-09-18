@@ -17,7 +17,7 @@ export function EvidenceSection({ evidence, flags, marketStructure, news, scores
       {/* Left Column: Primary Evidence Claims */}
       <div className="space-y-4 sm:space-y-5">
         <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.16em] text-[#4d6330]">
-          Verified Claims & Empirical Sources ({evidence.length})
+          ✦ Verified Empirical Signals & Primary Sources ({evidence.length})
         </div>
 
         {evidence.map((item, index) => (
@@ -76,9 +76,9 @@ export function FlagsCard({ flags }: { flags: StructureFlags }) {
     <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
-          Structural Flags
+          ✦ Microstructural Diagnostics
         </div>
-        <span className="font-mono text-[9px] uppercase text-[#738275]">Disaggregated</span>
+        <span className="font-mono text-[9px] uppercase text-[#738275]">Disaggregated Indicators</span>
       </div>
 
       <div className="mt-4 space-y-2.5 text-xs">
@@ -128,7 +128,7 @@ export function RmtCard({ market }: { market: MarketStructurePillar }) {
     <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
-          RMT Eigenstructure
+          ✦ RMT Market-Mode Dynamics
         </div>
         <span className="font-mono text-[9px] uppercase text-[#738275]">
           {market.communityId ?? "Global"}
@@ -180,29 +180,38 @@ export function SocialSummary({ news }: { news: NewsPillar }) {
     <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
-          Discourse Density
+          ✦ Multi-Channel Discourse Velocity
         </div>
         <span className="font-mono text-[9px] uppercase text-[#738275]">Multi-Source</span>
       </div>
 
-      <div className="mt-3.5 grid grid-cols-2 gap-3 text-xs">
+      <div className={`mt-3.5 grid ${news.social.reddit?.length ? "grid-cols-4" : "grid-cols-3"} gap-2.5 text-xs`}>
         <div className="rounded border border-[#141918]/[0.07] bg-white/60 p-2.5">
-          <div className="font-mono text-[10px] uppercase text-[#738375]">Headlines</div>
+          <div className="font-mono text-[10px] uppercase text-[#738375]">Wire / News</div>
           <div className="mt-1 font-mono text-base font-bold text-[#1f2821]">{news.headlines.length}</div>
         </div>
         <div className="rounded border border-[#141918]/[0.07] bg-white/60 p-2.5">
-          <div className="font-mono text-[10px] uppercase text-[#738375]">X / Twitter</div>
+          <div className="font-mono text-[10px] uppercase text-[#738375]">X / Social</div>
           <div className="mt-1 font-mono text-base font-bold text-[#1f2821]">{news.social.x.length}</div>
         </div>
+        {news.social.reddit && news.social.reddit.length > 0 && (
+          <div className="rounded border border-[#141918]/[0.07] bg-white/60 p-2.5">
+            <div className="font-mono text-[10px] uppercase text-[#738375]">Reddit Tape</div>
+            <div className="mt-1 font-mono text-base font-bold text-[#1f2821]">{news.social.reddit.length}</div>
+          </div>
+        )}
         <div className="rounded border border-[#141918]/[0.07] bg-white/60 p-2.5">
-          <div className="font-mono text-[10px] uppercase text-[#738375]">YouTube</div>
-          <div className="mt-1 font-mono text-base font-bold text-[#1f2821]">{news.social.youtube.length}</div>
-        </div>
-        <div className="rounded border border-[#141918]/[0.07] bg-white/60 p-2.5">
-          <div className="font-mono text-[10px] uppercase text-[#738375]">Aggregate</div>
+          <div className="font-mono text-[10px] uppercase text-[#738375]">Consensus</div>
           <div className="mt-1 truncate font-mono text-xs font-semibold text-[#486326]">{news.aggregateLean}</div>
         </div>
       </div>
+
+      {news.adanos?.buzzScore !== undefined && (
+        <div className="mt-2.5 flex items-center justify-between rounded border border-[#141918]/[0.07] bg-white/60 px-2.5 py-1.5 font-mono text-[10px]">
+          <span className="uppercase text-[#738375]">Adanos BuzzScore</span>
+          <span className="font-bold text-[#1f2821]">{news.adanos.buzzScore.toFixed(1)} / 100</span>
+        </div>
+      )}
 
       {news.caveats.length > 0 && (
         <div className="mt-3.5 border-t border-[#141918]/10 pt-3 text-[11px] leading-relaxed text-[#5a685c]">

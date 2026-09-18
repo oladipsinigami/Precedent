@@ -19,10 +19,10 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
     <div className="mt-7">
       <div className="mb-3 flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#486326]">
-          Historical Excess Return Distributions · Unsigned Base Rates
+          ✦ Historical Excess Return Distributions · Empirical Base Rates
         </div>
         <span className="font-mono text-[9px] uppercase tracking-wider text-[#738275]">
-          Empirical Quantiles
+          Empirical Quantile Spreads
         </span>
       </div>
 
@@ -111,7 +111,7 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
       </div>
 
       <p className="mt-3 text-[11px] leading-relaxed text-[#637265]">
-        These bands describe what followed similar chart states versus a baseline. They represent unsigned empirical distributions, never a directional recommendation or execution command.
+        ✦ Empirical Methodological Note: These quantile bands characterize the dispersion of excess returns following historically comparable market regimes. They reflect historical sample distributions and do not constitute directional advice or return guarantees.
       </p>
     </div>
   );

@@ -1,5 +1,5 @@
 import { fmtPct } from "./http";
-import { guardBriefing } from "./language-guard";
+import { guardBriefing, didLastGuardRewrite } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
@@ -74,14 +74,6 @@ export function deterministicBriefing(opts: {
     evidence.push({
       claim: `Top X post (@${top.author}, ${top.lean}): “${top.text.slice(0, 160)}”. Aggregate X lean across ${pillars.news.social.x.length} posts is engagement-weighted.`,
       source: "X discourse",
-      pillar: "news" as const,
-    });
-  }
-  if (pillars?.news?.social?.youtube?.[0]) {
-    const v = pillars.news.social.youtube[0];
-    evidence.push({
-      claim: `Top YouTube item: “${v.title}” (${v.channelTitle}, ${v.overallLean}).`,
-      source: "YouTube discourse",
       pillar: "news" as const,
     });
   }
@@ -274,6 +266,31 @@ export function deterministicBriefing(opts: {
         "Are you making this decision based on verified facts, or fear of missing out?",
       ];
 
+  const unverified: string[] = [];
+  if (!pillars?.fundamentals?.ok) {
+    unverified.push(
+      pillars?.fundamentals?.error || "Fundamentals partial — no SEC CIK available for this rToken.",
+    );
+  }
+  if (!pillars?.technicals?.ok) {
+    unverified.push(
+      pillars?.technicals?.error || "Technicals & Tape partial — Bitget venue order flow or cash session spread unavailable.",
+    );
+  }
+  if (!pillars?.news?.ok) {
+    unverified.push(
+      pillars?.news?.error || "News & Macro partial — multi-channel news flow was incomplete.",
+    );
+  } else if (pillars?.news?.caveats?.length) {
+    pillars.news.caveats.forEach((c) => unverified.push(`News & Macro note — ${c}`));
+  }
+  const analogSampleSize = band?.n ?? 0;
+  if (!pillars?.analogs?.ok || analogSampleSize === 0) {
+    unverified.push("Historical analog matches unavailable — 0 past cases found.");
+  } else if (analogSampleSize < 30) {
+    unverified.push(`Historical analog sample is limited (${analogSampleSize} cases).`);
+  }
+
   const result: Briefing = {
     title: `${name.rToken} — ${profile.label} stress test`,
     whatWeDid: whatWeDidText,
@@ -282,21 +299,35 @@ export function deterministicBriefing(opts: {
         ? `We found ${band.n} past cases with a similar chart pattern. The results show a wide range of outcomes. History helps provide context, but it cannot tell us what will happen this time.`
         : "Historical comparison was not available in this run because chart pattern feeds returned insufficient matching sessions. Decisions should rely on verified technical support/resistance and fundamental catalysts rather than ungrounded analogs.",
       sampleSize: band?.n ?? 0,
-      results: ranges.slice(0, 3).map((r) => ({
-        period: r.horizon === "1d" ? ("Next day" as const) : r.horizon === "5d" ? ("Next 5 trading days" as const) : ("Next 10 trading days" as const),
-        wentUp: `went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
-        typicalMove: `usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
-        median: fmtPct(r.p50),
-      })),
-      examples: (pillars?.analogs?.closest ?? [])
+      results: ([
+        { key: "1d", period: "Next 1 trading day" as const },
+        { key: "5d", period: "Next 5 trading days" as const },
+        { key: "10d", period: "Next 10 trading days" as const },
+      ])
+        .map(({ key, period }, idx) => {
+          const r = ranges.find((item) => item.horizon === key) ?? ranges[idx];
+          if (!r || r.n === 0) return null;
+          return {
+            period,
+            wentUp: `Went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
+            typicalMove: `Typical move: usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
+            median: fmtPct(r.p50),
+          };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null),
+      examples: [...(pillars?.analogs?.closest ?? [])]
+        .sort((a, b) => {
+          const aSame = a.sameName || a.ticker === name.native ? 0 : 1;
+          const bSame = b.sameName || b.ticker === name.native ? 0 : 1;
+          return aSame - bSame;
+        })
         .map((a) => {
           const outcome = formatAnalogOutcome(a, analogHorizon);
           if (!outcome) return null;
-          const whenLabel = a.sameName
+          const isSame = a.sameName || a.ticker === name.native;
+          const whenLabel = isSame
             ? `${a.ticker} (${a.date})`
-            : a.ticker.startsWith(name.native) || name.native.startsWith(a.ticker)
-            ? `${a.ticker} (${a.date}, related)`
-            : `${a.ticker} (${a.date}, similar chart)`;
+            : `${a.ticker} (${a.date}, cross-ticker)`;
           return {
             when: whenLabel,
             whatHappened: outcome,
@@ -313,6 +344,7 @@ export function deterministicBriefing(opts: {
     })),
     simpleTakeAways: takeaways,
     questionsOnlyYouCanAnswer: reflectionQuestions,
+    unverified,
     styleNote: `${profile.framing} Target horizon: ${profile.horizon} Regime frame: ${regime}.`,
     model: "deterministic-synthesizer",
     isFallback: true,
@@ -380,7 +412,11 @@ export function deterministicBriefing(opts: {
     },
     sources: collectSources(pillars),
   };
-  return guardBriefing(result);
+  const guarded = guardBriefing(result);
+  if (didLastGuardRewrite()) {
+    console.log(`[DeterministicBriefing] Language guard actively sanitized briefing text.`);
+  }
+  return guarded;
 }
 
 export function formatAnalogOutcome(

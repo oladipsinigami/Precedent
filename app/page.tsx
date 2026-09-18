@@ -19,8 +19,7 @@ import type {
 } from "@/lib/types";
 
 type Instrument = { native: string; rToken: string; name: string; sector: string };
-type PillarStatus = "idle" | "running" | "ready" | "degraded";
-type PillarState = Record<PillarId, PillarStatus>;
+import type { PillarStatus, PillarState } from "./components/PipelineSidebar";
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -71,11 +70,11 @@ function adaptQuestionToStyle(question: string, previousStyle: TradingStyle, nex
 }
 
 const EMPTY_PILLARS: PillarState = {
-  fundamentals: "idle",
-  technicals: "idle",
-  news: "idle",
-  analogs: "idle",
-  marketStructure: "idle",
+  fundamentals: "pending",
+  technicals: "pending",
+  news: "pending",
+  analogs: "pending",
+  marketStructure: "pending",
 };
 
 export default function Home() {
@@ -87,6 +86,8 @@ export default function Home() {
     UNIVERSE.map(({ native, rToken, name, sector }) => ({ native, rToken, name, sector })),
   );
   const [statuses, setStatuses] = useState<PillarState>(EMPTY_PILLARS);
+  const [stage, setStage] = useState<"idle" | "pillars" | "synthesis" | "complete">("idle");
+  const [pillarMessages, setPillarMessages] = useState<Record<string, string>>({});
   const [pillarData, setPillarData] = useState<PillarBundle | null>(null);
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [meta, setMeta] = useState<{ native: string; name: string; regime: string } | null>(null);
@@ -124,6 +125,13 @@ export default function Home() {
     setPillarData(null);
     setMeta(null);
     setDecisionNote("");
+    setStage("pillars");
+    setPillarMessages({
+      fundamentals: "Pulling SEC filings…",
+      technicals: "Comparing rToken vs cash session…",
+      news: "Scanning news & macro headlines…",
+      analogs: "Matching historical charts…",
+    });
     setStatuses({
       fundamentals: "running",
       technicals: "running",
@@ -142,14 +150,32 @@ export default function Home() {
         collectedMeta = { native: ev.symbol, name: ev.name, regime: ev.regime };
         setMeta(collectedMeta);
       } else if (ev.type === "pillar") {
-        collectedStatuses = { ...collectedStatuses, [ev.id]: ev.status };
-        setStatuses((current) => ({ ...current, [ev.id]: ev.status }));
+        const mappedStatus: PillarStatus =
+          ev.status === "ready"
+            ? "ready"
+            : ev.status === "degraded"
+            ? "degraded"
+            : ev.status === "failed"
+            ? "failed"
+            : ev.status === "running"
+            ? "running"
+            : "pending";
+        collectedStatuses = { ...collectedStatuses, [ev.id]: mappedStatus };
+        setStatuses((current) => ({ ...current, [ev.id]: mappedStatus }));
+        if (ev.message) {
+          setPillarMessages((prev) => ({ ...prev, [ev.id]: ev.message! }));
+        }
         if (ev.data) {
           collectedPillars = { ...collectedPillars, [ev.id]: ev.data as PillarBundle[PillarId] };
           setPillarData((current) => ({ ...((current ?? {}) as PillarBundle), [ev.id]: ev.data as PillarBundle[PillarId] }));
         }
+      } else if (ev.type === "status") {
+        if (ev.stage === "synthesis") {
+          setStage("synthesis");
+        }
       } else if (ev.type === "briefing") {
         receivedBriefing = true;
+        setStage("complete");
         setBriefing(ev.briefing);
         setView("results");
       } else if (ev.type === "error") {
@@ -167,7 +193,7 @@ export default function Home() {
         const defaultEmptyPillars: PillarBundle = {
           fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
           technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },
-          news: { ok: false, headlines: [], macro: [], social: { x: [], youtube: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
+          news: { ok: false, headlines: [], macro: [], social: { x: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
           analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
           marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
         };
@@ -268,6 +294,8 @@ export default function Home() {
     setBriefing(null);
     setMeta(null);
     setStatuses(EMPTY_PILLARS);
+    setStage("idle");
+    setPillarMessages({});
     setView("intake");
   }
 
@@ -297,6 +325,8 @@ export default function Home() {
             statuses={statuses}
             hasPreviousBriefing={Boolean(briefing)}
             onViewPreviousResults={() => setView("results")}
+            stage={stage}
+            pillarMessages={pillarMessages}
           />
         ) : briefing ? (
           <ResultsView
@@ -329,6 +359,8 @@ export default function Home() {
             statuses={statuses}
             hasPreviousBriefing={false}
             onViewPreviousResults={() => {}}
+            stage={stage}
+            pillarMessages={pillarMessages}
           />
         )}
       </main>

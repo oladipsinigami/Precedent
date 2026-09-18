@@ -7,23 +7,23 @@ interface DecisionRecordProps {
   onDecisionNoteChange: (value: string) => void;
 }
 
-const DEFAULT_PROMPTS_TEMPLATE = `1. What would make me wait or step aside?
+const DEFAULT_PROMPTS_TEMPLATE = `1. What market evidence or tape action would cause me to step aside?
 - 
 
-2. What price level or news would change my mind?
+2. At what specific price boundary or catalyst disclosure is my thesis invalidated?
 - 
 
-3. Am I comfortable holding if the price drops 3–4% in the next few days?
+3. What is my maximum tolerable drawdown if this asset moves 3–5% against me over the holding horizon?
 - 
 
-4. Is the overnight Bitget price more important to me than the regular daytime stock price?
+4. How am I weighting 24/7 Bitget tokenized tape liquidity vs. primary US exchange daytime session context?
 - `;
 
 const GUIDED_PROMPTS = [
-  "What would make me wait or step aside?",
-  "What price level or news would change my mind?",
-  "Am I comfortable holding if the price drops 3–4% in the next few days?",
-  "Is the overnight Bitget price more important to me than the regular daytime stock price?",
+  "What market evidence or tape action would cause me to step aside?",
+  "At what specific price boundary or catalyst disclosure is my thesis invalidated?",
+  "What is my maximum tolerable drawdown if this asset moves 3–5% against me?",
+  "How am I weighting 24/7 Bitget venue tape vs. primary US daytime session context?",
 ];
 
 export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionRecordProps) {
@@ -61,20 +61,20 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-[#486326]" />
             <span className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[#486326]">
-              Personal Reflection
+              Trader Deliberation Canvas
             </span>
           </div>
           <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#121614] sm:text-2xl font-display">
-            Human Decision Record – Personal Reflection
+            ✦ Trader Decision Record · Deliberative Journal
           </h3>
           <p className="mt-1 font-mono text-xs font-medium text-[#486326]">
-            Your Personal Notes (Non-Execution)
+            Private Pre-Trade Deliberation & Risk Framing (Non-Execution)
           </p>
         </div>
 
         <div className="flex items-center gap-2 rounded border border-[#141918]/15 bg-white/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[#344236] shadow-xs">
           <span className="h-1.5 w-1.5 rounded-full bg-[#486326]" />
-          <span>Non-Execution · Browser-Only</span>
+          <span>Non-Execution · Local Memory Only</span>
         </div>
       </div>
 
@@ -83,9 +83,9 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
         <div className="flex items-start gap-2.5">
           <span className="text-base leading-none select-none">🔒</span>
           <div>
-            <strong className="text-[#18211a]">Strictly Personal Reflection — No Order Will Ever Be Sent: </strong>
+            <strong className="text-[#18211a]">Strictly Private Discretionary Journal · Non-Execution Sandbox: </strong>
             <span>
-              This workspace is purely for your private discretionary thinking before making any choice. Precedent is an educational research tool. It does not connect to brokers or exchange accounts, cannot route orders, and keeps your notes in this browser tab only.
+              Precedent is an institutional intelligence workbench designed exclusively for pre-trade clarity. It does not interface with brokerage accounts or exchanges, cannot execute trades, and saves your notes exclusively to this local browser session. Crystallize your operational rules and risk parameters here before deploying capital.
             </span>
           </div>
         </div>
@@ -96,7 +96,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
         <div className="mb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-semibold text-[#303c32]">
-              Guided reflection prompts (pre-filled below):
+              ✦ Guided Deliberation Prompts (Select to append or review below):
             </p>
             <div className="flex items-center gap-2">
               <button
@@ -105,7 +105,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
                 className="rounded border border-[#141918]/15 bg-white/50 px-2.5 py-1 font-mono text-[11px] text-[#344236] transition hover:bg-white hover:text-[#18211a]"
                 title="Reset note back to default guided prompts"
               >
-                Reset prompts
+                ✦ Reset Prompts
               </button>
               <button
                 type="button"
@@ -113,7 +113,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
                 className="rounded border border-[#141918]/15 bg-white/50 px-2.5 py-1 font-mono text-[11px] text-[#7a3b3b] transition hover:bg-[#fae8e8] hover:text-[#5a2020]"
                 title="Clear all notes in the text area"
               >
-                Clear notes
+                ✕ Clear Canvas
               </button>
             </div>
           </div>
@@ -138,12 +138,12 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
           onChange={(event) => onDecisionNoteChange(event.target.value)}
           rows={8}
           className="w-full rounded-sm border border-[#141918]/20 bg-[#fbf8f2] p-3.5 sm:p-4 text-sm leading-relaxed text-[#141918] placeholder:text-[#78887a] outline-none transition focus:border-[#486326] focus:ring-1 focus:ring-[#486326]/40 font-sans"
-          placeholder="Write your personal reflections, plan boundaries, and answers to the prompts above..."
+          placeholder="Record your private thesis, sizing constraints, stop levels, and deliberative reflections here..."
         />
 
         {/* Footer info */}
         <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between font-mono text-[10px] text-[#5c6e5e]">
-          <span>Non-execution record: Stored locally in this browser tab only. No order will ever be sent.</span>
+          <span>✦ Discretionary Deliberation Record · Client-side only · Zero order routing</span>
           <span>{decisionNote.length} characters</span>
         </div>
       </div>

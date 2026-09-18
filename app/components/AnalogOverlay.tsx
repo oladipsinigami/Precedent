@@ -77,10 +77,10 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#141918]/10 pb-3">
         <div>
           <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#486326]">
-            Normalized Analog Paths · Trajectory Overlay
+            ✦ Normalized Historical Analog Paths · Empirical Trajectory Overlay
           </div>
           <div className="mt-0.5 text-xs text-[#637265]">
-            Rebased to 100.0 at matched state (T₀). Follow-through illustrates historical dispersion.
+            Rebased to 100.0 at trigger state (T₀). Trajectories depict actual historical post-setup paths.
           </div>
         </div>
 
@@ -279,7 +279,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
       </div>
 
       <div className="mt-3 text-[11px] leading-relaxed text-[#637265]">
-        The highlighted solid path represents the current target instrument. Thin muted trajectories display past analog precedents aligned at their matched market state. Divergence reflects empirical range rather than algorithmic projection.
+        ✦ Empirical Trajectory Context: The prominent solid green line traces the current asset. Muted trajectories trace matched historical analogs aligned at their respective trigger points. Path dispersion reflects empirical market range rather than a deterministic forecast.
       </div>
     </div>
   );

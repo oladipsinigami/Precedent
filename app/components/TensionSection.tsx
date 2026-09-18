@@ -11,10 +11,10 @@ export function TensionSection({ tension }: TensionSectionProps) {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <p className="max-w-2xl text-xs leading-relaxed text-[#59665a]">
-          These are the places where the information does not fully agree. That matters because mixed information can mean a less predictable result.
+          Cross-pillar divergences identify structural tensions where empirical streams contradict one another. Signal dispersion highlights where market uncertainty is highest and where risk parameters should be tightened.
         </p>
         <span className="hidden font-mono text-[10px] uppercase tracking-wider text-[#637265] sm:inline">
-          {tension.length} point{tension.length === 1 ? "" : "s"} to notice
+          {tension.length} active divergence{tension.length === 1 ? "" : "s"}
         </span>
       </div>
 
@@ -27,33 +27,33 @@ export function TensionSection({ tension }: TensionSectionProps) {
             <div>
               <div className="flex items-center justify-between border-b border-[#141918]/[0.08] pb-2.5">
                 <span className="font-mono text-[10px] font-bold uppercase tracking-[0.16em] text-[#486326]">
-                  Difference 0{index + 1}
+                  Divergence Vector 0{index + 1}
                 </span>
                 <span className="font-mono text-[9px] uppercase tracking-wider text-[#738275]">
-                  Two sides of the evidence
+                  Dual Signal Spectrum
                 </span>
               </div>
 
               <div className="mt-4 grid gap-3 text-xs leading-relaxed sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                 <div className="rounded border border-[#141918]/[0.06] bg-[#141918]/[0.02] p-3 text-[#1f2821]">
-                  <div className="font-mono text-[9px] uppercase text-[#738275] mb-1">One thing we saw</div>
+                  <div className="font-mono text-[9px] font-semibold uppercase text-[#738275] mb-1">Primary Observed Signal</div>
                   {item.left}
                 </div>
 
                 <div className="flex justify-center text-center font-mono text-[10px] font-bold uppercase text-[#738275]">
-                  <span className="rounded-full bg-[#141918]/[0.06] px-2 py-1">BUT</span>
+                  <span className="rounded-full bg-[#141918]/[0.06] px-2 py-1 tracking-wider text-[9px]">VS</span>
                 </div>
 
                 <div className="rounded border border-[#486326]/20 bg-[#486326]/[0.04] p-3 text-[#2a4515]">
-                  <div className="font-mono text-[9px] uppercase text-[#486326] mb-1">Another thing we saw</div>
-                  {item.right || "The available information points in a different direction."}
+                  <div className="font-mono text-[9px] font-semibold uppercase text-[#486326] mb-1">Countervailing Evidence</div>
+                  {item.right || "Countervailing data points toward a divergent market regime."}
                 </div>
               </div>
             </div>
 
             <div className="mt-4 border-t border-[#141918]/10 pt-3">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-[#526354]">
-                Why this matters:
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                ✦ Strategic Implication for Trader:
               </span>
               <p className="mt-1 text-xs leading-relaxed text-[#4b594d]">{item.whyItMatters}</p>
             </div>
