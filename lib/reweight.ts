@@ -33,16 +33,19 @@ export function reweightBriefing(
     briefing.considerations.invalidation[1] ?? "Monitor upcoming 8-K filings for thesis changes.",
   ];
 
-  const tokenMatch = briefing.title.match(/^([rR]?[A-Za-z0-9]+)\s*[—\-:]\s*/);
+  // Strip any prior "[Label]" suffix accumulated by earlier style switches,
+  // then rebuild the title deterministically — never stack suffixes.
+  const baseTitle = briefing.title.replace(/\s*\[[^\]]*\]\s*$/, "").trim();
+  const tokenMatch = baseTitle.match(/^([rR]?[A-Za-z0-9]+)\s*[—\-:]\s*/);
   const prefix = tokenMatch ? `${tokenMatch[1]} — ` : "";
   const newTitle = prefix
     ? `${prefix}${profile.label} stress test`
-    : briefing.title.includes("stress test")
-    ? briefing.title.replace(
+    : baseTitle.includes("stress test")
+    ? baseTitle.replace(
         /(Day trader|Swing trader|Event-driven \/ macro|Event-driven|Position trader|Position|Day|Swing)\s*(?:trader\s*)?stress test/i,
         `${profile.label} stress test`
       )
-    : `${briefing.title} [${profile.label}]`;
+    : `${baseTitle} [${profile.label}]`;
 
   const updatedWhatWeDid = newStyle === "day"
     ? "We compared the current chart with past charts that had a similar shape, focusing on the 1-session horizon into the next cash open. We specifically checked the 24-hour Bitget token price against the regular New York market close to assess overnight gap and basis risk. We also checked price trends and recent news."
@@ -77,7 +80,7 @@ export function reweightBriefing(
 
   return guardBriefing({
     ...briefing,
-    title: newTitle.includes(profile.label) ? newTitle : `${briefing.title} [${profile.label}]`,
+    title: newTitle.includes(profile.label) ? newTitle : `${baseTitle} [${profile.label}]`,
     whatWeDid: updatedWhatWeDid,
     historicalStressTest,
     styleNote: newStyleNote,

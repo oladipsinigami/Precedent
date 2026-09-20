@@ -20,6 +20,8 @@ export async function* runResearch(input: {
   symbol?: string;
 }): AsyncGenerator<ResearchEvent> {
   const requested = `${input.symbol ?? ""} ${input.question}`;
+  // Live Bitget discovery enriches or resolves the instrument. It runs whether
+  // or not the built-in universe matched, so newly listed rTokens work too.
   let name = findName(requested);
   try {
     const rToken = (await bitgetRTokenMarkets()).find((item) => {
@@ -37,7 +39,17 @@ export async function* runResearch(input: {
       if (contract) name = nameFromBitgetContract(contract);
     }
   } catch {
-    // Keep the built-in universe available when Bitget discovery is temporarily unavailable.
+    // Discovery unavailable; the built-in universe match (if any) still applies.
+  }
+  if (!name) {
+    // Refuse rather than silently research the wrong company.
+    yield {
+      type: "error",
+      message:
+        "Could not identify a supported rToken or underlying symbol in your question. Name a listed instrument (e.g. AAPL, NVDA, TSLA) or pick one from the instrument list.",
+    };
+    yield { type: "done" };
+    return;
   }
 
   // Regime runs ONCE per research run, before the pillars, and frames the memo.

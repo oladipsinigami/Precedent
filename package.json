@@ -6,11 +6,13 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "precompute": "tsx scripts/precompute-market-structure.ts"
+    "precompute": "tsx scripts/precompute-market-structure.ts",
+    "test": "tsx scripts/test-language-guard.ts"
   },
   "dependencies": {
     "next": "^15.5.2",
     "openai": "^4.104.0",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

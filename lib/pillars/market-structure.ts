@@ -90,7 +90,7 @@ export async function runMarketStructure(name: NameCard): Promise<MarketStructur
       marketModeStrength: store.marketModeStrength,
       cleanedCorrelations,
       infoBeyondNoisePct: store.infoBeyondNoisePct,
-      stability: `Snapshot from ${store.computedAt} across ${store.universeSize} assets and ${store.sharedBars} shared sessions; community assignment stability is tracked across rolling nightly runs.`,
+      stability: `Snapshot from ${store.computedAt} across ${store.universeSize} assets and ${store.sharedBars} shared sessions. Community assignment reflects this snapshot only; refresh with npm run precompute.`,
       universeSize: store.universeSize,
       computedAt: store.computedAt,
       caveats: [

@@ -348,8 +348,11 @@ export function ResearchMemo({
       </section>
 
       <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
-          ✦ Empirical Evidence & Cross-Pillar Signals
+        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
+          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M5 0L10 5L5 10L0 5Z" />
+          </svg>
+          Empirical Evidence & Cross-Pillar Signals
         </summary>
         <div className="border-t border-[#141918]/10">
           <MemoSection number="01" title="Verified Evidence & Source Attribution" badge="Primary Streams">
@@ -368,8 +371,11 @@ export function ResearchMemo({
       </details>
 
       <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
-          ✦ Historical Chart Precedents & Empirical Ranges
+        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
+          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M5 0L10 5L5 10L0 5Z" />
+          </svg>
+          Historical Chart Precedents & Empirical Ranges
         </summary>
         <MemoSection number="03" title="Historical Analogs & Trajectory Overlay" badge="Precedents">
         <div className="space-y-6">
@@ -435,8 +441,11 @@ export function ResearchMemo({
       </details>
 
       <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="cursor-pointer px-4 py-5 font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326] sm:px-10">
-          ✦ Diagnostic Scores, Invalidation Triggers & Plan Questions
+        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
+          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M5 0L10 5L5 10L0 5Z" />
+          </svg>
+          Diagnostic Scores, Invalidation Triggers & Plan Questions
         </summary>
         <MemoSection number="04" title="Quantitative Scoring & Plan Boundaries" shaded badge="Governance">
           <ConsiderationsSection

@@ -64,22 +64,49 @@ export function IntakeView({
       )}
 
       {/* Hero Headline Area */}
-      <div className="mb-8 text-center sm:mb-12">
+      <div className="relative mb-10 text-center sm:mb-14">
+        {/* Geometric corner ticks framing the hero */}
+        <svg aria-hidden="true" className="pointer-events-none absolute -left-1 -top-2 hidden h-6 w-6 text-[#d4ff3f]/40 sm:block" viewBox="0 0 24 24" fill="none">
+          <path d="M2 22V2h20" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+        <svg aria-hidden="true" className="pointer-events-none absolute -right-1 -top-2 hidden h-6 w-6 text-[#d4ff3f]/40 sm:block" viewBox="0 0 24 24" fill="none">
+          <path d="M22 22V2H2" stroke="currentColor" strokeWidth="1.5" />
+        </svg>
+
         <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#d4ff3f]/25 bg-[#d4ff3f]/[0.04] px-3.5 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.16em] text-[#d4ff3f] backdrop-blur-md sm:text-[11px] sm:tracking-[0.22em] shadow-[0_0_16px_rgba(212,255,63,0.08)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[#d4ff3f] shrink-0 shadow-[0_0_8px_#d4ff3f]" />
           <span className="truncate">✦ Institutional Research Workbench · Bitget rTokens</span>
         </div>
 
-        <h1 className="mt-5 font-display text-3xl sm:text-5xl md:text-6xl font-normal leading-[1.12] tracking-[-0.03em] text-white">
-          Turn market curiosity into clarity. <br className="hidden sm:inline" />
-          <span className="bg-gradient-to-r from-[#e7ebef] via-[#d4ff3f]/90 to-[#a3d924] bg-clip-text text-transparent font-medium">
+        {/* Line — diamond — line rule guiding the eye down to the headline */}
+        <div className="mt-7 flex items-center justify-center gap-3" aria-hidden="true">
+          <span className="h-px w-14 sm:w-20 bg-gradient-to-r from-transparent to-[#d4ff3f]/50" />
+          <svg className="h-2.5 w-2.5 text-[#d4ff3f]" viewBox="0 0 10 10" fill="currentColor">
+            <path d="M5 0L10 5L5 10L0 5Z" />
+          </svg>
+          <span className="h-px w-14 sm:w-20 bg-gradient-to-l from-transparent to-[#d4ff3f]/50" />
+        </div>
+
+        <h1 className="mt-6 font-display tracking-[-0.03em]">
+          <span className="block text-lg italic font-normal leading-snug text-[#7d8d9b] sm:text-2xl">
+            Turn market curiosity into clarity.
+          </span>
+          <span className="mt-3 block bg-gradient-to-r from-white via-[#d4ff3f] to-[#a3d924] bg-clip-text text-4xl font-semibold leading-[1.06] text-transparent sm:text-6xl md:text-7xl">
             Craft your institutional research memo.
           </span>
         </h1>
 
-        <p className="mx-auto mt-4 max-w-2xl text-xs sm:text-sm md:text-[15px] leading-relaxed text-[#8a9aa8]">
+        <p className="mx-auto mt-5 max-w-2xl text-xs sm:text-sm md:text-[15px] leading-relaxed text-[#8a9aa8]">
           Harmonize corporate fundamentals, live 24/7 venue order flow, social discourse, and 10-year historical precedents into one beautifully structured memo — keeping your judgment sovereign.
         </p>
+
+        {/* Subtle downward cue into the intake form */}
+        <div className="mt-9 flex flex-col items-center gap-1.5" aria-hidden="true">
+          <span className="h-8 w-px bg-gradient-to-b from-[#d4ff3f]/50 to-transparent" />
+          <svg className="h-2 w-2 rotate-45 text-[#d4ff3f]/80" viewBox="0 0 10 10" fill="currentColor">
+            <rect width="10" height="10" />
+          </svg>
+        </div>
       </div>
 
       {/* Main Intake Form */}

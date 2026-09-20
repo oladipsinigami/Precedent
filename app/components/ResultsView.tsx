@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ResearchMemo } from "./ResearchMemo";
 import { PipelineSummary } from "./PipelineSidebar";
 import { STYLES } from "@/lib/style-profiles";
@@ -32,6 +33,28 @@ export function ResultsView({
   meta,
   statuses,
 }: ResultsViewProps) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      // Lazy-import so pptxgenjs is only loaded when the trader asks for it.
+      const { downloadBriefingPptx } = await import("@/lib/export-pptx");
+      await downloadBriefingPptx({
+        briefing,
+        style,
+        symbol: meta?.native ?? symbol,
+        regime: meta?.regime ?? briefing.regime,
+        decisionNote,
+      });
+    } catch (err) {
+      console.error("[PPTX] export failed:", err);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-[1360px] py-4 sm:py-10">
       {/* Top Action & Navigation Strip */}
@@ -68,8 +91,36 @@ export function ResultsView({
           </div>
         </div>
 
-        {/* Right: Small Expandable Pipeline Summary */}
-        <PipelineSummary statuses={statuses} pillarData={pillarData} />
+        {/* Right: Download + Pipeline Summary */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={downloading}
+            className="group flex min-h-[44px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2.5 rounded-sm border border-[#d4ff3f]/60 bg-[#d4ff3f]/[0.08] px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#d4ff3f] transition hover:bg-[#d4ff3f] hover:text-[#080b0e] hover:shadow-[0_0_20px_rgba(212,255,63,0.35)] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+            title="Download this research memo as a PowerPoint (.pptx)"
+          >
+            {downloading ? (
+              <>
+                <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span>Building Deck…</span>
+              </>
+            ) : (
+              <>
+                <svg aria-hidden="true" className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3v12" />
+                  <path d="M7 10l5 5 5-5" />
+                  <path d="M4 21h16" />
+                </svg>
+                <span>Download Memo · .pptx</span>
+              </>
+            )}
+          </button>
+          <PipelineSummary statuses={statuses} pillarData={pillarData} />
+        </div>
       </div>
 
 

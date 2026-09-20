@@ -119,14 +119,26 @@ export const UNIVERSE: NameCard[] = [
   },
 ];
 
-export function findName(query: string): NameCard {
-  const q = query.toLowerCase();
-  const hit = UNIVERSE.find((n) => {
-    if (q.includes(n.native.toLowerCase())) return true;
-    if (q.includes(n.rToken.toLowerCase())) return true;
-    return n.aliases.some((a) => q.includes(a));
+function hasWord(haystack: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(haystack);
+}
+
+// Word-boundary matching only: "AMD" must not match "amDurable", "COIN" must
+// not match "bitcoin". Returns undefined when no instrument is named so the
+// caller can refuse rather than silently researching the wrong company.
+export function findName(query: string): NameCard | undefined {
+  return UNIVERSE.find((n) => {
+    if (hasWord(query, n.native)) return true;
+    if (hasWord(query, n.rToken)) return true;
+    return n.aliases.some((a) => hasWord(query, a));
   });
-  return hit ?? UNIVERSE[0];
+}
+
+// Legacy total-function wrapper: use only in last-resort fallback paths that
+// must always produce a NameCard. Prefer findName and handle undefined.
+export function findNameOrDefault(query: string): NameCard {
+  return findName(query) ?? UNIVERSE[0];
 }
 
 export function nameFromBitgetContract(contract: { symbol: string; baseCoin: string }): NameCard {

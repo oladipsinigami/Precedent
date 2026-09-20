@@ -7,8 +7,14 @@ const FINAL_RECOMMENDATION =
   /\b(?:final\s+|overall\s+|desk\s+|our\s+)?(?:recommendation|verdict|rating|call|action|stance|conclusion)\s*(?:is\s+to\s+|is\s+|:\s*|\s*—\s*|\s*–\s*)(?:to\s+)?(?:strong\s+)?(?:buy|sell|long|short)\b/gi;
 const VERDICT_LINE =
   /\b(?:i\s+recommend|we\s+recommend|you\s+should(?:\s+(?:enter(?:\s+here|\s+now|\s+at\s+[^,.;\n]+)?|buy|sell|short|go\s+long|go\s+short|exit|take\s+profits?|trade))?|(?:strong\s+)?(?:buy|sell)\s+signal|strong\s+(?:buy|sell)|this\s+is\s+a\s+(?:buy|sell)|open\s+a\s+(?:long|short)(?:\s+position)?|take\s+a\s+(?:long|short)(?:\s+position)?|go\s+(?:long|short)|enter\s+(?:here|now|at\s+[^,.;\n]+|(?:a\s+)?position))\b/gi;
+// "bullish/bearish sentiment" is allowed ONLY when explicitly attributed to
+// reported discourse (e.g. "X sentiment was bearish") — that is the news
+// pillar describing its data, not the desk taking a stance. The SENTIMENT_ATTR
+// pattern below detects un-attributed uses; banSoftDirectional rewrites those.
 const SOFT_DIRECTIONAL =
   /\b(upside bias|downside bias|favors higher prices|favors lower prices|constructive setup|cautious setup|lean(?:s|ing)? long|lean(?:s|ing)? short|lean(?:s|ing)? constructive|lean(?:s|ing)? cautious|history is supportive|history is unsupportive|supportive history|bullish setup|bearish setup|positive price bias|negative price bias|upside possible|downside possible|expect a pullback|bullish case|bearish case|upside case|downside case|further upside|further downside|room for upside|room for downside|tempts? traders|expect the same direction|moderate upside|moderate downside|tilted to the upside|tilted to the downside|on the upside|on the downside|struggles to go higher|may need a pause|tailwinds?|headwinds?|slight edge|small edge|modest edge|marginal edge|favoring patience|overnight speculation|news sentiment|bullish sentiment|bearish sentiment|remain(?:s|ed|ing)? constructive|remain(?:s|ed|ing)? cautious|is constructive|looks constructive|appears constructive|constructive (?:tone|stance|view|outlook|lean|bias|posture)|cautious (?:tone|stance|view|outlook|lean|bias|posture)|poised (?:to|for)|room to run)\b/gi;
+const SENTIMENT_ATTR =
+  /(?:headline|news|x|twitter|social|reddit|retail|discourse|media|press|aggregate|reported|coverage)[^.\n]{0,40}\b(?:bullish|bearish) sentiment\b|\b(?:bullish|bearish) sentiment\b[^.\n]{0,40}(?:in|across|among|from|on)\s+(?:headlines|news|x|twitter|social|reddit|retail|discourse|media|coverage|posts)/i;
 
 let lastRewriteCount = 0;
 let lastRewriteOccurred = false;
@@ -157,6 +163,29 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
 }
 
 function banSoftDirectional(text: string): string {
+  // Protect discourse-attributed sentiment reports ("aggregate X sentiment was
+  // bearish across posts") before the blanket "(bullish|bearish) sentiment"
+  // rewrite below — the news pillar is describing its data, not taking a side.
+  const PLACEHOLDER_BULL = "PRECDISCOURSESENTBULL";
+  const PLACEHOLDER_BEAR = "PRECDISCOURSESENTBEAR";
+  let protectedText = "";
+  let working = text;
+  if (SENTIMENT_ATTR.test(text)) {
+    working = text.replace(/\bbullish sentiment\b/gi, (m) => {
+      protectedText += m + "";
+      return PLACEHOLDER_BULL;
+    });
+    working = working.replace(/\bbearish sentiment\b/gi, (m) => {
+      protectedText += m;
+      return PLACEHOLDER_BEAR;
+    });
+  }
+  return finishBanSoftDirectional(working)
+    .replace(new RegExp(PLACEHOLDER_BULL, "g"), "bullish sentiment")
+    .replace(new RegExp(PLACEHOLDER_BEAR, "g"), "bearish sentiment");
+}
+
+function finishBanSoftDirectional(text: string): string {
   return text
     .replace(/\b(a\s+)?(slight|small|modest|marginal)\s+edge\s+to\s+(the\s+)?(upward|downward)(\s+movement)?\b/gi, "a split historical distribution")
     .replace(/\b(a\s+)?(slight|small|modest|marginal)\s+edge\s+(to|toward|for)\s+(the\s+)?(upside|downside|higher|lower)\b/gi, "a split historical distribution")
@@ -487,6 +516,7 @@ export const LANGUAGE_GUARD_EDGE_CASES = [
   { label: "Tape and filings disagree", text: "The tape and the filings currently disagree", isProhibited: false },
   { label: "Questions only you can answer", text: "Questions only you can answer", isProhibited: false },
   { label: "Mandatory disclaimer", text: "Historical results are past occurrences only, not predictions.", isProhibited: false },
+  { label: "Attributed discourse sentiment", text: "Aggregate X discourse sentiment was bearish across 18 posts this run.", isProhibited: false },
 ] as const;
 
 export function runLanguageGuardSelfTest(): {

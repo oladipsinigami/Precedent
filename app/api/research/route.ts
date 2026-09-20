@@ -1,7 +1,7 @@
 import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { runResearch } from "@/lib/pipeline";
 import type { TradingStyle } from "@/lib/types";
-import { findName } from "@/lib/universe";
+import { findName, findNameOrDefault } from "@/lib/universe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,7 +9,49 @@ export const maxDuration = 60;
 
 const STYLES: TradingStyle[] = ["day", "swing", "event", "position"];
 
+// Minimal abuse controls: optional shared-secret header plus a fixed-window
+// per-IP request cap. The secret is only enforced when RESEARCH_API_KEY is
+// configured; the rate cap is always on. Both are best-effort on serverless
+// (per-instance state) but stop casual quota-draining of upstream free tiers.
+const RATE_LIMIT = 10;
+const RATE_WINDOW_MS = 60_000;
+const hits = new Map<string, { count: number; resetAt: number }>();
+
+function clientIp(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-for");
+  if (fwd) return fwd.split(",")[0].trim();
+  return req.headers.get("x-real-ip") ?? "unknown";
+}
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = hits.get(ip);
+  if (!entry || entry.resetAt <= now) {
+    hits.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  if (hits.size > 5_000) {
+    for (const [key, value] of hits) {
+      if (value.resetAt <= now) hits.delete(key);
+    }
+  }
+  return entry.count > RATE_LIMIT;
+}
+
 export async function POST(req: Request) {
+  const requiredKey = process.env.RESEARCH_API_KEY?.trim();
+  if (requiredKey && req.headers.get("x-research-key") !== requiredKey) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const ip = clientIp(req);
+  if (rateLimited(ip)) {
+    return Response.json(
+      { error: "Too many research requests. Please wait a minute and try again." },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -60,7 +102,7 @@ export async function POST(req: Request) {
       } catch (err) {
         if (!hasSentBriefing) {
           try {
-            const fallbackName = findName(`${symbol ?? ""} ${question}`);
+            const fallbackName = findNameOrDefault(`${symbol ?? ""} ${question}`);
             const emptyPillars = {
               fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
               technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },

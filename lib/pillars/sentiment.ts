@@ -5,12 +5,23 @@ import { yahooNews } from "../providers/yahoo";
 import { serperNews } from "../providers/serper";
 import { alphaVantageNews } from "../providers/alpha-vantage";
 import { adanosSocialSummary } from "../providers/adanos";
+import { bitgetSignalNews } from "../providers/bitget-signals";
 import type { Lean, NewsPillar } from "../types";
 import type { NameCard } from "../universe";
 
+// Bitget's MCP signal tools stream slowly (~15–25s). We give the call a firm
+// budget inside the pillar's parallel fetch window so it enriches the memo
+// when it lands and degrades silently when it doesn't.
+const BITGET_SIGNAL_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, fallback: T, ms: number): Promise<T> {
+  return Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
+}
+
 export async function runNews(name: NameCard): Promise<NewsPillar> {
   try {
-    const [yf, rss, gNews, serper, av, macro, xResult, adanos] = await Promise.all([
+    const kw = `${name.name} OR ${name.native} OR stock`;
+    const [yf, rss, gNews, serper, av, macro, xResult, adanos, bitgetSignal] = await Promise.all([
       yahooNews(name.native).catch(() => []),
       yahooRss(name.native).catch(() => []),
       googleNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
@@ -19,10 +30,15 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       googleNews("Federal Reserve OR CPI OR tariffs US stocks").catch(() => []),
       fetchXSentiment({ native: name.native, name: name.name, rToken: name.rToken, bitgetSymbols: name.bitgetSymbols }),
       adanosSocialSummary(name.native).catch(() => null),
+      withTimeout(
+        bitgetSignalNews(kw).catch(() => []),
+        [],
+        BITGET_SIGNAL_TIMEOUT_MS,
+      ),
     ]);
 
     const seen = new Set<string>();
-    const merged = [...av, ...serper, ...yf, ...rss, ...gNews].filter((h) => {
+    const merged = [...bitgetSignal, ...av, ...serper, ...yf, ...rss, ...gNews].filter((h) => {
       const key = h.title.toLowerCase().slice(0, 80);
       if (seen.has(key)) return false;
       seen.add(key);
@@ -37,6 +53,9 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
 
     const caveats: string[] = [];
     if (xResult.caveat) caveats.push(xResult.caveat);
+    if (bitgetSignal.length === 0) {
+      caveats.push("Bitget Signal news stream (44-source aggregate via official MCP data service) returned no matching items this run.");
+    }
     if (!process.env.ALPHAVANTAGE_API_KEY) {
       caveats.push("Alpha Vantage News/Sentiment unavailable: ALPHAVANTAGE_API_KEY is not configured.");
     } else if (!av.length) {
@@ -128,6 +147,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       caveats,
       notes,
       sources: [
+        { label: "Bitget Signal news-briefing stream (official public MCP data service, 44 sources)" },
         ...(adanos && adanos.found
           ? [{ label: "Adanos social sentiment & BuzzScore (Reddit + X)", url: "https://adanos.org" }]
           : []),

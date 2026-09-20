@@ -90,8 +90,11 @@ export async function bitgetTape(name: NameCard): Promise<Tick | undefined> {
         const last = Number(row?.lastPr);
         if (!Number.isFinite(last)) throw new Error("no last price");
         const rawChange = Number(row?.change24h ?? 0);
+        // Bitget returns change24h as a decimal fraction (0.0234 = +2.34%).
+        // Only rescale when the magnitude clearly indicates fraction form;
+        // a genuine ±1% move encoded as "1" is left alone rather than inflated 100×.
         const changePct = Number.isFinite(rawChange)
-          ? (Math.abs(rawChange) <= 1 ? rawChange * 100 : rawChange)
+          ? (Math.abs(rawChange) < 1 ? rawChange * 100 : rawChange)
           : 0;
         return {
           last,

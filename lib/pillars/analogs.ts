@@ -375,6 +375,7 @@ export async function runAnalogs(
       );
 
       const closest = sameTickerAnalogs.slice(0, 5);
+      const MAX_OVERLAY_GAP_MS = 1000 * 60 * 60 * 24 * 6; // same guard as nearestBar
       for (const analog of closest) {
         const target = Date.parse(`${analog.date}T20:00:00Z`);
         let idx = 0;
@@ -386,6 +387,9 @@ export async function runAnalogs(
             idx = i;
           }
         });
+        // Skip analogs whose date has no genuinely nearby bar rather than
+        // snapping the overlay to a distant edge bar and mislabeling it.
+        if (best > MAX_OVERLAY_GAP_MS) continue;
         overlay.push(
           overlayFromBars(
             `${analog.ticker}-${analog.date}`,

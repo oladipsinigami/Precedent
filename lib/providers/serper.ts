@@ -10,7 +10,7 @@ type SerperResponse = {
 };
 
 export async function serperNews(query: string, opts: { num?: number } = {}): Promise<Headline[]> {
-  const apiKey = process.env.SERPER_API_KEY;
+  const apiKey = process.env.SERPER_API_KEY ?? process.env.SERPAPI_API_KEY;
   if (!apiKey) return [];
 
   const controller = new AbortController();
