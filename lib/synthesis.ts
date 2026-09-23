@@ -87,7 +87,7 @@ function providers() {
     available.push({
       label: "xai/grok-4.5",
       model: "grok-4.5",
-      client: new OpenAI({ apiKey: process.env.XAI_API_KEY.trim(), baseURL: "https://api.x.ai/v1" }),
+      client: new OpenAI({ apiKey: process.env.XAI_API_KEY.trim(), baseURL: "https://api.x.ai/v1", maxRetries: 0 }),
     });
   }
 
