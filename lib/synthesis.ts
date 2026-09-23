@@ -264,24 +264,10 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
     }
 
     const cleanSummary = cleanHistoricalSummary(stress?.summary) || fallback.historicalStressTest.summary;
-    const normalizedResults = fallback.historicalStressTest.results.map((fallbackItem) => {
-      const parsedItem = stress?.results?.find(
-        (r) => r.period === fallbackItem.period || (fallbackItem.period === "Next 1 trading day" && r.period === "Next day"),
-      );
-      if (!parsedItem) return fallbackItem;
-      const hasWentUp = /went\s+up\s+\d+\s+times\s+out\s+of\s+\d+/i.test(parsedItem.wentUp);
-      const hasTypical = /usually\s+between/i.test(parsedItem.typicalMove);
-      const cleanWentUp = hasWentUp ? parsedItem.wentUp.replace(/^went up/i, "Went up") : fallbackItem.wentUp;
-      const cleanTypicalMove = hasTypical
-        ? (parsedItem.typicalMove.startsWith("Typical move: ") ? parsedItem.typicalMove : `Typical move: ${parsedItem.typicalMove.replace(/^typical move:\s*/i, "")}`)
-        : fallbackItem.typicalMove;
-      return {
-        period: fallbackItem.period,
-        wentUp: cleanWentUp,
-        typicalMove: cleanTypicalMove,
-        median: parsedItem.median || fallbackItem.median,
-      };
-    });
+    // Per-horizon results ("went up X times out of Y", typical range, median) always
+    // come from the computed analog statistics. The model may write prose around
+    // them, but it never supplies the numbers shown to the trader.
+    const normalizedResults = fallback.historicalStressTest.results;
 
     const isDegradedSample = fallback.historicalStressTest.sampleSize === 0;
 
