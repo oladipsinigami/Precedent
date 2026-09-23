@@ -203,7 +203,7 @@ ${stressResultsSummary}
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
-    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, 42_000);
+    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, opts.timeoutMs ?? 42_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
