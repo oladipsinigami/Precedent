@@ -149,6 +149,8 @@ export async function synthesize(opts: {
   name: NameCard;
   regime: Regime;
   pillars: PillarBundle;
+  // Total time allowed for the LLM waterfall; the pipeline derives it from the request deadline.
+  timeoutMs?: number;
 }): Promise<Briefing> {
   let flags: Briefing["flags"];
   try {
