@@ -199,8 +199,8 @@ Retrieved Key Data:
 ${stressResultsSummary}
   * Past Examples: ${stressExamplesSummary || (stress.sampleSize > 0 ? "AAPL past occurrences" : "None (historical data unavailable)")}
 - Technicals: Cash price $${tech?.native?.last ?? "N/A"}, rToken $${tech?.rToken?.last ?? "N/A"} (basis: ${tech?.rTokenGap ?? "tight"}). Trend ${tech?.trend ?? "steady"}, RSI ${tech?.indicators?.rsi14 ?? 50}. Support: ${(tech?.levels?.support ?? []).slice(0, 2).join(", ") || "support zone"}, Resistance: ${(tech?.levels?.resistance ?? []).slice(0, 2).join(", ") || "resistance zone"}.
-- Fundamentals: ${fund?.company ? String(fund.company).slice(0, 100) : "Stable financials"}. Catalysts: ${(fund?.catalysts ?? []).slice(0, 2).join("; ") || "regular operations"}.
-- News & Macro: ${(news?.headlines ?? []).slice(0, 2).map((h) => h.title).join("; ") || "Neutral macro flow"}.
+- Fundamentals: ${untrusted([fund?.company], { maxItems: 1, maxLength: 100, fallback: "Stable financials" })}. Catalysts: ${untrusted((fund?.catalysts ?? []).slice(0, 2), { maxItems: 2, fallback: "regular operations" })}.
+- News & Macro: ${untrusted((news?.headlines ?? []).slice(0, 2).map((h) => h.title), { maxItems: 2, fallback: "Neutral macro flow" })}.
 
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
