@@ -99,6 +99,7 @@ function providers() {
       client: new OpenAI({
         apiKey: process.env.BITGET_QWEN_API_KEY.trim(),
         baseURL: "https://hackathon.bitgetops.com/v1",
+        maxRetries: 0,
       }),
     });
   }
