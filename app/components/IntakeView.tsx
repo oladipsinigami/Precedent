@@ -22,6 +22,8 @@ interface IntakeViewProps {
   onViewPreviousResults: () => void;
   stage?: "idle" | "pillars" | "synthesis" | "complete";
   pillarMessages?: Record<string, string>;
+  onLoadDemo?: () => void;
+  onFillDemo?: () => void;
 }
 
 export function IntakeView({
@@ -41,6 +43,8 @@ export function IntakeView({
   onViewPreviousResults,
   stage = "idle",
   pillarMessages = {},
+  onLoadDemo,
+  onFillDemo,
 }: IntakeViewProps) {
 
   return (
@@ -100,8 +104,30 @@ export function IntakeView({
           Harmonize corporate fundamentals, live 24/7 venue order flow, social discourse, and 10-year historical precedents into one beautifully structured memo — keeping your judgment sovereign.
         </p>
 
+        {/* Prominent One-Click Recommended Demo Walkthrough */}
+        {onLoadDemo && (
+          <div className="mt-7 flex flex-col items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={onLoadDemo}
+              disabled={busy}
+              className="group inline-flex min-h-[44px] items-center gap-3 rounded-sm border border-[#d4ff3f]/70 bg-[#d4ff3f]/15 px-6 py-2.5 font-mono text-xs font-bold uppercase tracking-[0.16em] text-[#d4ff3f] shadow-[0_0_24px_rgba(212,255,63,0.25)] backdrop-blur-md transition-all hover:bg-[#d4ff3f] hover:text-[#080b0e] hover:shadow-[0_0_36px_rgba(212,255,63,0.5)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#d4ff3f] opacity-75 group-hover:bg-[#080b0e]" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#d4ff3f] group-hover:bg-[#080b0e]" />
+              </span>
+              <span>⚡ Load recommended demo (AAPL Swing Setup)</span>
+              <span className="transition-transform duration-200 group-hover:translate-x-1">→</span>
+            </button>
+            <span className="font-mono text-[10px] text-[#718292]">
+              Instant deterministic walkthrough · 5 evidence streams · Evaluated in &lt;8s
+            </span>
+          </div>
+        )}
+
         {/* Subtle downward cue into the intake form */}
-        <div className="mt-9 flex flex-col items-center gap-1.5" aria-hidden="true">
+        <div className="mt-8 flex flex-col items-center gap-1.5" aria-hidden="true">
           <span className="h-8 w-px bg-gradient-to-b from-[#d4ff3f]/50 to-transparent" />
           <svg className="h-2 w-2 rotate-45 text-[#d4ff3f]/80" viewBox="0 0 10 10" fill="currentColor">
             <rect width="10" height="10" />
@@ -122,6 +148,8 @@ export function IntakeView({
           onQuestionChange={onQuestionChange}
           busy={busy}
           onSubmit={onSubmit}
+          onLoadDemo={onLoadDemo}
+          onFillDemo={onFillDemo}
         />
 
         {/* Compact Vertical Checklist of the Four Pillars */}

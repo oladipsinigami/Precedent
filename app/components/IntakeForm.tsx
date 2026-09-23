@@ -18,6 +18,8 @@ interface IntakeFormProps {
   onQuestionChange: (question: string) => void;
   busy: boolean;
   onSubmit: (event?: FormEvent) => void;
+  onLoadDemo?: () => void;
+  onFillDemo?: () => void;
 }
 
 export function IntakeForm({
@@ -31,7 +33,13 @@ export function IntakeForm({
   onQuestionChange,
   busy,
   onSubmit,
+  onLoadDemo,
+  onFillDemo,
 }: IntakeFormProps) {
+  const isDemoMatched =
+    symbol === "AAPL" &&
+    style === "swing" &&
+    question.trim().toLowerCase().includes("stress-test the current aapl rtoken setup");
   const PRESET_PROMPTS = [
     "How wide is the overnight rToken basis spread vs the New York cash close?",
     "Where does the 10-year historical chart pattern clash with the current market regime?",
@@ -178,6 +186,21 @@ export function IntakeForm({
           {/* Quick prompt suggestions */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="font-mono text-[10px] uppercase text-[#617180]">Suggested Angles:</span>
+            {(onFillDemo || onLoadDemo) && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onFillDemo ?? onLoadDemo}
+                className={`rounded border px-2.5 py-1.5 text-[11px] font-mono font-bold transition flex items-center gap-1.5 ${
+                  isDemoMatched
+                    ? "border-[#d4ff3f] bg-[#d4ff3f]/20 text-[#d4ff3f] shadow-[0_0_12px_rgba(212,255,63,0.3)]"
+                    : "border-[#d4ff3f]/60 bg-[#d4ff3f]/10 text-[#d4ff3f] hover:bg-[#d4ff3f] hover:text-[#080b0e]"
+                }`}
+                title="Populate form with the recommended AAPL 7×24 Swing Setup question"
+              >
+                <span>⚡ {isDemoMatched ? "Recommended Demo Active (AAPL Swing)" : "Fill Recommended Demo (AAPL Swing)"}</span>
+              </button>
+            )}
             {PRESET_PROMPTS.map((prompt, i) => (
               <button
                 key={i}
@@ -201,7 +224,11 @@ export function IntakeForm({
           <button
             type="submit"
             disabled={busy || question.trim().length < 8}
-            className="group relative flex w-full sm:w-auto items-center justify-center gap-3 overflow-hidden rounded-sm bg-[#d4ff3f] px-6 py-3.5 sm:py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#080b0e] transition-all hover:bg-white hover:shadow-[0_0_24px_rgba(212,255,63,0.4)] disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px]"
+            className={`group relative flex w-full sm:w-auto items-center justify-center gap-3 overflow-hidden rounded-sm px-6 py-3.5 sm:py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] transition-all disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px] ${
+              isDemoMatched && !busy
+                ? "bg-[#d4ff3f] text-[#080b0e] shadow-[0_0_30px_rgba(212,255,63,0.55)] ring-2 ring-[#d4ff3f] hover:bg-white"
+                : "bg-[#d4ff3f] text-[#080b0e] hover:bg-white hover:shadow-[0_0_24px_rgba(212,255,63,0.4)]"
+            }`}
           >
             {busy ? (
               <>

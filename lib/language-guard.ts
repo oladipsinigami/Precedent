@@ -12,7 +12,7 @@ const VERDICT_LINE =
 // pillar describing its data, not the desk taking a stance. The SENTIMENT_ATTR
 // pattern below detects un-attributed uses; banSoftDirectional rewrites those.
 const SOFT_DIRECTIONAL =
-  /\b(upside bias|downside bias|favors higher prices|favors lower prices|constructive setup|cautious setup|lean(?:s|ing)? long|lean(?:s|ing)? short|lean(?:s|ing)? constructive|lean(?:s|ing)? cautious|history is supportive|history is unsupportive|supportive history|bullish setup|bearish setup|positive price bias|negative price bias|upside possible|downside possible|expect a pullback|bullish case|bearish case|upside case|downside case|further upside|further downside|room for upside|room for downside|tempts? traders|expect the same direction|moderate upside|moderate downside|tilted to the upside|tilted to the downside|on the upside|on the downside|struggles to go higher|may need a pause|tailwinds?|headwinds?|slight edge|small edge|modest edge|marginal edge|favoring patience|overnight speculation|news sentiment|bullish sentiment|bearish sentiment|remain(?:s|ed|ing)? constructive|remain(?:s|ed|ing)? cautious|is constructive|looks constructive|appears constructive|constructive (?:tone|stance|view|outlook|lean|bias|posture)|cautious (?:tone|stance|view|outlook|lean|bias|posture)|poised (?:to|for)|room to run)\b/gi;
+  /\b(upside bias|downside bias|favors higher prices|favors lower prices|constructive setup|cautious setup|lean(?:s|ing)? long|lean(?:s|ing)? short|lean(?:s|ing)? constructive|lean(?:s|ing)? cautious|history is supportive|history is unsupportive|supportive history|bullish setup|bearish setup|positive price bias|negative price bias|upside possible|downside possible|expect a pullback|bullish case|bearish case|upside case|downside case|further upside|further downside|room for upside|room for downside|tempts? traders|expect the same direction|moderate upside|moderate downside|tilted to the upside|tilted to the downside|on the upside|on the downside|struggles to go higher|may need a pause|tailwinds?|headwinds?|slight edge|small edge|modest edge|marginal edge|favoring patience|overnight speculation|news sentiment|bullish sentiment|bearish sentiment|remain(?:s|ed|ing)? constructive|remain(?:s|ed|ing)? cautious|is constructive|looks constructive|appears constructive|constructive (?:tone|stance|view|outlook|lean|bias|posture)|cautious (?:tone|stance|view|outlook|lean|bias|posture)|setup\s+(?:remains?|stays?|looks?)\s+favou?rable|(?:an?\s+)?edge\s+exists|bias\s+(?:is\s+|remains?\s+)?tilted|history\s+favou?rs|poised (?:to|for)|room to run)\b/gi;
 const SENTIMENT_ATTR =
   /(?:headline|news|x|twitter|social|reddit|retail|discourse|media|press|aggregate|reported|coverage)[^.\n]{0,40}\b(?:bullish|bearish) sentiment\b|\b(?:bullish|bearish) sentiment\b[^.\n]{0,40}(?:in|across|among|from|on)\s+(?:headlines|news|x|twitter|social|reddit|retail|discourse|media|coverage|posts)/i;
 
@@ -238,6 +238,13 @@ function finishBanSoftDirectional(text: string): string {
     .replace(/\btilted\s+to\s+the\s+(upside|downside)\b/gi, "mixed across the sample")
     .replace(/\bstruggles\s+to\s+go\s+higher\b/gi, "is trading near recent levels")
     .replace(/\bmay\s+need\s+a\s+pause\b/gi, "has recorded recent gains")
+    .replace(/\b(?:the\s+)?setup\s+(?:remains?|stays?|looks?)\s+favou?rable\b/gi, "current chart pattern is mixed")
+    .replace(/\bhistory\s+favou?rs\s+(?:continuation|follow[- ]?through)\b/gi, "past outcomes were split")
+    .replace(/\bhistory\s+favou?rs\b/gi, "history is mixed")
+    .replace(/\bbias\s+(?:is\s+|remains?\s+)?tilted\b/gi, "historical distribution is mixed")
+    .replace(/\b(?:an?\s+)?edge\s+exists\b/gi, "outcomes were mixed across the sample")
+    .replace(/\b(?:is|seems|looks|appears)\s+poised\s+for\s+further\s+(?:gains|upside)\b/gi, "has already recorded a strong recent move")
+    .replace(/\bpoised\s+for\s+further\s+(?:gains|upside)\b/gi, "extended after a strong recent move")
     .replace(/\bpoised\s+(to|for)\b/gi, "positioned around")
     .replace(/\broom\s+to\s+run\b/gi, "historical price spread")
     .replace(/\b(moderate\s+)?upside\b/gi, "upward movement")

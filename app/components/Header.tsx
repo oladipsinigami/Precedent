@@ -46,10 +46,10 @@ export function Header({ onLoadDemo }: HeaderProps) {
           <button
             type="button"
             onClick={onLoadDemo}
-            className="group flex min-h-[44px] items-center gap-1.5 px-1 sm:px-0 text-xs font-semibold text-[#d4ff3f] transition hover:text-white"
-            title="Load NVDA Post-Earnings Drift Demo Case"
+            className="group flex min-h-[44px] items-center gap-1.5 rounded-md bg-[#d4ff3f] px-3 text-xs font-bold text-[#080a0d] shadow-[0_0_18px_rgba(212,255,63,0.35)] transition hover:bg-white"
+            title="Load and run the recommended demo walkthrough (AAPL swing stress-test)"
           >
-            <span>Explore Live Demo</span>
+            <span>Load recommended demo</span>
             <span className="transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
               ↗
             </span>

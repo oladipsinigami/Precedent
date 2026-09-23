@@ -223,6 +223,17 @@ export function ResearchMemo({
           <p className="mt-3 text-sm leading-relaxed text-[#232b25]">
             {briefing.historicalStressTest.summary}
           </p>
+
+          {/* Normalized SVG Trajectory Chart — visual centerpiece of the stress test */}
+          {(pillarData?.analogs?.overlay?.length ?? 0) > 0 && (
+            <AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} />
+          )}
+
+          {/* Quantile Distribution Range Bar */}
+          {(pillarData?.analogs?.ranges?.length ?? 0) > 0 && (
+            <UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} />
+          )}
+
           {briefing.historicalStressTest.results.length > 0 ? (
             <>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -235,11 +246,11 @@ export function ResearchMemo({
                   const periodLabel = result.period === "Next day" ? "Next 1 trading day" : result.period;
 
                   return (
-                    <div key={result.period} className="rounded border border-[#141918]/10 bg-white/40 p-3">
+                    <div key={result.period} className="rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-3.5 shadow-sm sm:p-4">
                       <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
                         {periodLabel}
                       </div>
-                      <p className="mt-2 text-sm font-semibold text-[#1a221c]">{wentUpText}</p>
+                      <p className="mt-2 text-base font-bold leading-snug text-[#1a221c]">{wentUpText}</p>
                       <p className="mt-1 text-xs text-[#4f5e51]">{typicalMoveText}</p>
                       <p className="mt-1 text-xs text-[#637265]">Middle result: {medianText}</p>
                     </div>
@@ -427,11 +438,9 @@ export function ResearchMemo({
             </div>
           )}
 
-          {/* Quantile Distribution Range Bar */}
-          <UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} />
-
-          {/* Normalized SVG Trajectory Chart */}
-          <AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} />
+          {/* Trajectory overlay & quantile range bars are promoted into the
+              Historical Precedent Distribution card above (the memo's star
+              visual); this section keeps the tabular precedent detail. */}
 
           <p className="mt-4 max-w-4xl text-xs leading-relaxed text-[#637265] italic">
             {briefing.historicalAnalog.caveat}

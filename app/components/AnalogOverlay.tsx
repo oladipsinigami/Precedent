@@ -22,7 +22,7 @@ function smoothPath(points: { x: number; y: number }[]) {
 
 export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   const width = 800;
-  const height = 240;
+  const height = 280;
   const padLeft = 45;
   const padRight = 55;
   const padTop = 30;
@@ -73,7 +73,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   }
 
   return (
-    <div className="mt-6 sm:mt-8 rounded-sm border border-[#141918]/15 bg-[#fbf8f2] p-4 sm:p-6 shadow-sm">
+    <div className="mt-6 sm:mt-8 rounded-sm border border-[#141918]/20 bg-[#fbf8f2] p-4 sm:p-6 shadow-md">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#141918]/10 pb-3">
         <div>
           <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#486326]">
@@ -88,11 +88,11 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 font-mono text-[10px] uppercase text-[#637265]">
           <div className="flex items-center gap-1.5">
             <span className="h-1 w-4 rounded-full bg-[#3d5c22]" />
-            <span className="font-semibold text-[#253816]">Current Target</span>
+            <span className="font-semibold text-[#253816]">Current</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-0.5 w-4 rounded-full bg-[#839487]" />
-            <span>Analog Precedents ({analogSeries.length})</span>
+            <span>Historical analogs ({analogSeries.length})</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="h-px w-3 border-b border-dashed border-[#a15530]" />

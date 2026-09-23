@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { DEMO_TASK, STYLES } from "@/lib/style-profiles";
 import { reweightBriefing } from "@/lib/reweight";
@@ -77,6 +77,9 @@ const EMPTY_PILLARS: PillarState = {
   marketStructure: "pending",
 };
 
+// UX-1: the Trader Decision Record journal persists locally across reloads.
+const DECISION_NOTE_STORAGE_KEY = "precedent-decision-note";
+
 export default function Home() {
   const [view, setView] = useState<"intake" | "results">("intake");
   const [style, setStyle] = useState<TradingStyle>("swing");
@@ -94,6 +97,31 @@ export default function Home() {
   const [decisionNote, setDecisionNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  // UX-1: hydrate the decision note from localStorage once, then persist every
+  // edit so the deliberation journal survives page reloads (and repeat demo
+  // runs). The save effect skips its first invocation so the mount render
+  // never overwrites the stored note before hydration applies.
+  const skipInitialDecisionNoteSave = useRef(true);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DECISION_NOTE_STORAGE_KEY);
+      if (saved) setDecisionNote(saved);
+    } catch {
+      // localStorage unavailable (e.g. private mode) — journal stays session-only.
+    }
+  }, []);
+  useEffect(() => {
+    if (skipInitialDecisionNoteSave.current) {
+      skipInitialDecisionNoteSave.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem(DECISION_NOTE_STORAGE_KEY, decisionNote);
+    } catch {
+      // Persistence failure is non-fatal; the in-memory note still works.
+    }
+  }, [decisionNote]);
 
   const selected = useMemo(
     () => instruments.find((item) => item.native === symbol) ?? instruments[0],
@@ -116,15 +144,20 @@ export default function Home() {
     };
   }, []);
 
-  async function runResearch(event?: FormEvent) {
+  async function runResearch(event?: FormEvent, opts?: { demo?: boolean }) {
     event?.preventDefault();
-    if (busy || question.trim().length < 8) return;
+    const demo = opts?.demo === true;
+    const activeStyle = demo ? DEMO_TASK.style : style;
+    const activeSymbol = demo ? DEMO_TASK.symbol : symbol;
+    const activeQuestion = (demo ? DEMO_TASK.question : question).trim();
+    if (busy || activeQuestion.length < 8) return;
     setBusy(true);
     setError("");
     setBriefing(null);
     setPillarData(null);
     setMeta(null);
-    setDecisionNote("");
+    // Decision note intentionally NOT reset: the journal persists across runs
+    // and reloads via localStorage (UX-1); the trader clears it explicitly.
     setStage("pillars");
     setPillarMessages({
       fundamentals: "Pulling SEC filings…",
@@ -189,7 +222,7 @@ export default function Home() {
         (s) => s === "ready" || s === "degraded",
       );
       if (hasCompletedPillars || Object.keys(collectedPillars).length > 0) {
-        const fallbackName = findNameOrDefault(`${symbol ?? ""} ${question}`);
+        const fallbackName = findNameOrDefault(`${activeSymbol ?? ""} ${activeQuestion}`);
         const defaultEmptyPillars: PillarBundle = {
           fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
           technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },
@@ -205,8 +238,8 @@ export default function Home() {
           marketStructure: (collectedPillars.marketStructure as PillarBundle["marketStructure"]) ?? defaultEmptyPillars.marketStructure,
         };
         const fallbackBriefing = deterministicBriefing({
-          style,
-          question: question.trim(),
+          style: activeStyle,
+          question: activeQuestion,
           name: fallbackName,
           regime: (collectedMeta?.regime as Regime) ?? "normal",
           pillars: resolvedBundle,
@@ -226,7 +259,7 @@ export default function Home() {
       const response = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ style, symbol, question: question.trim() }),
+        body: JSON.stringify({ style: activeStyle, symbol: activeSymbol, question: activeQuestion, demo }),
       });
       if (!response.ok || !response.body) {
         const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -299,13 +332,21 @@ export default function Home() {
     setView("intake");
   }
 
+  // One-click judge walkthrough: loads the recommended demo task and starts
+  // it immediately against the server's cached demo fast path (demo: true).
+  function runDemo() {
+    if (busy) return;
+    loadDemo();
+    void runResearch(undefined, { demo: true });
+  }
+
   return (
     <div className="relative min-h-screen text-[#e7ebef]">
       {/* Contextual Moving Blackhole Background (Prominent on Intake, Subdued on Results) */}
       <BlackholeBackground variant={view} />
 
       {/* Institutional Top Navigation Bar */}
-      <Header onLoadDemo={loadDemo} />
+      <Header onLoadDemo={runDemo} />
 
       {/* Main Container Rendering Either Page 1 (Intake) or Page 2 (Results) */}
       <main className="px-3.5 sm:px-6 md:px-8">

@@ -432,6 +432,7 @@ async function complete(
   timeoutMs = 16_000,
 ): Promise<{ text: string; actualModel?: string }> {
   let lastError: unknown;
+  const startedAt = Date.now();
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     const controller = new AbortController();
@@ -485,7 +486,7 @@ async function complete(
       const isTimeout = err?.name === "AbortError" || controller.signal.aborted;
       const errorDescription = isTimeout ? `timeout after ${timeoutMs / 1000}s` : err?.message || String(err);
 
-      if (attempt === 1 && isTransientError(err)) {
+      if (attempt === 1 && isTransientError(err) && Date.now() - startedAt < timeoutMs / 2) {
         console.warn(`[Synthesis] Model ${model} transient failure on attempt 1 (${errorDescription}). Retrying in 500ms...`);
         await new Promise((r) => setTimeout(r, 500));
         continue;
@@ -517,9 +518,11 @@ async function runSequentialSynthesis(
       break;
     }
 
-    // Calibrated timeout per candidate: 28s allows detailed JSON response to stream without premature abortion
+    // Fail-fast per candidate: 14s forces hanging free models to yield quickly so
+    // the waterfall reaches a responsive provider (or the deterministic fallback)
+    // well within the overall 42s synthesis / 48s pipeline budget
     const candidateTimeout = Math.min(
-      28_000,
+      14_000,
       remainingTime - 1_500,
     );
 

@@ -54,7 +54,10 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
   }
 
   return (
-    <section className="border-t border-[#141918]/15 bg-[#e2e9de] px-4 py-6 sm:px-10 sm:py-10">
+    <section
+      id="decision-record"
+      className="relative scroll-mt-6 border-t-2 border-[#486326] bg-[#e2e9de] px-4 py-6 shadow-[0_-18px_44px_-24px_rgba(18,22,20,0.45)] sm:px-10 sm:py-10"
+    >
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -74,7 +77,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
 
         <div className="flex items-center gap-2 rounded border border-[#141918]/15 bg-white/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-[#344236] shadow-xs">
           <span className="h-1.5 w-1.5 rounded-full bg-[#486326]" />
-          <span>Non-Execution · Local Memory Only</span>
+          <span>Non-Execution · Auto-saved Locally</span>
         </div>
       </div>
 
@@ -143,7 +146,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
 
         {/* Footer info */}
         <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between font-mono text-[10px] text-[#5c6e5e]">
-          <span>✦ Discretionary Deliberation Record · Client-side only · Zero order routing</span>
+          <span>✦ Discretionary Deliberation Record · ✓ Auto-saved to this browser · Zero order routing</span>
           <span>{decisionNote.length} characters</span>
         </div>
       </div>

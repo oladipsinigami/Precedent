@@ -49,9 +49,12 @@ type SpotSymbolsResponse = {
 let rwaCache: { expires: number; contracts: BitgetRwaContract[] } | undefined;
 let rTokenCache: { expires: number; markets: BitgetRTokenMarket[] } | undefined;
 const candleCache = new Map<string, { expires: number; bars: BitgetCandle[] }>();
+// In-flight refresh de-duplication: a burst of concurrent research requests
+// shares one upstream call instead of stampeding the Bitget API.
+let rwaInFlight: Promise<BitgetRwaContract[]> | null = null;
+let rTokenInFlight: Promise<BitgetRTokenMarket[]> | null = null;
 
-export async function bitgetRwaContracts(): Promise<BitgetRwaContract[]> {
-  if (rwaCache && rwaCache.expires > Date.now()) return rwaCache.contracts;
+async function fetchRwaContracts(): Promise<BitgetRwaContract[]> {
   const response = await fetchJson<ContractsResponse>(
     "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES",
     { timeoutMs: 2500, cacheTtlMs: 5 * 60_000 },
@@ -63,8 +66,15 @@ export async function bitgetRwaContracts(): Promise<BitgetRwaContract[]> {
   return contracts;
 }
 
-export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
-  if (rTokenCache && rTokenCache.expires > Date.now()) return rTokenCache.markets;
+export async function bitgetRwaContracts(): Promise<BitgetRwaContract[]> {
+  if (rwaCache && rwaCache.expires > Date.now()) return rwaCache.contracts;
+  rwaInFlight ??= fetchRwaContracts().finally(() => {
+    rwaInFlight = null;
+  });
+  return rwaInFlight;
+}
+
+async function fetchRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
   const response = await fetchJson<SpotSymbolsResponse>(
     "https://api.bitget.com/api/v2/spot/public/symbols",
     { timeoutMs: 2500, cacheTtlMs: 5 * 60_000 },
@@ -74,6 +84,14 @@ export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
   );
   rTokenCache = { markets, expires: Date.now() + 5 * 60_000 };
   return markets;
+}
+
+export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
+  if (rTokenCache && rTokenCache.expires > Date.now()) return rTokenCache.markets;
+  rTokenInFlight ??= fetchRTokenMarkets().finally(() => {
+    rTokenInFlight = null;
+  });
+  return rTokenInFlight;
 }
 
 export async function bitgetTape(name: NameCard): Promise<Tick | undefined> {

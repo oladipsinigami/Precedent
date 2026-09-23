@@ -91,8 +91,19 @@ export function ResultsView({
           </div>
         </div>
 
-        {/* Right: Download + Pipeline Summary */}
+        {/* Right: Decision Record jump + Download + Pipeline Summary */}
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={() =>
+              document.getElementById("decision-record")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className="group flex min-h-[44px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2 rounded-sm border border-white/[0.14] bg-[#0c1015] px-4 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
+            title="Jump to the Trader Decision Record at the end of the memo"
+          >
+            <span className="text-[#d4ff3f] transition-transform duration-200 group-hover:translate-y-0.5">↓</span>
+            <span>Decision Record</span>
+          </button>
           <button
             type="button"
             onClick={handleDownload}
