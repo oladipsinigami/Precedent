@@ -287,11 +287,8 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
 
     const historicalStressTest = {
       summary: isDegradedSample ? fallback.historicalStressTest.summary : cleanSummary,
-      sampleSize: isDegradedSample
-        ? 0
-        : typeof stress?.sampleSize === "number" && Number.isFinite(stress.sampleSize)
-        ? stress.sampleSize
-        : fallback.historicalStressTest.sampleSize,
+      // Sample size is computed from retrieved data; never trust a model-supplied count.
+      sampleSize: isDegradedSample ? 0 : fallback.historicalStressTest.sampleSize,
       results: isDegradedSample ? [] : normalizedResults,
       examples: (() => {
         if (isDegradedSample) return [];
