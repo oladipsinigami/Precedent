@@ -169,6 +169,7 @@ CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be con
 Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "Went up X times out of Y", "Typical move: usually between A% and B%", "Middle result: C%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
 Technical Glossing: Explain any technical term once in plain language on first mention (e.g. "RSI (a short-term strength score from 0 to 100)"), then use only the short name ("RSI") for later mentions. Avoid repeating the same parenthetical explanation multiple times. Prefer shorter sentences overall.
 Past Examples Guidance: Provide 2 to 3 past examples in "historicalStressTest.examples" based on the retrieved examples. Prefer same-ticker historical occurrences when available. State each outcome clearly in plain language (e.g. "rose about 2.8% over the next 5 days"). Never output "n/a", undefined, or empty outcomes.
+${UNTRUSTED_DATA_RULE}
 
 SCHEMA:
 ${SCHEMA}`;
