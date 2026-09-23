@@ -10,6 +10,20 @@ import { deterministicBriefing, synthesize } from "./synthesis";
 import type { Briefing, PillarBundle, PillarId, ResearchEvent, StructureFlags, TradingStyle } from "./types";
 import { findName, nameFromBitgetContract, nameFromBitgetRTokenMarket, type NameCard } from "./universe";
 
+// Time budget defaults. Callers (the API route) normally pass an explicit deadline
+// derived from the serverless maxDuration; these apply when none is provided.
+const DEFAULT_BUDGET_MS = 55_000;
+const SYNTHESIS_MAX_MS = 48_000;
+// Below this, an LLM call is unlikely to finish, so go straight to the deterministic memo.
+const SYNTHESIS_MIN_MS = 8_000;
+// Reserved for building the fallback memo and streaming it back.
+const RESPONSE_MARGIN_MS = 3_000;
+
+// Fixed date for the illustrative demo bundle. Sample values must never be
+// stamped with the current date, or they read as live market data.
+const SAMPLE_AS_OF = "2024-08-30";
+const SAMPLE_LABEL = "Illustrative sample (not live)";
+
 function queryMentions(query: string, value: string): boolean {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(query);
@@ -48,20 +62,16 @@ async function getCachedBitgetRwaContracts(): Promise<BitgetRwaContract[]> {
   return contracts;
 }
 
-function isDemoRequest(input: { question: string; symbol?: string; demo?: boolean; useCachedMemo?: boolean }): boolean {
-  if (input.demo || input.useCachedMemo) return true;
-  if (!input.question) return false;
-  const q = input.question.trim().toLowerCase();
-  const demoQ = DEMO_TASK.question.trim().toLowerCase();
-  if (q === demoQ) return true;
-  if (
-    q.includes("stress-test the current aapl rtoken setup") ||
-    (q.includes("aapl") && q.includes("7×24") && q.includes("swing")) ||
-    (input.symbol?.toUpperCase() === "AAPL" && q.includes("stress-test"))
-  ) {
-    return true;
-  }
-  return false;
+// The sample bundle is only served on an explicit demo request for the exact
+// recommended demo task. Ordinary questions (even about AAPL) always run live.
+function isDemoRequest(input: {
+  style: TradingStyle;
+  question: string;
+  demo?: boolean;
+  useCachedMemo?: boolean;
+}): boolean {
+  if (!input.demo && !input.useCachedMemo) return false;
+  return input.style === DEMO_TASK.style && input.question.trim() === DEMO_TASK.question.trim();
 }
 
 function buildDemoBundle(style: TradingStyle, question: string) {
@@ -99,16 +109,15 @@ function buildDemoBundle(style: TradingStyle, question: string) {
       eps: { form: "10-Q", filed: "2024-08-02", periodEnd: "2024-06-29", value: 1.64 },
       catalysts: [
         "Apple Intelligence phased feature rollout cycle across iOS 18 devices",
-        "Services segment gross margin expansion (+14% year-over-year revenue momentum)",
-        "Active installed device base surpassing 2.2 billion active products worldwide",
+        "Services segment revenue growth",
+        "Large active installed device base",
       ],
       notes: [
-        "Balance sheet records $29.96B in cash and cash equivalents with $31.58B in marketable securities.",
-        "Capital return framework active with continuous share repurchases and regular quarterly dividends.",
+        "Sample snapshot: cash, equivalents, and marketable securities figures are illustrative.",
+        "Capital return framework active with share repurchases and quarterly dividends.",
       ],
       sources: [
-        { label: "SEC EDGAR companyconcept API (CIK 0000320193)" },
-        { label: "Apple Investor Relations Submissions" },
+        { label: `SEC EDGAR filings index (CIK 0000320193) · ${SAMPLE_LABEL}` },
       ],
     },
     technicals: {
@@ -119,20 +128,20 @@ function buildDemoBundle(style: TradingStyle, question: string) {
         high52: 237.49,
         low52: 164.08,
         volume: 48210000,
-        asOf: new Date().toISOString().slice(0, 10),
+        asOf: SAMPLE_AS_OF,
       },
       rToken: {
         last: 235.1,
         changePct: 1.35,
         venue: "Bitget spot",
         symbol: "rAAPLUSDT",
-        asOf: new Date().toISOString(),
+        asOf: `${SAMPLE_AS_OF}T20:00:00.000Z`,
       },
       rTokenGap:
-        "rToken trades at a +$0.25 (+0.11%) basis premium over the New York 4:00 PM cash close ($234.85 vs $235.10) on 24/7 rails.",
-      trend: "Constructive consolidation near 52-week highs with ordered moving averages (SMA20 > SMA50 > SMA200).",
-      momentum: "RSI14 at 58.4 reflecting upside momentum without reaching overbought (>70) territory.",
-      volatility: "20-day realized volatility at 18.2%, below tech megacap median of 22.4%.",
+        "Sample: rToken at a +$0.25 (+0.11%) premium over the 4:00 PM New York cash close ($234.85 vs $235.10).",
+      trend: "Consolidation near 52-week highs with ordered moving averages (SMA20 > SMA50 > SMA200).",
+      momentum: "RSI14 at 58.4, below the overbought (>70) threshold.",
+      volatility: "20-day realized volatility at 18.2%.",
       levels: {
         support: [231.0, 228.5, 224.2],
         resistance: [237.5, 242.0, 248.0],
@@ -146,63 +155,60 @@ function buildDemoBundle(style: TradingStyle, question: string) {
       },
       spark: [226.5, 227.8, 229.1, 228.4, 230.2, 232.0, 231.5, 233.4, 234.1, 234.85],
       notes: [
-        "Overnight basis spread remains well contained within normal arbitrage bounds (+0.10% to +0.25%).",
-        "Volume profile exhibits sustained accumulation at the $228-$231 high-volume consolidation shelf.",
+        "Sample: overnight rToken basis spread within +0.10% to +0.25%.",
+        "Sample: volume concentrated in the $228-$231 consolidation range.",
       ],
-      sources: [
-        { label: "Yahoo Finance chart historicals" },
-        { label: "Bitget public ticker & 24h market tape" },
-      ],
+      sources: [{ label: `Price and rToken snapshot · ${SAMPLE_LABEL}` }],
     },
     news: {
       ok: true,
       headlines: [
         {
           title: "Apple Intelligence features roll out to developer betas ahead of broader launch",
-          publisher: "Bloomberg",
-          url: "https://www.bloomberg.com",
+          publisher: SAMPLE_LABEL,
+          url: "#",
           tag: "product",
           lean: "constructive",
         },
         {
-          title: "Tech mega-caps steady as treasury yields consolidate following FOMC remarks",
-          publisher: "Reuters",
-          url: "https://www.reuters.com",
+          title: "Tech mega-caps steady as Treasury yields consolidate following FOMC remarks",
+          publisher: SAMPLE_LABEL,
+          url: "#",
           tag: "macro",
           lean: "mixed",
         },
         {
-          title: "Supply chain checks indicate resilient iPhone demand across North America and Europe",
-          publisher: "Morgan Stanley Research",
-          url: "https://www.morganstanley.com",
+          title: "Supply chain checks point to steady iPhone demand in North America and Europe",
+          publisher: SAMPLE_LABEL,
+          url: "#",
           tag: "guidance",
           lean: "constructive",
         },
       ],
       macro: [
-        "FOMC policy stance remains in calibrated easing mode with stable neutral rate expectations.",
-        "US 10-year Treasury yield oscillating between 4.15% and 4.25%.",
+        "Sample: FOMC policy stance described as gradual easing.",
+        "Sample: US 10-year Treasury yield between 4.15% and 4.25%.",
       ],
       social: {
         x: [
           {
-            id: "x-1",
+            id: "sample-x-1",
             platform: "x",
-            text: "AAPL holding the $230 breakout shelf into next week. 7x24 basis spread is tight, showing steady institutional flow.",
-            author: "PrecedentDesk",
-            url: "https://x.com",
-            createdAt: new Date().toISOString(),
+            text: "AAPL holding the $230 shelf into next week. 7x24 basis spread is tight.",
+            author: "sample_user_1",
+            url: "#",
+            createdAt: `${SAMPLE_AS_OF}T14:00:00.000Z`,
             metrics: { likes: 142, reposts: 28 },
             lean: "constructive",
             engagementScore: 198,
           },
           {
-            id: "x-2",
+            id: "sample-x-2",
             platform: "x",
-            text: "Watching Apple Intelligence rollout cadence. If adoption beats consensus, multiple expansion has room.",
-            author: "TechAlpha",
-            url: "https://x.com",
-            createdAt: new Date().toISOString(),
+            text: "Watching the Apple Intelligence rollout cadence versus consensus expectations.",
+            author: "sample_user_2",
+            url: "#",
+            createdAt: `${SAMPLE_AS_OF}T15:30:00.000Z`,
             metrics: { likes: 89, reposts: 14 },
             lean: "constructive",
             engagementScore: 117,
@@ -210,20 +216,17 @@ function buildDemoBundle(style: TradingStyle, question: string) {
         ],
       },
       aggregateLean: "constructive",
-      caveats: ["Social discourse is retail-weighted and interpreted as market attention, not fundamental certainty."],
-      notes: [
-        "Headline tone constructive on AI feature timeline, balanced against cautious macro discount rate commentary.",
+      caveats: [
+        "All headlines and posts in this memo are illustrative samples, not live news.",
+        "Social discourse is retail-weighted and reflects attention, not fundamentals.",
       ],
-      sources: [
-        { label: "Bloomberg Technology News" },
-        { label: "Reuters Markets Wire" },
-        { label: "X Financial Discourse" },
-      ],
+      notes: ["Sample headline tone: constructive on AI features, mixed on macro."],
+      sources: [{ label: `Headlines and social posts · ${SAMPLE_LABEL}` }],
     },
     analogs: {
       ok: true,
-      session: new Date().toISOString().slice(0, 10),
-      state: "Consolidation shelf near multi-month highs following earnings drift with compressed volatility.",
+      session: SAMPLE_AS_OF,
+      state: "Consolidation near multi-month highs following earnings drift with compressed volatility.",
       closest: [
         {
           ticker: "AAPL",
@@ -243,7 +246,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
           ret1d: 0.4,
           ret5d: 1.85,
           ret10d: 4.1,
-          note: "Peer mega-cap multi-week shelf breakout continuation",
+          note: "Peer mega-cap multi-week range",
         },
         {
           ticker: "AAPL",
@@ -253,7 +256,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
           ret1d: -0.35,
           ret5d: 1.15,
           ret10d: 2.9,
-          note: "Pre-catalyst range trade holding above rising 50 DMA",
+          note: "Pre-catalyst range trade above rising 50 DMA",
         },
         {
           ticker: "GOOGL",
@@ -273,7 +276,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
           ret1d: 1.1,
           ret5d: 3.9,
           ret10d: 5.6,
-          note: "Trend continuation following quarterly filing disclosure",
+          note: "Trend continuation following quarterly filing",
         },
       ],
       ranges: [
@@ -284,7 +287,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
       overlay: [
         {
           id: "current",
-          label: "AAPL Current",
+          label: "AAPL (sample)",
           kind: "current",
           points: Array.from({ length: 21 }, (_, i) => ({ t: i - 20, value: 95 + i * 0.5 + Math.sin(i / 2) })),
         },
@@ -308,11 +311,11 @@ function buildDemoBundle(style: TradingStyle, question: string) {
         },
       ],
       sample: { n: 84, symbols: 8, sessions: 840 },
-      caveats: ["Historical chart analogs describe past return distributions and do not constitute a forecast."],
-      sources: [
-        { label: "Precedent 10-Year Chart Analog Engine" },
-        { label: "S&P 500 Historical Price Records" },
+      caveats: [
+        "Analog matches and ranges in this memo are illustrative samples.",
+        "Historical chart analogs describe past return distributions and do not constitute a forecast.",
       ],
+      sources: [{ label: `Historical analog matches · ${SAMPLE_LABEL}` }],
     },
     marketStructure: {
       ok: true,
@@ -328,16 +331,13 @@ function buildDemoBundle(style: TradingStyle, question: string) {
         { peer: "NVDA", raw: 0.54, cleaned: 0.46 },
       ],
       caveats: ["RMT correlation matrix applies Marchenko-Pastur filtering to isolate true sector co-movement."],
-      sources: [{ label: "RMT Eigenvalue Precompute Matrix (data/market-structure.json)" }],
+      sources: [{ label: `RMT market-structure values · ${SAMPLE_LABEL}` }],
     },
   };
 
   const demoFlags: StructureFlags = {
     catalystDensity: "moderate",
-    balanceSheet: [
-      "SEC EDGAR 10-Q: Cash & cash equivalents $29.96B.",
-      "SEC EDGAR 10-Q: Marketable securities $31.58B.",
-    ],
+    balanceSheet: ["Sample balance-sheet snapshot (illustrative)."],
     regimeAlignment: "aligned",
     communityStability: "stable",
     cleanedCorrRankPct: 82,
@@ -352,7 +352,8 @@ function buildDemoBundle(style: TradingStyle, question: string) {
     pillars: demoPillars,
     flags: demoFlags,
   });
-  demoBriefing.model = "Precedent Quantitative Desk";
+  demoBriefing.model = "Precedent Quantitative Desk (sample data)";
+  demoBriefing.isSample = true;
 
   return { name: demoName, pillars: demoPillars, briefing: demoBriefing, regime: "normal" as const };
 }
@@ -363,8 +364,12 @@ export async function* runResearch(input: {
   symbol?: string;
   demo?: boolean;
   useCachedMemo?: boolean;
+  // Epoch ms by which the whole run (including the memo) must be produced.
+  deadline?: number;
 }): AsyncGenerator<ResearchEvent> {
-  // Check for demo request: guarantees instant, flawless, deterministic briefing
+  const deadline = input.deadline ?? Date.now() + DEFAULT_BUDGET_MS;
+
+  // Explicit demo request for the exact demo task: serve the labeled sample memo.
   if (isDemoRequest(input)) {
     const cachedDemo = getCached<ReturnType<typeof buildDemoBundle>>(`demoBundle:${input.style}`);
     const bundle = cachedDemo ?? buildDemoBundle(input.style, input.question);
@@ -382,18 +387,17 @@ export async function* runResearch(input: {
     };
 
     const initialMessages: Partial<Record<PillarId, string>> = {
-      fundamentals: "Pulling SEC filings…",
-      technicals: "Comparing rToken vs cash session…",
-      news: "Scanning news & macro headlines…",
-      analogs: "Matching historical charts…",
-      marketStructure: "Resolving market structure…",
+      fundamentals: "Loading sample filings…",
+      technicals: "Loading sample price snapshot…",
+      news: "Loading sample headlines…",
+      analogs: "Loading sample analogs…",
+      marketStructure: "Loading sample market structure…",
     };
     const order: PillarId[] = ["fundamentals", "technicals", "news", "analogs", "marketStructure"];
     for (const id of order) {
       yield { type: "pillar", id, status: "running", message: initialMessages[id] };
     }
 
-    // Yield verified pillars with rich pre-stored evidence
     for (const id of order) {
       yield {
         type: "pillar",
@@ -403,7 +407,7 @@ export async function* runResearch(input: {
       };
     }
 
-    yield { type: "status", stage: "synthesis", message: "Synthesizing research memo…" };
+    yield { type: "status", stage: "synthesis", message: "Building sample research memo…" };
     yield { type: "briefing", briefing: bundle.briefing };
     yield { type: "done" };
     return;
@@ -487,11 +491,17 @@ export async function* runResearch(input: {
 
   yield { type: "status", stage: "synthesis", message: "Synthesizing research memo…" };
 
-  const SYNTHESIS_TIMEOUT_MS = 48_000;
+  // Synthesis gets whatever time remains before the deadline (capped), minus a
+  // margin reserved for the deterministic fallback and streaming.
+  const synthesisBudgetMs = Math.min(SYNTHESIS_MAX_MS, deadline - Date.now() - RESPONSE_MARGIN_MS);
   let briefing: Briefing;
   let synthesisFailed = false;
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   try {
+    if (synthesisBudgetMs < SYNTHESIS_MIN_MS) {
+      throw new Error(`Insufficient time for LLM synthesis (${synthesisBudgetMs}ms remaining)`);
+    }
     briefing = await Promise.race([
       synthesize({
         style: input.style,
@@ -499,10 +509,11 @@ export async function* runResearch(input: {
         name,
         regime,
         pillars,
+        timeoutMs: synthesisBudgetMs - 1_000,
       }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Synthesis call timed out")), SYNTHESIS_TIMEOUT_MS),
-      ),
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error("Synthesis call timed out")), synthesisBudgetMs);
+      }),
     ]);
   } catch (err) {
     synthesisFailed = true;
@@ -516,6 +527,8 @@ export async function* runResearch(input: {
       flags: undefined,
     });
     briefing.model = "Precedent Quantitative Desk";
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 
   const isFallback =

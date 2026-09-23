@@ -113,6 +113,15 @@ export function ResearchMemo({
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              {briefing.isSample ? (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 rounded-sm border border-[#b91c1c]/40 bg-[#b91c1c]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#991b1b]"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
+                  Sample data · Not live market data
+                </span>
+              ) : null}
               {briefing.isFallback ? (
                 <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#b45309]/30 bg-[#b45309]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#92400e]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#d97706]" />

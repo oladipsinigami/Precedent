@@ -87,7 +87,7 @@ function providers() {
     available.push({
       label: "xai/grok-4.5",
       model: "grok-4.5",
-      client: new OpenAI({ apiKey: process.env.XAI_API_KEY.trim(), baseURL: "https://api.x.ai/v1" }),
+      client: new OpenAI({ apiKey: process.env.XAI_API_KEY.trim(), baseURL: "https://api.x.ai/v1", maxRetries: 0 }),
     });
   }
 
@@ -99,6 +99,7 @@ function providers() {
       client: new OpenAI({
         apiKey: process.env.BITGET_QWEN_API_KEY.trim(),
         baseURL: "https://hackathon.bitgetops.com/v1",
+        maxRetries: 0,
       }),
     });
   }
@@ -148,6 +149,8 @@ export async function synthesize(opts: {
   name: NameCard;
   regime: Regime;
   pillars: PillarBundle;
+  // Total time allowed for the LLM waterfall; the pipeline derives it from the request deadline.
+  timeoutMs?: number;
 }): Promise<Briefing> {
   let flags: Briefing["flags"];
   try {
@@ -200,7 +203,7 @@ ${stressResultsSummary}
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
   try {
-    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, 42_000);
+    const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, opts.timeoutMs ?? 42_000);
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
@@ -284,11 +287,8 @@ CRITICAL: Return the raw JSON memo now matching the schema.`;
 
     const historicalStressTest = {
       summary: isDegradedSample ? fallback.historicalStressTest.summary : cleanSummary,
-      sampleSize: isDegradedSample
-        ? 0
-        : typeof stress?.sampleSize === "number" && Number.isFinite(stress.sampleSize)
-        ? stress.sampleSize
-        : fallback.historicalStressTest.sampleSize,
+      // Sample size is computed from retrieved data; never trust a model-supplied count.
+      sampleSize: isDegradedSample ? 0 : fallback.historicalStressTest.sampleSize,
       results: isDegradedSample ? [] : normalizedResults,
       examples: (() => {
         if (isDegradedSample) return [];

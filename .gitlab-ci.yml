@@ -6,8 +6,26 @@
 # Note that environment variables can be set in several places
 # See https://docs.gitlab.com/ci/variables/#cicd-variable-precedence
 stages:
+- build
 - test
 - secret-detection
+build_and_test:
+  stage: build
+  image: node:20
+  variables:
+    NEXT_TELEMETRY_DISABLED: "1"
+    npm_config_cache: "$CI_PROJECT_DIR/.npm"
+  cache:
+    key:
+      files:
+      - package-lock.json
+    paths:
+    - ".npm/"
+  script:
+  - npm ci --prefer-offline --no-audit
+  - npm test
+  - npm run build
+  - npx tsc --noEmit
 sast:
   stage: test
 include:
