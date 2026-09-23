@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Total work budget per request. Kept below maxDuration so the deterministic
+// fallback memo always has time to stream before the platform kills the function.
+const REQUEST_BUDGET_MS = 55_000;
+
 const STYLES: TradingStyle[] = ["day", "swing", "event", "position"];
 
 // Minimal abuse controls: optional shared-secret header plus a fixed-window
@@ -40,10 +44,11 @@ function rateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT;
 }
 
-// Demo fast path: the recommended judge walkthrough (DEMO_TASK) replays a
-// cached copy of one full high-quality run, so it finishes almost instantly
-// and stays reliable under concurrent judges. Only the exact demo question
-// with an explicit demo flag uses this path; all other research is untouched.
+// Demo fast path: the recommended judge walkthrough (DEMO_TASK) replays the
+// built-in illustrative sample memo, so it finishes almost instantly and stays
+// reliable under concurrent judges. Only the exact demo question with an
+// explicit demo flag uses this path; all other research runs live. The memo is
+// flagged isSample so the UI labels it as sample data.
 const DEMO_CACHE_TTL_MS = 10 * 60_000;
 const demoEventCache = new Map<string, { events: ResearchEvent[]; expires: number }>();
 const demoInFlight = new Map<string, Promise<ResearchEvent[] | null>>();
@@ -52,7 +57,7 @@ function demoCacheKey(): string {
   return `${DEMO_TASK.style}::${DEMO_TASK.question}`;
 }
 
-async function runDemoOnce(key: string): Promise<ResearchEvent[] | null> {
+async function runDemoOnce(key: string, deadline: number): Promise<ResearchEvent[] | null> {
   const existing = demoInFlight.get(key);
   if (existing) return existing;
   const promise = (async () => {
@@ -63,6 +68,8 @@ async function runDemoOnce(key: string): Promise<ResearchEvent[] | null> {
         style: DEMO_TASK.style,
         question: DEMO_TASK.question,
         symbol: DEMO_TASK.symbol,
+        demo: true,
+        deadline,
       })) {
         if (event.type === "briefing") gotBriefing = true;
         events.push(event);
@@ -70,8 +77,7 @@ async function runDemoOnce(key: string): Promise<ResearchEvent[] | null> {
     } catch {
       return null;
     }
-    // Only cache runs that produced a memo, so a degraded upstream moment can
-    // never poison the demo for the whole TTL window.
+    // Only cache runs that produced a memo.
     if (!gotBriefing) return null;
     demoEventCache.set(key, { events, expires: Date.now() + DEMO_CACHE_TTL_MS });
     return events;
@@ -83,6 +89,7 @@ async function runDemoOnce(key: string): Promise<ResearchEvent[] | null> {
 }
 
 export async function POST(req: Request) {
+  const deadline = Date.now() + REQUEST_BUDGET_MS;
   const requiredKey = process.env.RESEARCH_API_KEY?.trim();
   if (requiredKey && req.headers.get("x-research-key") !== requiredKey) {
     return Response.json({ error: "Unauthorized." }, { status: 401 });
@@ -121,7 +128,7 @@ export async function POST(req: Request) {
   const symbol = typeof input.symbol === "string" ? input.symbol.trim().slice(0, 20) : undefined;
 
   // Demo fast path only activates on an explicit flag plus an exact
-  // DEMO_TASK match, so ordinary research questions never replay cached runs.
+  // DEMO_TASK match, so ordinary research questions never replay sample data.
   const demoParam = new URL(req.url).searchParams.get("demo");
   const isDemo =
     (input.demo === true || demoParam === "true" || demoParam === "1") &&
@@ -148,14 +155,14 @@ export async function POST(req: Request) {
           const key = demoCacheKey();
           const cached = demoEventCache.get(key);
           const events =
-            cached && cached.expires > Date.now() ? cached.events : await runDemoOnce(key);
+            cached && cached.expires > Date.now() ? cached.events : await runDemoOnce(key, deadline);
           if (events) {
             for (const event of events) send(event);
             return;
           }
           // Cold-cache failure: fall through to the normal live pipeline.
         }
-        for await (const event of runResearch({ style, question, symbol })) {
+        for await (const event of runResearch({ style, question, symbol, deadline })) {
           if (event.type === "briefing") {
             hasSentBriefing = true;
           }

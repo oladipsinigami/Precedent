@@ -275,6 +275,8 @@ export type Briefing = {
   styleNote: string;
   model: string;
   isFallback?: boolean;
+  // True when the memo was built from the built-in illustrative demo bundle, not live data.
+  isSample?: boolean;
   regime?: Regime;
   flags?: StructureFlags;
   evidence: Citation[];
