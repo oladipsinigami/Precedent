@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
 import { guardBriefing, cleanHistoricalSummary, didLastGuardRewrite } from "./language-guard";
+import { UNTRUSTED_DATA_RULE, untrusted } from "./prompt-safety";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";

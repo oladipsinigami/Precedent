@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "precompute": "tsx scripts/precompute-market-structure.ts",
-    "test": "tsx scripts/test-language-guard.ts"
+    "test": "tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts"
   },
   "dependencies": {
     "next": "^15.5.2",
