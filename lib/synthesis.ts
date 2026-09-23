@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
 import { guardBriefing, cleanHistoricalSummary, didLastGuardRewrite } from "./language-guard";
+import { UNTRUSTED_DATA_RULE, untrusted } from "./prompt-safety";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
@@ -168,6 +169,7 @@ CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be con
 Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "Went up X times out of Y", "Typical move: usually between A% and B%", "Middle result: C%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
 Technical Glossing: Explain any technical term once in plain language on first mention (e.g. "RSI (a short-term strength score from 0 to 100)"), then use only the short name ("RSI") for later mentions. Avoid repeating the same parenthetical explanation multiple times. Prefer shorter sentences overall.
 Past Examples Guidance: Provide 2 to 3 past examples in "historicalStressTest.examples" based on the retrieved examples. Prefer same-ticker historical occurrences when available. State each outcome clearly in plain language (e.g. "rose about 2.8% over the next 5 days"). Never output "n/a", undefined, or empty outcomes.
+${UNTRUSTED_DATA_RULE}
 
 SCHEMA:
 ${SCHEMA}`;
@@ -197,8 +199,8 @@ Retrieved Key Data:
 ${stressResultsSummary}
   * Past Examples: ${stressExamplesSummary || (stress.sampleSize > 0 ? "AAPL past occurrences" : "None (historical data unavailable)")}
 - Technicals: Cash price $${tech?.native?.last ?? "N/A"}, rToken $${tech?.rToken?.last ?? "N/A"} (basis: ${tech?.rTokenGap ?? "tight"}). Trend ${tech?.trend ?? "steady"}, RSI ${tech?.indicators?.rsi14 ?? 50}. Support: ${(tech?.levels?.support ?? []).slice(0, 2).join(", ") || "support zone"}, Resistance: ${(tech?.levels?.resistance ?? []).slice(0, 2).join(", ") || "resistance zone"}.
-- Fundamentals: ${fund?.company ? String(fund.company).slice(0, 100) : "Stable financials"}. Catalysts: ${(fund?.catalysts ?? []).slice(0, 2).join("; ") || "regular operations"}.
-- News & Macro: ${(news?.headlines ?? []).slice(0, 2).map((h) => h.title).join("; ") || "Neutral macro flow"}.
+- Fundamentals: ${untrusted([fund?.company], { maxItems: 1, maxLength: 100, fallback: "Stable financials" })}. Catalysts: ${untrusted((fund?.catalysts ?? []).slice(0, 2), { maxItems: 2, fallback: "regular operations" })}.
+- News & Macro: ${untrusted((news?.headlines ?? []).slice(0, 2).map((h) => h.title), { maxItems: 2, fallback: "Neutral macro flow" })}.
 
 CRITICAL: Return the raw JSON memo now matching the schema.`;
 
