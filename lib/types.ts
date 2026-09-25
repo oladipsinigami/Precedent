@@ -231,11 +231,12 @@ export type MarketStructurePillar = {
   communityId?: string;
   communityMembers?: string[];
   marketModeStrength?: number;
-  cleanedCorrelations?: { peer: string; raw: number; cleaned: number }[];
+  cleanedCorrelations?: { peer: string; raw: number; residual: number }[];
   infoBeyondNoisePct?: number;
   stability?: string;
   universeSize: number;
   computedAt?: string;
+  stale?: boolean;
   caveats: string[];
   sources: SourceRef[];
 };

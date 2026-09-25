@@ -1,76 +1,82 @@
-import { googleNews, leanHeadline, tagHeadline, yahooRss } from "../providers/news";
+import { blendHeadlines, googleNews, leanHeadline, tagHeadline, yahooRss } from "../providers/news";
 import { majorityLean } from "../providers/social";
 import { fetchXSentiment } from "../providers/x-sentiment";
 import { yahooNews } from "../providers/yahoo";
-import { serperNews } from "../providers/serper";
+import { youcomNews } from "../providers/youcom";
+import { BITGET_MCP_SOURCE_LABEL, bitgetMarketFearGreed } from "../providers/bitget-data";
 import { alphaVantageNews } from "../providers/alpha-vantage";
 import { adanosSocialSummary } from "../providers/adanos";
-import { bitgetSignalNews } from "../providers/bitget-signals";
 import type { Lean, NewsPillar } from "../types";
 import type { NameCard } from "../universe";
 
-// Bitget's MCP signal tools stream slowly (~15–25s). We give the call a firm
-// budget inside the pillar's parallel fetch window so it enriches the memo
-// when it lands and degrades silently when it doesn't.
-const BITGET_SIGNAL_TIMEOUT_MS = 20_000;
-
-function withTimeout<T>(promise: Promise<T>, fallback: T, ms: number): Promise<T> {
-  return Promise.race([promise, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);
-}
+// Bitget's Signal MCP news_feed is no longer wired into this pillar. Measured
+// 2026-09-24: the call takes ~23s and returns 44 crypto-only feeds (Cointelegraph,
+// Decrypt, Bitcoinist, Blockworks ...) with every `items` array empty, even with
+// no keyword filter. It cannot serve an equity research memo, and it cost a
+// permanent "no matching items" notice plus the longest pole in the fetch window.
+// The equity feeds below cover the same ground. See README for the full note.
 
 export async function runNews(name: NameCard): Promise<NewsPillar> {
   try {
-    const kw = `${name.name} OR ${name.native} OR stock`;
-    const [yf, rss, gNews, serper, av, macro, xResult, adanos, bitgetSignal] = await Promise.all([
+    const [yf, rss, gNews, youcom, av, macro, xResult, adanos, fearGreed] = await Promise.all([
       yahooNews(name.native).catch(() => []),
       yahooRss(name.native).catch(() => []),
       googleNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
-      serperNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
+      youcomNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       alphaVantageNews(name.native).catch(() => []),
       googleNews("Federal Reserve OR CPI OR tariffs US stocks").catch(() => []),
       fetchXSentiment({ native: name.native, name: name.name, rToken: name.rToken, bitgetSymbols: name.bitgetSymbols }),
       adanosSocialSummary(name.native).catch(() => null),
-      withTimeout(
-        bitgetSignalNews(kw).catch(() => []),
-        [],
-        BITGET_SIGNAL_TIMEOUT_MS,
-      ),
+      // Market-wide sentiment from Bitget's own MCP data layer. Reported as
+      // context only: it is a gauge of broad risk appetite, not a signal about
+      // this name, so it never feeds the headline aggregate.
+      bitgetMarketFearGreed().catch(() => null),
     ]);
 
-    const seen = new Set<string>();
-    const merged = [...bitgetSignal, ...av, ...serper, ...yf, ...rss, ...gNews].filter((h) => {
-      const key = h.title.toLowerCase().slice(0, 80);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Priority order matters: each provider contributes one headline per pass,
+    // so the visible set spans feeds instead of the first vendor's whole batch.
+    const merged = blendHeadlines([av, youcom, yf, rss, gNews], 10);
 
-    const headlines = merged.slice(0, 10).map((h) => ({
+    const headlines = merged.map((h) => ({
       ...h,
       tag: tagHeadline(h.title),
       lean: (h as { lean?: "constructive" | "cautious" | "mixed" }).lean ?? leanHeadline(h.title),
     }));
 
-    const caveats: string[] = [];
-    if (xResult.caveat) caveats.push(xResult.caveat);
-    if (bitgetSignal.length === 0) {
-      caveats.push("Bitget Signal news stream (44-source aggregate via official MCP data service) returned no matching items this run.");
-    }
+    const availabilityIssues: string[] = [];
+    if (xResult.caveat) availabilityIssues.push(xResult.caveat);
     if (!process.env.ALPHAVANTAGE_API_KEY) {
-      caveats.push("Alpha Vantage News/Sentiment unavailable: ALPHAVANTAGE_API_KEY is not configured.");
+      availabilityIssues.push("Alpha Vantage News/Sentiment unavailable: ALPHAVANTAGE_API_KEY is not configured");
     } else if (!av.length) {
-      caveats.push("Alpha Vantage News/Sentiment returned no usable headlines or reached rate limit this run.");
+      availabilityIssues.push("Alpha Vantage News/Sentiment returned no usable headlines or reached its rate limit");
     }
-    if (!process.env.SERPER_API_KEY) {
-      caveats.push("Serper news unavailable: SERPER_API_KEY is not configured.");
-    } else if (!serper.length) {
-      caveats.push("Serper news returned no usable headlines or was unreachable this run.");
+    // You.com is the only third-party search-enrichment provider: report the key
+    // gap when it is unset, and report a degraded call when it is configured but
+    // returned nothing or was unreachable.
+    if (!process.env.YDC_API_KEY) {
+      availabilityIssues.push(
+        "no search-enrichment provider configured: set YDC_API_KEY to enable You.com Web Search",
+      );
+    } else if (!youcom.length) {
+      availabilityIssues.push("You.com search returned no usable headlines or was unreachable");
     }
     if (!process.env.ADANOS_API_KEY) {
-      caveats.push("Adanos social sentiment unavailable: ADANOS_API_KEY is not configured.");
+      availabilityIssues.push("Adanos social sentiment unavailable: ADANOS_API_KEY is not configured");
     } else if (!adanos) {
-      caveats.push("Adanos social sentiment returned no data or reached rate limit this run.");
+      availabilityIssues.push("Adanos social sentiment returned no data or reached its rate limit");
     }
+
+    const activeHeadlineSources = [
+      av.length ? "Alpha Vantage" : null,
+      youcom.length ? "You.com" : null,
+      yf.length || rss.length ? "Yahoo Finance" : null,
+      gNews.length ? "Google News" : null,
+    ].filter((source): source is string => Boolean(source));
+    const caveats = headlines.length > 0 && availabilityIssues.length > 0
+      ? [
+          `Optional news coverage gaps: ${availabilityIssues.join("; ")}. Core headlines remained available from ${activeHeadlineSources.join(", ") || "other providers"}.`,
+        ]
+      : availabilityIssues;
 
     const mergedXPosts = [...(adanos?.xPosts ?? []), ...xResult.posts];
     const seenSocial = new Set<string>();
@@ -95,6 +101,15 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
 
     const notes = [
       `${headlines.length} equity-relevant headlines after de-duplication.`,
+      ...(fearGreed
+        ? [
+            `Bitget market Fear & Greed ${fearGreed.score.toFixed(1)} (${fearGreed.rating.toLowerCase()})${
+              fearGreed.previousWeek !== undefined
+                ? `, week-ago ${fearGreed.previousWeek.toFixed(1)}`
+                : ""
+            }${fearGreed.previousMonth !== undefined ? `, month-ago ${fearGreed.previousMonth.toFixed(1)}` : ""}. Broad market context, not a signal about this name.`,
+          ]
+        : []),
       headlines.some((h) => h.tag === "earnings" || h.tag === "guidance")
         ? "Earnings/guidance language is present in the recent tape of headlines."
         : "No obvious earnings/guidance headline in the recent sample — do not invent one.",
@@ -147,18 +162,22 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       caveats,
       notes,
       sources: [
-        { label: "Bitget Signal news-briefing stream (official public MCP data service, 44 sources)" },
+        ...(fearGreed ? [{ label: `${BITGET_MCP_SOURCE_LABEL} · market sentiment`, url: "https://agent.bitget.com/mcp" }] : []),
         ...(adanos && adanos.found
           ? [{ label: "Adanos social sentiment & BuzzScore (Reddit + X)", url: "https://adanos.org" }]
           : []),
         ...(av.length ? [{ label: "Alpha Vantage News & Sentiment" }] : []),
-        ...(serper.length ? [{ label: "Serper Google News" }] : []),
+        ...(youcom.length
+          ? [{ label: "You.com Web Search (web + news sections)", url: "https://you.com/platform" }]
+          : []),
         { label: "Yahoo Finance search/news" },
         { label: "Yahoo Finance RSS" },
         { label: "Google News RSS" },
-        ...(xCount
-          ? [{ label: process.env.SORSA_API_KEY && !xResult.caveat?.startsWith("Sorsa unavailable") ? "Sorsa X discourse" : "X discourse" }]
-          : [{ label: "X discourse (unavailable this run)" }]),
+        ...(xResult.posts.length
+          ? [{ label: "X discourse" }]
+          : xCount
+            ? []
+            : [{ label: "X discourse (unavailable this run)" }]),
       ],
     };
   } catch (err) {

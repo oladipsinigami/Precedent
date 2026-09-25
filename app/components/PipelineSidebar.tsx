@@ -41,6 +41,13 @@ export const PILLARS: {
     description: "Empirical chart trajectory matching with unsigned historical outcome distributions.",
     runningMessage: "Matching 10-year historical chart patterns…",
   },
+  {
+    id: "marketStructure",
+    label: "Market Structure",
+    short: "RMT Peer Communities",
+    description: "Precomputed peer communities from market-mode-removed co-movement, with a Marcenko-Pastur signal-versus-noise diagnostic.",
+    runningMessage: "Resolving RMT peer communities…",
+  },
 ];
 
 function StatusIndicator({
@@ -130,7 +137,7 @@ export function PipelineChecklist({
               <span className="relative inline-flex h-2 w-2 rounded-full bg-[#75b8ff]" />
             </span>
             <span className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-white">
-              All Evidence Streams Verified ({readyCount}/4 Ready) · Synthesizing Research Memo…
+              Evidence Streams Verified ({readyCount}/{PILLARS.length} Ready) · Synthesizing Research Memo…
             </span>
           </div>
           <button
@@ -155,7 +162,7 @@ export function PipelineChecklist({
                 ? "bg-[#75b8ff] animate-pulse"
                 : busy || runningCount > 0
                 ? "bg-[#75b8ff] animate-pulse"
-                : readyCount === 4
+                : readyCount === PILLARS.length
                 ? "bg-[#d4ff3f]"
                 : degradedCount > 0
                 ? "bg-[#f59e0b]"
@@ -165,7 +172,7 @@ export function PipelineChecklist({
           <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-white">
             {isSynthesis
               ? "Synthesis in progress · Preparing Memo"
-              : `Verification Pipeline Progress (${readyCount}/4 Verified)`}
+              : `Verification Pipeline Progress (${readyCount}/${PILLARS.length} Verified)`}
           </span>
         </div>
 
@@ -185,7 +192,7 @@ export function PipelineChecklist({
         </div>
       </div>
 
-      {/* Compact Vertical Checklist of the 4 Pillars */}
+      {/* Compact Vertical Checklist of the Five Evidence Streams */}
       <div className="mt-3 divide-y divide-white/[0.05]">
         {PILLARS.map((pillar, idx) => {
           const status = statuses[pillar.id] ?? "pending";
@@ -262,6 +269,19 @@ export function PipelineSummary({
   } else if (pillarData?.analogs?.caveats?.length) {
     pillarData.analogs.caveats.forEach((c) => caveats.push({ pillar: "Historical Analogs", text: c }));
   }
+  if (pillarData?.marketStructure) {
+    if (!pillarData.marketStructure.ok) {
+      caveats.push({
+        pillar: "Market Structure",
+        text: pillarData.marketStructure.error || "RMT peer-community snapshot degraded.",
+      });
+    } else if (pillarData.marketStructure.stale) {
+      caveats.push({
+        pillar: "Market Structure",
+        text: `Snapshot computed ${pillarData.marketStructure.computedAt ?? "at an unknown time"} is stale; refresh the scheduled precompute.`,
+      });
+    }
+  }
 
   return (
     <div className="relative">
@@ -281,7 +301,7 @@ export function PipelineSummary({
             }`}
           />
           <span>
-            Pipeline Summary: {readyCount}/4 Ready
+            Pipeline Summary: {readyCount}/{PILLARS.length} Ready
             {degradedCount > 0 ? ` (${degradedCount} Degraded)` : ""}
             {failedCount > 0 ? ` (${failedCount} Failed)` : ""}
           </span>
@@ -295,7 +315,7 @@ export function PipelineSummary({
             <div className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#a0b0be]">
               Pipeline Verification Summary
             </div>
-            <span className="font-mono text-[10px] text-[#617180]">Four Pillars</span>
+            <span className="font-mono text-[10px] text-[#617180]">Five Evidence Streams</span>
           </div>
 
           <div className="mt-3 divide-y divide-white/[0.04]">
@@ -341,7 +361,7 @@ export function PipelineSummary({
             </div>
           ) : (
             <div className="mt-3 border-t border-white/[0.06] pt-2 text-[11px] text-[#637382]">
-              All four research streams converged with full source verification and zero degradation caveats.
+              All five evidence streams converged with full source verification and zero degradation caveats.
             </div>
           )}
         </div>

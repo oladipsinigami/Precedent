@@ -157,13 +157,24 @@ function computeEmpiricalRanges(
 
   if (distinct.length < 10) return { ranges: [], sampleN: 0 };
 
+  function quantile(sorted: number[], q: number): number {
+    if (!sorted.length) return 0;
+    const pos = (sorted.length - 1) * q;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (sorted[base + 1] !== undefined) {
+      return sorted[base] + rest * (sorted[base + 1] - sorted[base]);
+    }
+    return sorted[base];
+  }
+
   function getPercentiles(returns: number[]) {
     if (!returns.length) return { n: 0, p10: 0, p50: 0, p90: 0, pUp: 0 };
     returns.sort((a, b) => a - b);
     const n = returns.length;
-    const p10 = returns[Math.floor(n * 0.10)];
-    const p50 = returns[Math.floor(n * 0.50)];
-    const p90 = returns[Math.floor(n * 0.90)];
+    const p10 = Number(quantile(returns, 0.10).toFixed(2));
+    const p50 = Number(quantile(returns, 0.50).toFixed(2));
+    const p90 = Number(quantile(returns, 0.90).toFixed(2));
     const upCount = returns.filter((r) => r > 0).length;
     return { n, p10, p50, p90, pUp: upCount / n };
   }

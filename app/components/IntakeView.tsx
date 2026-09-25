@@ -11,6 +11,7 @@ interface IntakeViewProps {
   symbol: string;
   onInstrumentChange: (symbol: string) => void;
   instruments: Instrument[];
+  universeMeta: { source: "live" | "fallback"; count: number; asOf: string | null };
   selectedInstrument: Instrument | undefined;
   question: string;
   onQuestionChange: (question: string) => void;
@@ -32,6 +33,7 @@ export function IntakeView({
   symbol,
   onInstrumentChange,
   instruments,
+  universeMeta,
   selectedInstrument,
   question,
   onQuestionChange,
@@ -101,7 +103,7 @@ export function IntakeView({
         </h1>
 
         <p className="mx-auto mt-5 max-w-2xl text-xs sm:text-sm md:text-[15px] leading-relaxed text-[#8a9aa8]">
-          Harmonize corporate fundamentals, live 24/7 venue order flow, social discourse, and 10-year historical precedents into one beautifully structured memo — keeping your judgment sovereign.
+          Harmonize corporate fundamentals, 24/7 tokenized-venue context, social discourse, market structure, and 10-year historical precedents into one beautifully structured memo — keeping your judgment sovereign.
         </p>
 
         {/* Prominent One-Click Recommended Demo Walkthrough */}
@@ -143,6 +145,7 @@ export function IntakeView({
           symbol={symbol}
           onInstrumentChange={onInstrumentChange}
           instruments={instruments}
+          universeMeta={universeMeta}
           selectedInstrument={selectedInstrument}
           question={question}
           onQuestionChange={onQuestionChange}
@@ -152,7 +155,7 @@ export function IntakeView({
           onFillDemo={onFillDemo}
         />
 
-        {/* Compact Vertical Checklist of the Four Pillars */}
+        {/* Compact Vertical Checklist of the Five Evidence Streams */}
         {busy && (
           <PipelineChecklist
             statuses={statuses}

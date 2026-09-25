@@ -41,7 +41,7 @@ export const STYLES: Record<
     horizon: "20–60 sessions. Multi-quarter filings matter more than one RSI print.",
     depth: "Lead with filings, earnings trajectory, and 10-day analog bands. Technicals as regime, not as a trigger.",
     analogHorizon: "10d",
-    framing: "Longer-horizon investment assessment stress-testing multi-week analog distribution against fundamental SEC filing trends.",
+    framing: "Longer-horizon position assessment stress-testing multi-week analog distribution against fundamental SEC filing trends.",
   },
 };
 

@@ -9,18 +9,23 @@ import {
   swingLevels,
 } from "../indicators";
 import { bitgetTape } from "../providers/bitget";
+import { BITGET_MCP_SOURCE_LABEL, bitgetEquityQuote } from "../providers/bitget-data";
 import { yahooChart } from "../providers/yahoo";
 import type { TechnicalsPillar } from "../types";
 import type { NameCard } from "../universe";
 
 export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
   try {
-    const [yahooRes, rTape] = await Promise.all([
+    const [yahooRes, rTape, bitgetQuote] = await Promise.all([
       yahooChart(name.native, "1y", "1d").catch((err) => {
         console.warn("[technicals] Yahoo chart failed:", err instanceof Error ? err.message : err);
         return null;
       }),
       bitgetTape(name).catch(() => null),
+      // First-party Bitget US-equity quote. Independent of the Yahoo chart, so
+      // a disagreement between the two is itself a reportable fact rather than
+      // something to paper over.
+      bitgetEquityQuote(name.native).catch(() => null),
     ]);
 
     const bars = yahooRes?.bars && yahooRes.bars.length > 0 ? yahooRes.bars : [];
@@ -71,6 +76,17 @@ export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
         "Bitget rToken tape was not reachable from this environment. Native cash session is the tape; 7×24 implications are framed, not fabricated.";
     }
 
+    // Two independent prints of the same cash-session last. Agreement is a
+    // provenance check; a gap is disclosed rather than silently averaged away.
+    if (bitgetQuote && last > 0) {
+      const driftPct = ((bitgetQuote.last - last) / last) * 100;
+      notes.push(
+        Math.abs(driftPct) < 0.5
+          ? `Bitget MCP equity quote ${bitgetQuote.last} agrees with the Yahoo chart last ${last} (${driftPct >= 0 ? "+" : ""}${driftPct.toFixed(2)}% apart).`
+          : `Bitget MCP equity quote ${bitgetQuote.last} differs from the Yahoo chart last ${last} by ${driftPct >= 0 ? "+" : ""}${driftPct.toFixed(2)}%; treat the cash reference as unconfirmed on this run.`,
+      );
+    }
+
     return {
       ok: true,
       native: {
@@ -104,6 +120,7 @@ export async function runTechnicals(name: NameCard): Promise<TechnicalsPillar> {
       notes,
       sources: [
         ...(yahooRes ? [{ label: `Yahoo Finance chart ${name.native}`, url: `https://finance.yahoo.com/quote/${name.native}` }] : []),
+        ...(bitgetQuote ? [{ label: BITGET_MCP_SOURCE_LABEL, url: "https://agent.bitget.com/mcp" }] : []),
         ...(rTape ? [{ label: `Bitget ${rTape.symbol}` }] : [{ label: "Bitget public ticker (unreachable this run)" }]),
       ],
     };

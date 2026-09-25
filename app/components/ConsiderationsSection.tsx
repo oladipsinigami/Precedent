@@ -1,17 +1,17 @@
 "use client";
 
 import type { AnalogsPillar, Briefing, StructureFlags } from "@/lib/types";
-import type { PillarScore } from "@/lib/pillar-scores";
+import type { PillarCoverage, PillarScore } from "@/lib/pillar-scores";
 
 interface ConsiderationsSectionProps {
   considerations: Briefing["considerations"];
   scores: { sentiment: PillarScore; fundamentals: PillarScore; technicals: PillarScore };
-  aggregate: { value: number | null; label: PillarScore["label"]; basis: string };
+  coverage: PillarCoverage;
   analogs?: AnalogsPillar;
   analogQuality?: StructureFlags["analogQuality"];
 }
 
-export function ConsiderationsSection({ considerations, scores, aggregate, analogs, analogQuality }: ConsiderationsSectionProps) {
+export function ConsiderationsSection({ considerations, scores, coverage, analogs, analogQuality }: ConsiderationsSectionProps) {
   const available = Object.values(scores).filter((score) => score.value !== null);
   const labels = available.map((score) => score.label);
   const agreement = labels.length > 1 && labels.every((label) => label === labels[0])
@@ -24,10 +24,10 @@ export function ConsiderationsSection({ considerations, scores, aggregate, analo
     <div className="space-y-5">
       <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">✦ Aggregate Evidence Synthesis</h4>
-          <span className="font-mono text-lg font-semibold text-[#1f2821]">{aggregate.value === null ? "N/A" : `${aggregate.value} / 100`} <span className="text-[10px] uppercase text-[#738275]">· {aggregate.label}</span></span>
+          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#486326]">✦ Evidence Coverage Synthesis</h4>
+          <span className="font-mono text-lg font-semibold text-[#1f2821]">{coverage.available} / {coverage.total} streams <span className="text-[10px] uppercase text-[#738275]">· {coverage.label}</span></span>
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{aggregate.basis}</p>
+        <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{coverage.basis}</p>
         <p className="mt-2 text-xs leading-relaxed text-[#222b24]"><span className="font-semibold text-[#486326]">✦ Synthesis Commentary:</span> {agreement} {trajectory} The unresolved questions below define what evidence would change the thesis.</p>
       </div>
       <div className="grid gap-4 sm:gap-6 md:grid-cols-3">

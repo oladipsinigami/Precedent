@@ -86,8 +86,15 @@ export function deterministicBriefing(opts: {
   }
   if (pillars?.marketStructure?.ok) {
     const ms = pillars.marketStructure;
+    const cohortPeers = (ms.communityMembers ?? []).filter((m) => m !== name.native);
+    const residualPeers = (ms.cleanedCorrelations ?? []).slice(0, 5);
+    const cohortClause = cohortPeers.length
+      ? `sits in RMT community ${ms.communityId} alongside ${cohortPeers.slice(0, 5).join(", ")}`
+      : `has no distinct peer cluster at this cut; its strongest market-mode-removed partners are ${
+          residualPeers.map((p) => `${p.peer} (${p.residual.toFixed(2)})`).join(", ") || "none above the cut"
+        }`;
     evidence.push({
-      claim: `Market structure: ${name.native} sits in RMT community ${ms.communityId} alongside ${(ms.communityMembers ?? []).filter((m) => m !== name.native).slice(0, 5).join(", ") || "no listed peers"}; market-mode share ${ms.marketModeStrength !== undefined ? (ms.marketModeStrength * 100).toFixed(1) + "%" : "n/a"}; ≈${ms.infoBeyondNoisePct?.toFixed(1)}% of eigenstructure beyond noise.`,
+      claim: `Market structure: ${name.native} ${cohortClause}; market-mode share ${ms.marketModeStrength !== undefined ? (ms.marketModeStrength * 100).toFixed(1) + "%" : "n/a"}; ≈${ms.infoBeyondNoisePct?.toFixed(1)}% of eigenstructure beyond noise.${ms.stale ? ` Snapshot from ${ms.computedAt ?? "an unknown time"} is stale and is historical context only.` : ""}`,
       source: "RMT precompute snapshot",
       pillar: "marketStructure" as const,
     });
@@ -123,20 +130,20 @@ export function deterministicBriefing(opts: {
 
   if (isDayOrOvernight || pillars?.technicals?.rTokenGap) {
     tension.push({
-      left: "Bitget trades 24 hours a day on crypto exchange rails.",
+      left: "Bitget trades 24/7 on crypto exchange rails.",
       right: pillars?.technicals?.rTokenGap
-        ? `The regular US stock market is closed overnight, leaving a price difference: ${pillars.technicals.rTokenGap}.`
-        : "The regular US stock market is closed overnight and only trades during daytime hours.",
+        ? `US cash market is closed overnight, establishing venue basis: ${pillars.technicals.rTokenGap}.`
+        : "US cash equity market is closed overnight, operating only during standard daytime hours.",
       whyItMatters:
-        "Overnight prices trade on lighter volume on 24-hour rails, while the daytime cash market provides primary equity liquidity.",
+        "Overnight rToken quotes reflect off-hours crypto venue liquidity; basis spreads frequently mean-revert or gap sharply upon NY cash market open.",
     });
   }
 
   if (band) {
     const dir = pillars?.technicals?.native?.changePct !== undefined && pillars.technicals.native.changePct >= 0 ? "upward" : "downward";
     tension.push({
-      left: `Recent price action has trended ${dir} in native trading.`,
-      right: `Similar past chart patterns only went up ${Math.round(band.pUp * band.n)} out of ${band.n} times.`,
+      left: `Native cash tape demonstrates recent ${dir} price movement.`,
+      right: `Historical analog follow-through produced positive returns in only ${Math.round(band.pUp * band.n)} of ${band.n} matching instances.`,
       whyItMatters:
         "Recent price action and historical analog follow-through are separate measurements; past patterns produced a split distribution rather than a uniform move.",
     });
@@ -144,46 +151,46 @@ export function deterministicBriefing(opts: {
 
   if (band && (band.p90 - band.p10) >= 3) {
     tension.push({
-      left: `The stock is currently trading around ${pillars?.technicals?.native?.last !== undefined ? `$${pillars.technicals.native.last.toFixed(2)}` : "its current price"}.`,
-      right: `In past similar charts, outcomes over ${analogHorizon} ranged from ${fmtPct(band.p10)} to ${fmtPct(band.p90)}.`,
+      left: `Spot equity trades near ${pillars?.technicals?.native?.last !== undefined ? `$${pillars.technicals.native.last.toFixed(2)}` : "its current print"}.`,
+      right: `Historical analog realizations over ${analogHorizon} span a wide distribution: ${fmtPct(band.p10)} (p10) to ${fmtPct(band.p90)} (p90).`,
       whyItMatters:
-        "The historical range shows that both positive and negative moves occurred from this pattern, so a plan must account for both.",
+        `Historical quantile dispersion (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) confirms two-sided tail risk; past realizations were not clustered unidirectionally.`,
     });
   }
 
   if (rsi !== undefined && rsi >= 60 && pillars?.news?.headlines?.some((h) => h.lean === "cautious")) {
     tension.push({
-      left: `The short-term strength score (RSI) is high at ${rsi.toFixed(1)} out of 100.`,
-      right: "Recent news coverage reflects mixed or risk-oriented headlines.",
+      left: `RSI-14 indicates elevated short-term momentum at ${rsi.toFixed(1)}.`,
+      right: "Verified headline flow reflects cautious or risk-sensitive editorial coverage.",
       whyItMatters:
-        "Recent price strength and cautious headline flow do not point in the same direction, so a beginner should note the disagreement rather than treat either as a directional forecast.",
+        "Price momentum and cautious headline flow diverge; treat the clash as analytical friction rather than directional signal.",
     });
   }
 
   if (newsLean && xLean && newsLean !== "mixed" && xLean !== "mixed" && newsLean !== xLean) {
     const describeLean = (l: string) => (l === "constructive" ? "positive" : l === "cautious" ? "risk-conscious" : l);
     tension.push({
-      left: `Official news headlines show ${describeLean(newsLean)} coverage.`,
-      right: `Social media discussions show ${describeLean(xLean)} coverage.`,
+      left: `Verified news headlines show ${describeLean(newsLean)} editorial coverage.`,
+      right: `Social discourse feeds show ${describeLean(xLean)} engagement-weighted sentiment.`,
       whyItMatters:
-        "News reporters and social media discussions track different information sources and participant groups.",
+        "Financial media editorial coverage and social participant sentiment track distinct data streams and market participant cohorts.",
     });
   }
 
   if (pillars?.fundamentals?.eps) {
     tension.push({
-      left: `Company reports show quarterly performance (latest diluted EPS ${pillars.fundamentals.eps.value}).`,
-      right: "Daily market prices fluctuate continuously based on short-term trading.",
+      left: `SEC filings confirm reported quarterly profitability (diluted EPS ${pillars.fundamentals.eps.value}).`,
+      right: "Continuous secondary market prices fluctuate independently on order flow and macro sentiment.",
       whyItMatters:
-        "SEC-filed financial statements record historical company performance, while market prices reflect continuous daily trading.",
+        "SEC-filed financial statements record historical accounting results, while market pricing continuously discounts forward macro and liquidity expectations.",
     });
   }
 
   if (!tension.length) {
     tension.push({
-      left: "Retrieved facts do not show an obvious open contradiction.",
-      right: "An absence of contradiction is not a guarantee of safety.",
-      whyItMatters: "A beginner still needs a clear invalidation level before opening any position.",
+      left: "Retrieved pillar streams demonstrate no obvious direct contradiction.",
+      right: "Absence of active divergence does not eliminate tail risk or structural vulnerability.",
+      whyItMatters: "Clear invalidation boundaries remain mandatory regardless of multi-stream agreement.",
     });
   }
 
@@ -195,75 +202,75 @@ export function deterministicBriefing(opts: {
   }));
 
   const whatWeDidText = (!band || band.n === 0)
-    ? `We evaluated live evidence across corporate filings, technical price action, Bitget 24-hour token trading, and recent news flow. Historical chart comparison was not available in this run, so this simplified research note focuses on verified technical levels, order flow, and fundamental catalysts.`
+    ? `Cross-examined live tape and 24/7 Bitget basis for ${name.native} (${name.rToken}) against SEC filings, market structure, and headline flow; 10-year historical analog feed returned no qualifying matches.`
     : style === "day"
-    ? `We compared the current chart with past charts that had a similar shape, focusing on the 1-session horizon into the next cash open. We specifically checked the 24-hour Bitget token price against the regular New York market close to assess overnight gap and basis risk. We also checked price trends and recent news.`
+    ? `Cross-examined 1-session price action for ${name.native} (${name.rToken}) against 10-year analogs, measuring the 24/7 Bitget basis against the NY cash close alongside SEC filings and recent headlines.`
     : style === "position"
-    ? `We compared the current chart with past charts over a multi-week horizon. We focused on company filings, earnings trajectory, and 10-day analog distributions, checking the 24-hour Bitget token price for context.`
+    ? `Cross-examined multi-week position trajectory for ${name.native} (${name.rToken}) against 10-year analog distributions, SEC EDGAR filing trends, and RMT market structure alongside 24/7 Bitget tape context.`
     : style === "event"
-    ? `We compared the current chart with past charts around similar event windows. We specifically evaluated the 24-hour Bitget token price against the regular market close, along with upcoming catalysts, company earnings, and recent news.`
+    ? `Cross-examined catalyst and event-window pricing for ${name.native} (${name.rToken}) against historical reaction bands, SEC filing disclosures, and 24/7 Bitget tape basis.`
     : asksAboutOvernight
-    ? `We compared the current chart with past charts that had a similar shape. Because you asked about overnight trading, we specifically checked the 24-hour Bitget token price against the regular New York market close. We also checked company earnings and recent news.`
-    : `We compared the current chart with past charts that had a similar shape. We also checked company earnings, price trends, Bitget trading, and recent news.`;
+    ? `Evaluated ${name.native} (${name.rToken}) overnight tape dynamics, measuring the 24/7 Bitget pricing basis and liquidity spread against the NY cash close alongside 10-year historical analog distributions.`
+    : `Cross-examined 5-session swing structure for ${name.native} (${name.rToken}) against 10-year analog distributions, measuring the 24/7 Bitget basis against the NY cash close alongside corporate fundamentals and discourse.`;
 
   const otherChecked = isDayOrOvernight
     ? [
         pillars?.technicals?.rTokenGap
-          ? `24-hour Bitget price vs regular stock close: ${pillars.technicals.rTokenGap}.`
-          : "Bitget trades 24 hours a day, while the regular US stock market closes overnight.",
-        "Overnight basis risk: Bitget 24-hour token trading continues overnight while regular US cash markets are closed.",
+          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          : "Tape & Venue Basis: Bitget trades 24/7 on crypto rails, while the primary US equity market closes overnight.",
+        "Liquidity & Spread: Off-hours rToken trading operates with thinner order depth, exposing positions to opening basis gap risk.",
         pillars?.fundamentals?.eps
-          ? `Company earnings: diluted EPS was ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
+          ? `SEC EDGAR Filing Tape: Diluted EPS ${pillars.fundamentals.eps.value} for period ending ${pillars.fundamentals.eps.periodEnd} (${pillars.fundamentals.eps.form} filed ${pillars.fundamentals.eps.filed}).`
           : pillars?.fundamentals?.latestFilings?.[0]
-          ? `Company filings: latest SEC form on tape is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
-          : "Company filings data was limited in this run.",
+          ? `SEC EDGAR Filing Tape: Latest disclosure is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
+          : "SEC Filing Tape: Corporate disclosure feed returned limited reporting in this run.",
       ]
     : [
         pillars?.fundamentals?.eps
-          ? `Company earnings: diluted EPS was ${pillars.fundamentals.eps.value} for the period ending ${pillars.fundamentals.eps.periodEnd}.`
+          ? `SEC EDGAR Filing Tape: Diluted EPS ${pillars.fundamentals.eps.value} for period ending ${pillars.fundamentals.eps.periodEnd} (${pillars.fundamentals.eps.form} filed ${pillars.fundamentals.eps.filed}).`
           : pillars?.fundamentals?.latestFilings?.[0]
-          ? `Company filings: latest SEC form on tape is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
-          : "Company filings data was limited in this run.",
+          ? `SEC EDGAR Filing Tape: Latest disclosure is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
+          : "SEC Filing Tape: Corporate disclosure feed returned limited reporting in this run.",
         pillars?.technicals?.rTokenGap
-          ? `24-hour Bitget price vs regular stock: ${pillars.technicals.rTokenGap}.`
-          : "Bitget 24-hour trading operates independently of daytime market hours.",
+          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          : "Tape & Venue Basis: Bitget 24/7 trading operates continuously across closed cash market sessions.",
         pillars?.news?.headlines?.[0]
-          ? `Latest headline: “${pillars.news.headlines[0].title}”.`
-          : "Recent news coverage was included where available.",
+          ? `Lead Editorial Headline: “${pillars.news.headlines[0].title}” (${pillars.news.headlines[0].publisher}).`
+          : "News & Macro: Live headline stream verified where coverage was active.",
       ];
 
   const takeaways = isDayOrOvernight
     ? [
-        "Bitget trades 7×24, so overnight prices can differ from regular market closing prices until New York trading opens.",
+        "Bitget trades 24/7; overnight rToken prices establish a venue basis against the NY cash close that frequently adjusts upon cash equity open.",
         band && band.n > 0
-          ? `Past similar charts went up ${Math.round(band.pUp * band.n)} out of ${band.n} times, with outcomes spread between ${fmtPct(band.p10)} and ${fmtPct(band.p90)}.`
-          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and order flow.",
-        "Trading during closed cash sessions carries basis risk if liquidity is thin.",
+          ? `Past 10-year analogs (n=${band.n}) show positive follow-through in ${Math.round(band.pUp * band.n)} of ${band.n} sessions, with quantile dispersion spanning ${fmtPct(band.p10)} (p10) to ${fmtPct(band.p90)} (p90).`
+          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and venue order flow.",
+        "Trading during offline cash sessions exposes capital to venue liquidity vacuums and overnight gap risk.",
       ]
     : [
         band && band.n > 0
-          ? `Past similar charts went up ${Math.round(band.pUp * band.n)} out of ${band.n} times, with outcomes spread between ${fmtPct(band.p10)} and ${fmtPct(band.p90)}.`
-          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and order flow.",
+          ? `Past 10-year analogs (n=${band.n}) show positive follow-through in ${Math.round(band.pUp * band.n)} of ${band.n} sessions, with quantile dispersion spanning ${fmtPct(band.p10)} (p10) to ${fmtPct(band.p90)} (p90).`
+          : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and venue order flow.",
         pillars?.technicals?.rTokenGap
-          ? `24-hour Bitget price vs regular stock: ${pillars.technicals.rTokenGap}.`
-          : "Bitget 24-hour trading operates independently of daytime market hours.",
-        "Historical patterns show possibilities, but never predict what will happen next.",
+          ? `24/7 Bitget price vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          : "Bitget 24/7 trading functions continuously independent of daytime cash session schedules.",
+        "Historical analog distributions indicate realization dispersion, not deterministic forward paths.",
       ];
 
   const reflectionQuestions = isDayOrOvernight
     ? [
-        "If the 24-hour Bitget price moves sharply overnight while regular US stock markets are closed, will you exit immediately or wait for the New York open?",
+        "If the Bitget overnight basis dislocates sharply while US cash markets are closed, does your rule set mandate exiting on crypto rails or waiting for New York open price discovery?",
         band
-          ? `If the price drops below the typical historical range of ${fmtPct(band.p10)}, what is your exit plan?`
-          : "What specific price drop would make you step aside and close the trade?",
-        "Are you comfortable holding an rToken position when daytime stock liquidity is offline?",
+          ? `If price breaches the historical ${fmtPct(band.p10)} lower quantile boundary, what is your predetermined invalidation trigger?`
+          : "What precise price print invalidates the premise and forces immediate risk liquidation?",
+        "Are you equipped to manage rToken execution during off-hours when underlying equity liquidity is offline?",
       ]
     : [
         band
-          ? `If the price moves outside the typical historical range (${fmtPct(band.p10)} to ${fmtPct(band.p90)}), will you stick to your plan?`
-          : "If the price moves against you immediately, where will you step aside?",
-        "What specific news or price drop would prove your plan wrong?",
-        "Are you making this decision based on verified facts, or fear of missing out?",
+          ? `If post-entry price realization breaches the historical quantile boundaries (${fmtPct(band.p10)} to ${fmtPct(band.p90)}), what is your mechanical invalidation protocol?`
+          : "What specific price level invalidates the thesis and triggers complete exposure removal?",
+        "What specific catalyst drift (e.g. surprise 8-K disclosure, regulatory filing, or macro volatility spike) would invalidate the current setup?",
+        "Is your conviction grounded in cross-examined evidence across the 4 witnesses, or unearned directional bias?",
       ];
 
   const unverified: string[] = [];
@@ -296,7 +303,7 @@ export function deterministicBriefing(opts: {
     whatWeDid: whatWeDidText,
     historicalStressTest: {
       summary: band && band.n > 0
-        ? `We found ${band.n} past cases with a similar chart pattern. The results show a wide range of outcomes. History helps provide context, but it cannot tell us what will happen this time.`
+        ? `Identified ${band.n} matching historical setups across the 10-year library. Analog follow-through exhibits quantile dispersion between ${fmtPct(band.p10)} and ${fmtPct(band.p90)}, indicating significant variance in post-pattern realization.`
         : "Historical comparison was not available in this run because chart pattern feeds returned insufficient matching sessions. Decisions should rely on verified technical support/resistance and fundamental catalysts rather than ungrounded analogs.",
       sampleSize: band?.n ?? 0,
       results: ([
@@ -385,29 +392,29 @@ export function deterministicBriefing(opts: {
     },
     considerations: {
       forStyle: [
-        `This memo is framed for a ${profile.label} style over ${profile.horizon}.`,
+        `This memo is framed for a ${profile.label} horizon (${profile.horizon}).`,
         analogHorizon === "1d"
-          ? "Weight the 1-session analog band and any cash/rToken gap into the next open."
+          ? "Single-session horizon prioritizes 24/7 rToken basis and overnight gap risk into the NY cash open."
           : analogHorizon === "10d"
-            ? "For this time frame, company reports matter more than one short-term price reading."
-            : "For this time frame, compare the five-session history with the places where the facts disagree.",
+            ? "Multi-week horizon prioritizes SEC filing trajectory and RMT community stability over short-term session noise."
+            : "Swing horizon prioritizes 5-session analog dispersion and tension between tape momentum and news flow.",
         pillars?.technicals?.rTokenGap ?? "rToken venue print was not on the tape this run.",
         pillars?.marketStructure?.ok
-          ? `Community ${pillars.marketStructure.communityId} membership means peer moves inside that group deserve more weight than index-level moves.`
-          : "No community membership this run; peer comparison stays manual.",
+          ? `Community ${pillars.marketStructure.communityId} membership indicates peer moves inside that group carry higher explanatory power than broad index beta.`
+          : "No community membership resolved this run; peer comparison requires manual tracking.",
       ],
       invalidation: [
         band
-          ? `A move outside the usual historical range for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) would be different from the cases in this sample.`
-          : "Without analog bands, invalidation has to be defined by the trader’s own level — the desk will not invent one.",
+          ? `Realization outside the historical distribution for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) represents an outlier regime break.`
+          : "Without analog bands, invalidation must be anchored to explicit structural support/resistance levels — the desk does not assume a trade side.",
         pillars?.fundamentals?.catalysts?.[0]
-          ? `A new 8-K that changes the last-known filing picture (latest on tape: ${pillars.fundamentals.catalysts[0]}) would reopen the fundamental picture.`
-          : "Watch the next 8-K; the current filing tape is the last known state.",
+          ? `An unscheduled 8-K or regulatory filing that alters the documented disclosure tape (${pillars.fundamentals.catalysts[0]}) reopens fundamental assumptions.`
+          : "Monitor upcoming SEC filings; the recorded EDGAR state represents the last verified corporate baseline.",
       ],
       questions: [
-        "Is the analog range wide enough that standing aside is the actual decision, not a placeholder?",
-        "If cash is closed and rToken is still trading, which tape are you answering to?",
-        "Which pillar, if it flipped tomorrow, would make you abandon the rest of this memo?",
+        "Is the analog quantile dispersion wide enough that standing aside represents the disciplined institutional choice?",
+        "If cash equity is offline while rToken trades 24/7, which venue's pricing governs your execution rules?",
+        "Which witness stream, if it inverted tomorrow, would force immediate thesis invalidation?",
       ],
     },
     sources: collectSources(pillars),

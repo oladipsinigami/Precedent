@@ -123,15 +123,22 @@ export function FlagsCard({ flags }: { flags: StructureFlags }) {
 
 export function RmtCard({ market }: { market: MarketStructurePillar }) {
   const modePct = market.marketModeStrength !== undefined ? market.marketModeStrength * 100 : null;
+  const cohortSize = market.communityMembers?.length ?? 0;
+  const hasCohort = cohortSize > 1;
+  const peers = market.cleanedCorrelations ?? [];
 
   return (
-    <div className="rounded-sm border border-[#141918]/15 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+    <div className={`rounded-sm border bg-[#fcf9f2] p-4 sm:p-5 shadow-sm ${market.stale ? "border-[#b5731d]/40" : "border-[#141918]/15"}`}>
       <div className="flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[#486326]">
           ✦ RMT Market-Mode Dynamics
         </div>
-        <span className="font-mono text-[9px] uppercase text-[#738275]">
-          {market.communityId ?? "Global"}
+        <span className={`font-mono text-[9px] uppercase ${market.stale ? "font-semibold text-[#a3681e]" : "text-[#738275]"}`}>
+          {market.stale
+            ? "Stale Snapshot"
+            : hasCohort
+              ? `${market.communityId ?? "Cohort"} · ${cohortSize} names`
+              : "No Distinct Cohort"}
         </span>
       </div>
 
@@ -167,6 +174,29 @@ export function RmtCard({ market }: { market: MarketStructurePillar }) {
           </div>
         </div>
       </div>
+
+      {peers.length > 0 && (
+        <div className="mt-3 border-t border-[#141918]/10 pt-3">
+          <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#859487]">
+            {hasCohort ? "Cohort peers" : "Strongest residual partners"}
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {peers.slice(0, 4).map((peer) => (
+              <li key={peer.peer} className="flex items-baseline justify-between gap-2 text-[11px]">
+                <span className="font-semibold text-[#253028]">{peer.peer}</span>
+                <span className="font-mono text-[10px] text-[#637265]">
+                  ρ {peer.residual.toFixed(2)}
+                  <span className="text-[#859487]"> (raw {peer.raw.toFixed(2)})</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] leading-relaxed text-[#859487]">
+            Correlations measured after the market mode is removed, so they describe co-movement
+            beyond the beta these names share with the market.
+          </p>
+        </div>
+      )}
 
       <div className="mt-4 border-t border-[#141918]/10 pt-3 text-[11px] leading-relaxed text-[#5a685c]">
         {market.stability ?? market.caveats.join(" ")}

@@ -60,13 +60,20 @@ export function technicalsScore(technicals?: TechnicalsPillar): PillarScore {
   return score(value, `${averages.length ? `${averages.length} moving-average comparisons` : "No moving-average comparisons"}${technicals.indicators.rsi14 !== undefined ? `; RSI ${technicals.indicators.rsi14.toFixed(1)}` : ""}${technicals.rToken?.premiumPct !== undefined && technicals.rToken.premiumPct !== null ? `; rToken basis ${technicals.rToken.premiumPct.toFixed(2)}%` : ""}.`);
 }
 
-export function aggregatePillarScore(scores: PillarScore[]) {
-  const available = scores.filter((item): item is PillarScore & { value: number } => item.value !== null);
-  if (!available.length) return { value: null, label: "insufficient" as const, basis: "No pillar scores were available." };
-  const value = Math.round(available.reduce((sum, item) => sum + item.value, 0) / available.length);
+export type PillarCoverage = {
+  available: number;
+  total: number;
+  label: "complete" | "partial" | "insufficient";
+  basis: string;
+};
+
+export function summarizePillarCoverage(availability: boolean[]): PillarCoverage {
+  const available = availability.filter(Boolean).length;
+  const total = availability.length;
   return {
-    value,
-    label: labelFor(value),
-    basis: `${available.length} of ${scores.length} pillar scores available; equal-weight average of descriptive evidence strength.`,
+    available,
+    total,
+    label: available === total ? "complete" : available > 0 ? "partial" : "insufficient",
+    basis: `${available} of ${total} evidence streams returned usable data. This is a source-coverage check, not a blended investment score.`,
   };
 }

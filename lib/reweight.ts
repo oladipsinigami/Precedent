@@ -17,20 +17,20 @@ export function reweightBriefing(
   const newStyleNote = `${profile.framing} Target horizon: ${profile.horizon}${briefing.regime ? ` Regime frame: ${briefing.regime}.` : ""}`;
 
   const styleConsiderations = [
-    `Active style re-weighted to ${profile.label}. Target horizon: ${profile.desk}.`,
+    `Active style re-weighted to ${profile.label} (${profile.horizon}).`,
     horizon === "1d"
-      ? "Prioritize the 1-session analog band and overnight 7×24 rToken gap into the next cash open."
+      ? "Single-session horizon prioritizes 24/7 rToken basis and overnight gap risk into the NY cash open."
       : horizon === "10d"
-      ? "Prioritize SEC filing trajectory and the 10-session analog band over any single-day momentum print."
-      : "Prioritize the 5-session analog band and points of tension over isolated headlines.",
-    pillarData?.technicals?.rTokenGap ?? "Evaluate 7×24 rToken tape vs cash close.",
+      ? "Multi-week horizon prioritizes SEC filing trajectory and RMT community stability over short-term session noise."
+      : "Swing horizon prioritizes 5-session analog dispersion and tension between tape momentum and news flow.",
+    pillarData?.technicals?.rTokenGap ?? "Evaluate 24/7 rToken venue basis vs NY cash close.",
   ];
 
   const invalidationConsiderations = [
     band
-      ? `A realized move beyond the ${horizon} p10/p90 band (${fmtPct(band.p10)} / ${fmtPct(band.p90)} excess) invalidates the setup relative to historical precedent.`
-      : briefing.considerations.invalidation[0] ?? "Setup invalidation marked at key structural swing level.",
-    briefing.considerations.invalidation[1] ?? "Monitor upcoming 8-K filings for thesis changes.",
+      ? `Realization beyond the ${horizon} p10/p90 band (${fmtPct(band.p10)} / ${fmtPct(band.p90)} excess) marks a regime break relative to historical precedent.`
+      : briefing.considerations.invalidation[0] ?? "Setup invalidation requires explicit price violation of structural support/resistance.",
+    briefing.considerations.invalidation[1] ?? "Monitor upcoming SEC filings for thesis alteration.",
   ];
 
   // Strip any prior "[Label]" suffix accumulated by earlier style switches,
@@ -48,12 +48,12 @@ export function reweightBriefing(
     : `${baseTitle} [${profile.label}]`;
 
   const updatedWhatWeDid = newStyle === "day"
-    ? "We compared the current chart with past charts that had a similar shape, focusing on the 1-session horizon into the next cash open. We specifically checked the 24-hour Bitget token price against the regular New York market close to assess overnight gap and basis risk. We also checked price trends and recent news."
+    ? "Cross-examined 1-session price action against 10-year analogs, measuring the 24/7 Bitget basis against the NY cash close alongside SEC filings and recent headlines."
     : newStyle === "position"
-    ? "We compared the current chart with past charts over a multi-week horizon. We focused on company filings, earnings trajectory, and 10-day analog distributions, checking the 24-hour Bitget token price for context."
+    ? "Cross-examined multi-week position trajectory against 10-year analog distributions, SEC EDGAR filing trends, and RMT market structure alongside 24/7 Bitget tape context."
     : newStyle === "event"
-    ? "We compared the current chart with past charts around similar event windows. We specifically evaluated the 24-hour Bitget token price against the regular market close, along with upcoming catalysts, company earnings, and recent news."
-    : "We compared the current chart with past charts that had a similar shape. We also checked company earnings, price trends, Bitget trading, and recent news.";
+    ? "Cross-examined catalyst and event-window pricing against historical reaction bands, SEC filing disclosures, and 24/7 Bitget tape basis."
+    : "Cross-examined 5-session swing structure against 10-year analog distributions, measuring the 24/7 Bitget basis against the NY cash close alongside corporate fundamentals and discourse.";
 
   const nativeTicker = tokenMatch ? tokenMatch[1].replace(/^r/i, "").toUpperCase() : "";
   const updatedExamples = (pillarData?.analogs?.closest ?? [])
@@ -73,7 +73,7 @@ export function reweightBriefing(
   const historicalStressTest = {
     ...briefing.historicalStressTest,
     summary: band
-      ? `We found ${band.n} past cases with a similar chart pattern over a ${horizon === "1d" ? "1-day" : horizon === "10d" ? "10-day" : "5-day"} horizon. Outcomes ranged from ${fmtPct(band.p10)} to ${fmtPct(band.p90)}. History provides context, but cannot predict this run.`
+      ? `Identified ${band.n} matching historical setups across the 10-year library for a ${horizon === "1d" ? "1-session" : horizon === "10d" ? "10-session" : "5-session"} horizon. Quantile dispersion spans ${fmtPct(band.p10)} to ${fmtPct(band.p90)}, reflecting wide outcome variance.`
       : briefing.historicalStressTest.summary,
     examples: updatedExamples.length ? updatedExamples : briefing.historicalStressTest.examples,
   };

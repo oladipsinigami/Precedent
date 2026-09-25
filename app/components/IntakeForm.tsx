@@ -6,6 +6,7 @@ import { StyleSelector } from "./StyleSelector";
 import type { TradingStyle } from "@/lib/types";
 
 export type Instrument = { native: string; rToken: string; name: string; sector: string };
+export type UniverseMeta = { source: "live" | "fallback"; count: number; asOf: string | null };
 
 interface IntakeFormProps {
   style: TradingStyle;
@@ -13,6 +14,7 @@ interface IntakeFormProps {
   symbol: string;
   onInstrumentChange: (symbol: string) => void;
   instruments: Instrument[];
+  universeMeta: UniverseMeta;
   selectedInstrument: Instrument | undefined;
   question: string;
   onQuestionChange: (question: string) => void;
@@ -28,6 +30,7 @@ export function IntakeForm({
   symbol,
   onInstrumentChange,
   instruments,
+  universeMeta,
   selectedInstrument,
   question,
   onQuestionChange,
@@ -62,7 +65,7 @@ export function IntakeForm({
           </span>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 font-mono text-[10px] text-[#6c7c8c]">
-          <span className="hidden sm:inline">5 Parallel Verification Streams</span>
+          <span className="hidden sm:inline">5 Parallel Evidence Streams</span>
           <span className="hidden sm:inline text-white/20">|</span>
           <span className="truncate">POST /api/research · SSE Live</span>
         </div>
@@ -86,8 +89,8 @@ export function IntakeForm({
                   </svg>
                   Target Asset · Tokenized US Equity
                 </label>
-                <span className="font-mono text-[10px] text-[#556472]">
-                  {instruments.length} Assets Available
+                <span className="font-mono text-[10px] text-[#556472]" title={universeMeta.asOf ? `Universe refreshed ${new Date(universeMeta.asOf).toLocaleString()}` : "Static fallback universe"}>
+                  {instruments.length.toLocaleString("en-US")} Assets · {universeMeta.source === "live" ? "Live Bitget" : "Static Fallback"}
                 </span>
               </div>
 
@@ -106,7 +109,7 @@ export function IntakeForm({
                 <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#d4ff3f]/70" viewBox="0 0 10 10" fill="currentColor">
                   <path d="M5 0L10 5L5 10L0 5Z" />
                 </svg>
-                Live Venue & Tape Context
+                Venue & Tape Context
               </label>
               <div className="mt-2 flex min-h-[48px] items-center justify-between rounded-sm border border-white/[0.08] bg-[#090c10]/70 px-3 py-2 sm:px-4">
                 <div className="min-w-0 pr-2">
@@ -121,8 +124,12 @@ export function IntakeForm({
                 </div>
                 <div className="flex items-center gap-2 border-l border-white/[0.08] pl-3 sm:pl-4 text-right shrink-0">
                   <span className="hidden sm:inline font-mono text-[10px] uppercase text-[#617180]">Venue:</span>
-                  <span className="rounded bg-[#d4ff3f]/10 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#d4ff3f]">
-                    Bitget 24/7 Market
+                  <span className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${
+                    universeMeta.source === "live"
+                      ? "bg-[#d4ff3f]/10 text-[#d4ff3f]"
+                      : "bg-[#f59e0b]/10 text-[#f59e0b]"
+                  }`}>
+                    {universeMeta.source === "live" ? "Bitget rToken Listed" : "Static Venue Metadata"}
                   </span>
                 </div>
               </div>
@@ -218,7 +225,7 @@ export function IntakeForm({
         {/* Submit & Guidance Bar */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/[0.08] pt-5">
           <div className="max-w-md text-xs leading-relaxed text-[#687786]">
-            Precedent synthesizes factual evidence across all 5 verification streams without directional bias or hype. Every claim is attributed to real data sources.
+            Precedent synthesizes factual evidence across all 5 evidence streams without directional bias or hype. Every claim is attributed to real data sources.
           </div>
 
           <button

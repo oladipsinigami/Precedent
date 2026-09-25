@@ -16,6 +16,12 @@ const SOFT_DIRECTIONAL =
 const SENTIMENT_ATTR =
   /(?:headline|news|x|twitter|social|reddit|retail|discourse|media|press|aggregate|reported|coverage)[^.\n]{0,40}\b(?:bullish|bearish) sentiment\b|\b(?:bullish|bearish) sentiment\b[^.\n]{0,40}(?:in|across|among|from|on)\s+(?:headlines|news|x|twitter|social|reddit|retail|discourse|media|coverage|posts)/i;
 
+const INFLUENCER_HYPE =
+  /\b(going\s+to\s+rip|is\s+about\s+to\s+rip|ready\s+to\s+rip|poised\s+to\s+rip|rip\s+higher|send\s+it|to\s+the\s+moon|squeeze\s+incoming|massive\s+squeeze|huge\s+upside|massive\s+upside|can't\s+miss|surefire\s+trade|guaranteed\s+(?:gains?|profit|returns?)|printing\s+cash)\b/gi;
+
+const PATRONIZING_COACHING =
+  /\b(a\s+beginner\s+should\s+note|for\s+beginners?|beginners?\s+should|fear\s+of\s+missing\s+out|\bFOMO\b)\b/gi;
+
 let lastRewriteCount = 0;
 let lastRewriteOccurred = false;
 
@@ -62,10 +68,10 @@ function demystifyTerm(
 function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
   let out = text;
 
-  if (/\bshort-term\s+strength\s+(score|indicator)\s*\([^)]*RSI[^)]*\)/i.test(out)) {
+  if (/\b(14-session\s+momentum\s+oscillator|short-term\s+strength\s+(?:score|indicator))\s*\([^)]*RSI[^)]*\)/i.test(out)) {
     seen.add("RSI");
   }
-  if (/\btrend-speed\s+indicator\s*\([^)]*MACD[^)]*\)/i.test(out)) {
+  if (/\btrend-(?:momentum|speed)\s+indicator\s*\([^)]*MACD[^)]*\)/i.test(out)) {
     seen.add("MACD");
   }
 
@@ -73,7 +79,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "RSI_stretch",
     /(?<!\()\bRSI\s+stretch(?:\s*\([^)]*\))?(?!\))/gi,
-    "RSI stretch (a condition where the short-term strength indicator reached an extreme)",
+    "RSI stretch (14-session momentum oscillator reached historical tail bands)",
     "RSI stretch",
     seen,
   );
@@ -82,7 +88,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "RSI",
     /(?<!\()\b(?!RSI\s+stretch\b)RSI(?:\s*\([^)]*\))?(?!\))/gi,
-    "RSI (a short-term strength score from 0 to 100)",
+    "RSI (14-session momentum oscillator)",
     "RSI",
     seen,
   );
@@ -91,7 +97,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "MACD",
     /(?<!\()\bMACD(?:\s*\([^)]*\))?(?!\))/gi,
-    "MACD (a trend-speed indicator)",
+    "MACD (trend-momentum indicator)",
     "MACD",
     seen,
   );
@@ -100,7 +106,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "overbought",
     /\boverbought(?:\s*\([^)]*\))?/gi,
-    "overbought (where recent gains were unusually fast relative to the baseline)",
+    "overbought (recent gains stretched relative to baseline)",
     "overbought",
     seen,
   );
@@ -109,7 +115,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "oversold",
     /\boversold(?:\s*\([^)]*\))?/gi,
-    "oversold (where recent drops were unusually fast relative to the baseline)",
+    "oversold (recent decline stretched relative to baseline)",
     "oversold",
     seen,
   );
@@ -118,7 +124,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "mean_reversion",
     /\bmean\s+reversion(?:\s*\([^)]*\))?/gi,
-    "mean reversion (the tendency of prices to return toward their historical average)",
+    "mean reversion (statistical return toward the historical mean)",
     "mean reversion",
     seen,
   );
@@ -127,7 +133,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "overextended",
     /\boverextended(?:\s*\([^)]*\))?/gi,
-    "overextended (moved unusually far away from its recent average)",
+    "overextended (deviated from recent baseline)",
     "overextended",
     seen,
   );
@@ -136,7 +142,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "consolidation",
     /\bconsolidation(?:\s*\([^)]*\))?/gi,
-    "consolidation (a period where price moves sideways in a tight range)",
+    "consolidation (range-bound session compression)",
     "consolidation",
     seen,
   );
@@ -145,7 +151,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "resistance",
     /\bresistance\s+(band|zone|level)(?:\s*\([^)]*\))?/gi,
-    (_m, type) => `resistance ${type} (a price level where historical selling activity previously concentrated)`,
+    (_m, type) => `resistance ${type} (historical selling concentration level)`,
     (_m, type) => `resistance ${type}`,
     seen,
   );
@@ -154,7 +160,7 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
     out,
     "support",
     /\bsupport\s+(zone|band|level)(?:\s*\([^)]*\))?/gi,
-    (_m, type) => `support ${type} (a price level where historical buying activity previously concentrated)`,
+    (_m, type) => `support ${type} (historical buying concentration level)`,
     (_m, type) => `support ${type}`,
     seen,
   );
@@ -319,6 +325,21 @@ export function sanitizeTitle(
   return t;
 }
 
+function banHypeAndCoaching(text: string): string {
+  return text
+    .replace(/\b(going\s+to\s+rip|is\s+about\s+to\s+rip|ready\s+to\s+rip|poised\s+to\s+rip|rip\s+higher)\b/gi, "extended in recent trading")
+    .replace(/\bto\s+the\s+moon\b/gi, "sharply higher")
+    .replace(/\bsend\s+it\b/gi, "execute at market")
+    .replace(/\bprinting\s+cash\b/gi, "generating cash flow")
+    .replace(/\b(massive|huge)\s+(?:upside|rally)\b/gi, "historical upper dispersion")
+    .replace(/\b(squeeze\s+incoming|massive\s+squeeze)\b/gi, "short interest concentration")
+    .replace(/\b(can't\s+miss|surefire\s+trade|guaranteed\s+(?:gains?|profit|returns?))\b/gi, "unverified speculative setup")
+    .replace(/\ba\s+beginner\s+should\s+note\b/gi, "an analyst should note")
+    .replace(/\bfor\s+beginners?\b/gi, "for risk modeling")
+    .replace(/\bbeginners?\s+should\b/gi, "analysts should")
+    .replace(/\b(fear\s+of\s+missing\s+out|\bFOMO\b)\b/gi, "unverified momentum chasing");
+}
+
 function rewrite(
   text: string | undefined | null,
   seen: Set<string> = new Set(),
@@ -330,8 +351,8 @@ function rewrite(
     .replace(CONFIDENCE, "an unstated conviction (removed)")
     .replace(FINAL_RECOMMENDATION, "this desk does not take a side")
     .replace(VERDICT_LINE, "this desk does not take a side");
+  out = banHypeAndCoaching(out);
   out = banSoftDirectional(out);
-  out = demystifyJargon(out, seen);
   out = out.replace(VERDICT, (m) => {
     const lower = m.toLowerCase();
     if (lower === "buy") return "purchasing";
@@ -341,7 +362,11 @@ function rewrite(
     return m;
   });
 
-  if (out !== original && onRewrite) {
+  const prohibitedChanged = out !== original;
+
+  out = demystifyJargon(out, seen);
+
+  if (prohibitedChanged && onRewrite) {
     onRewrite(original, out);
   }
   return out;
@@ -487,7 +512,9 @@ export function looksLikeVerdict(text: string): boolean {
     matches(CONFIDENCE, text) ||
     matches(FINAL_RECOMMENDATION, text) ||
     matches(VERDICT_LINE, text) ||
-    matches(SOFT_DIRECTIONAL, text)
+    matches(SOFT_DIRECTIONAL, text) ||
+    matches(INFLUENCER_HYPE, text) ||
+    matches(PATRONIZING_COACHING, text)
   );
 }
 
@@ -495,9 +522,11 @@ export function looksLikeVerdict(text: string): boolean {
  * Edge case test cases documenting prohibited vs allowed language:
  *
  * PROHIBITED (must be blocked or rewritten):
- * - BUY / SELL / LONG / SHORT used as headlines or final recommendations (e.g. "BUY AAPL", "Final Recommendation: BUY")
- * - Confidence percentages used as a verdict ("78% chance of higher prices", "90% probability of rally")
- * - Imperative trading language ("You should enter here", "Strong sell signal", "Enter a position now")
+ * - BUY / SELL / LONG / SHORT used as headlines or final recommendations
+ * - Confidence percentages used as a verdict
+ * - Imperative trading calls ("You should enter here", "Strong sell signal")
+ * - Influencer hype & Telegram signals ("going to rip", "to the moon", "guaranteed profit")
+ * - Patronizing / coaching beginner talk ("a beginner should note", "FOMO")
  *
  * ALLOWED (must be preserved without alteration):
  * - "Went up X times out of Y"
@@ -505,9 +534,10 @@ export function looksLikeVerdict(text: string): boolean {
  * - "The tape and the filings currently disagree"
  * - "Questions only you can answer"
  * - "Historical results are past occurrences only, not predictions."
+ * - Provenance and venue basis ("rAAPL trades at +0.18% basis against the New York cash close.")
  */
 export const LANGUAGE_GUARD_EDGE_CASES = [
-  // Prohibited edge cases
+  // Prohibited edge cases - Verdicts & Recommendations
   { label: "Headline BUY", text: "BUY AAPL", isProhibited: true },
   { label: "Headline STRONG BUY", text: "STRONG BUY", isProhibited: true },
   { label: "Final Recommendation BUY", text: "Final Recommendation: BUY", isProhibited: true },
@@ -517,6 +547,15 @@ export const LANGUAGE_GUARD_EDGE_CASES = [
   { label: "You should enter here", text: "You should enter here", isProhibited: true },
   { label: "Strong sell signal", text: "Strong sell signal", isProhibited: true },
 
+  // Prohibited edge cases - Influencer Hype & Telegram Calls
+  { label: "Going to rip", text: "This setup is going to rip higher into the open", isProhibited: true },
+  { label: "To the moon", text: "Target price is to the moon after earnings", isProhibited: true },
+  { label: "Guaranteed profit", text: "A guaranteed profit setup based on technicals", isProhibited: true },
+
+  // Prohibited edge cases - Patronizing Coaching Talk
+  { label: "A beginner should note", text: "A beginner should note that tape and filings disagree", isProhibited: true },
+  { label: "Fear of missing out FOMO", text: "Traders acting out of fear of missing out often get stopped", isProhibited: true },
+
   // Allowed base-rate edge cases
   { label: "Went up X times out of Y", text: "Went up 14 times out of 20", isProhibited: false },
   { label: "Typical move", text: "Typical move was usually between -1.5% and +2.1%", isProhibited: false },
@@ -524,6 +563,8 @@ export const LANGUAGE_GUARD_EDGE_CASES = [
   { label: "Questions only you can answer", text: "Questions only you can answer", isProhibited: false },
   { label: "Mandatory disclaimer", text: "Historical results are past occurrences only, not predictions.", isProhibited: false },
   { label: "Attributed discourse sentiment", text: "Aggregate X discourse sentiment was bearish across 18 posts this run.", isProhibited: false },
+  { label: "Basis vs NY close", text: "rAAPL trades at +0.18% basis against the New York cash close.", isProhibited: false },
+  { label: "Quantile dispersion p10/p90", text: "Historical analog dispersion ranges from -2.8% to +3.4%.", isProhibited: false },
 ] as const;
 
 export function runLanguageGuardSelfTest(): {

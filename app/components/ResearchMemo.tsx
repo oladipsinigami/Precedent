@@ -8,7 +8,7 @@ import { AnalogOverlay } from "./AnalogOverlay";
 import { UnsignedRanges } from "./UnsignedRanges";
 import { ConsiderationsSection } from "./ConsiderationsSection";
 import { DecisionRecord } from "./DecisionRecord";
-import { aggregatePillarScore, fundamentalsScore, sentimentScore, technicalsScore, type PillarScore } from "@/lib/pillar-scores";
+import { fundamentalsScore, sentimentScore, summarizePillarCoverage, technicalsScore, type PillarScore } from "@/lib/pillar-scores";
 import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 
 interface ResearchMemoProps {
@@ -79,6 +79,16 @@ function getUnverifiedCaveats(briefing: Briefing, pillarData: PillarBundle | nul
         list.push(`Historical analog sample is limited (${n} cases).`);
       }
     }
+
+    if (!pillarData.marketStructure || !pillarData.marketStructure.ok) {
+      const msg = pillarData.marketStructure?.error
+        ? `Market Structure partial — ${pillarData.marketStructure.error}`
+        : "Market Structure partial — RMT peer-community snapshot unavailable.";
+      if (!list.some((c) => c.toLowerCase().includes("market structure"))) list.push(msg);
+    } else if (pillarData.marketStructure.stale) {
+      const msg = `Market Structure stale — snapshot computed ${pillarData.marketStructure.computedAt ?? "at an unknown time"}; refresh the scheduled precompute.`;
+      if (!list.some((c) => c.toLowerCase().includes("market structure"))) list.push(msg);
+    }
   } else {
     const n = briefing.historicalStressTest?.sampleSize ?? 0;
     if (n === 0 && !list.some((c) => c.toLowerCase().includes("analog"))) {
@@ -103,8 +113,30 @@ export function ResearchMemo({
     fundamentals: fundamentalsScore(pillarData?.fundamentals),
     technicals: technicalsScore(pillarData?.technicals),
   };
-  const aggregate = aggregatePillarScore(Object.values(scores));
+  const coverage = summarizePillarCoverage([
+    scores.sentiment.value !== null,
+    scores.fundamentals.value !== null,
+    scores.technicals.value !== null,
+    Boolean(pillarData?.analogs?.ok),
+    Boolean(pillarData?.marketStructure?.ok && !pillarData.marketStructure.stale),
+  ]);
   const unverifiedCaveats = getUnverifiedCaveats(briefing, pillarData);
+
+  const validExamples = (briefing.historicalStressTest.examples ?? [])
+    .filter(
+      (example) =>
+        example?.when &&
+        example?.whatHappened &&
+        !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(example.whatHappened) &&
+        !/\b(n\/?a|null|undefined)\b/i.test(example.when) &&
+        /\d/.test(example.whatHappened),
+    )
+    .sort((a, b) => {
+      const aCross = /cross[- ]ticker|similar chart|different stock/i.test(a.when) ? 1 : 0;
+      const bCross = /cross[- ]ticker|similar chart|different stock/i.test(b.when) ? 1 : 0;
+      return aCross - bCross;
+    })
+    .slice(0, 3);
 
   return (
     <article className="mt-6 sm:mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-[#f5f0e6] text-[#141918] shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]">
@@ -130,7 +162,7 @@ export function ResearchMemo({
               ) : (
                 <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#486326]/30 bg-[#486326]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#36521a]">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#486326]" />
-                  ✦ Institutional Research Memo · Verified Streams
+                  ✦ Institutional Desk Note · Clerk of Evidence
                 </span>
               )}
               <span className="text-[#88998a]">·</span>
@@ -180,6 +212,7 @@ export function ResearchMemo({
         </div>
       </header>
 
+      {/* TOP SECTION: Executive Research Summary & Takeaways */}
       <section className="border-b border-[#141918]/15 bg-[#f8f5ee] px-4 py-6 sm:px-10 sm:py-8">
         {/* Dedicated "What we could not fully verify" block */}
         {unverifiedCaveats.length > 0 && (
@@ -208,165 +241,155 @@ export function ResearchMemo({
           </div>
         )}
 
-        <div className="mb-5">
-          <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#486326]">
-            ✦ Empirical Precedent & Stress Test
+        {/* Executive Summary Header */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#486326]">
+                ✦ Clerk of Evidence · Desk Briefing
+              </div>
+              <h3 className="mt-2 font-display text-2xl font-medium text-[#111513] sm:text-3xl">
+                Evidence cross-examination & setup briefing
+              </h3>
+            </div>
+            <a
+              href="#advanced-precedents"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="inline-flex items-center gap-1.5 rounded-sm border border-[#486326]/30 bg-[#486326]/10 px-3.5 py-2 font-mono text-xs font-semibold text-[#38521d] transition hover:bg-[#486326]/20 self-start sm:self-auto shrink-0 shadow-sm"
+            >
+              <span>View Full Trajectory Charts & Deep Telemetry</span>
+              <span aria-hidden="true">↓</span>
+            </a>
           </div>
-          <h3 className="mt-2 font-display text-2xl font-medium text-[#111513] sm:text-3xl">
-            How did similar market patterns unfold in history?
-          </h3>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#3f4c41]">{briefing.whatWeDid}</p>
+          {briefing.whatWeDid && (
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#3f4c41] font-medium">
+              {briefing.whatWeDid}
+            </p>
+          )}
         </div>
 
-        <div className="rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-4 shadow-sm sm:p-6">
+        {/* Precedent Quick Snapshot */}
+        <div className="mb-6 rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
-              Historical Precedent Distribution
-            </h4>
+            <div className="flex items-center gap-2">
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#486326]/20 font-mono text-[10px] font-bold text-[#38521d]">
+                ✦
+              </span>
+              <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
+                10-Year Historical Rhyme & Dispersion
+              </h4>
+            </div>
             <span className="inline-flex items-center rounded bg-[#486326]/10 px-2.5 py-1 font-mono text-xs font-semibold text-[#38521d]">
               {briefing.historicalStressTest.sampleSize > 0
-                ? `${briefing.historicalStressTest.sampleSize} historical precedents matched`
+                ? `${briefing.historicalStressTest.sampleSize} historical cases matched`
                 : "0 past cases matched"}
             </span>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-[#232b25]">
+          <p className="mt-2.5 text-sm leading-relaxed text-[#232b25]">
             {briefing.historicalStressTest.summary}
           </p>
+          <div className="mt-3 flex items-center justify-between border-t border-[#141918]/[0.08] pt-3 text-xs text-[#556457]">
+            <span>Detailed trajectory overlays, quantile ranges, and matching episodes are organized at the bottom.</span>
+            <a
+              href="#advanced-precedents"
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="font-mono text-[11px] font-semibold text-[#486326] underline hover:text-[#38521d]"
+            >
+              Jump to charts ↓
+            </a>
+          </div>
+        </div>
 
-          {/* Normalized SVG Trajectory Chart — visual centerpiece of the stress test */}
-          {(pillarData?.analogs?.overlay?.length ?? 0) > 0 && (
-            <AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} />
-          )}
+        {/* 3-Column Core Takeaways Grid */}
+        <div className="grid gap-4 md:grid-cols-3">
+          {/* Card 1: Core Verified Takeaways */}
+          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#486326]">
+                  ✦ Core Verified Takeaways
+                </h4>
+                <span className="font-mono text-[10px] text-[#738375]">01 / Takeaways</span>
+              </div>
+              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+                {briefing.simpleTakeAways.slice(0, 4).map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-[#486326] font-bold select-none">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
 
-          {/* Quantile Distribution Range Bar */}
-          {(pillarData?.analogs?.ranges?.length ?? 0) > 0 && (
-            <UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} />
-          )}
-
-          {briefing.historicalStressTest.results.length > 0 ? (
-            <>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {briefing.historicalStressTest.results.map((result) => {
-                  const wentUpText = result.wentUp.replace(/^went up/i, "Went up");
-                  const typicalMoveText = result.typicalMove.startsWith("Typical move: ")
-                    ? result.typicalMove
-                    : `Typical move: ${result.typicalMove.replace(/^typical move:\s*/i, "")}`;
-                  const medianText = result.median.replace(/^middle result:\s*/i, "");
-                  const periodLabel = result.period === "Next day" ? "Next 1 trading day" : result.period;
-
-                  return (
-                    <div key={result.period} className="rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-3.5 shadow-sm sm:p-4">
-                      <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
-                        {periodLabel}
+          {/* Card 2: Witness Clashes & Divergences */}
+          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#b45309]">
+                  ✦ Witness Clashes & Divergences
+                </h4>
+                <span className="font-mono text-[10px] text-[#738375]">02 / Divergences</span>
+              </div>
+              {briefing.whereThingsDoNotAgree.length > 0 ? (
+                <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+                  {briefing.whereThingsDoNotAgree.slice(0, 3).map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="text-[#b45309] font-bold select-none">•</span>
+                      <div>
+                        <span className="font-semibold text-[#1a221c]">{item.conflict}: </span>
+                        <span className="text-[#4f5e51]">{item.whyItMatters}</span>
                       </div>
-                      <p className="mt-2 text-base font-bold leading-snug text-[#1a221c]">{wentUpText}</p>
-                      <p className="mt-1 text-xs text-[#4f5e51]">{typicalMoveText}</p>
-                      <p className="mt-1 text-xs text-[#637265]">Middle result: {medianText}</p>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="mt-3 text-xs italic leading-relaxed text-[#637265]">
-                Historical results are past occurrences only, not predictions.
-              </p>
-            </>
-          ) : (
-            <div className="mt-4 rounded-sm border border-dashed border-[#141918]/20 bg-white/60 p-5 text-center">
-              <p className="font-mono text-xs font-semibold uppercase tracking-wider text-[#637265]">
-                No historical matches found
-              </p>
-              <p className="mt-1.5 text-xs leading-relaxed text-[#556457] max-w-lg mx-auto">
-                No past chart patterns met verification standards for this setup. Historical base rates and outcome cards are unavailable for this run. Decisions should be grounded in live technical levels and fundamental catalysts.
-              </p>
-            </div>
-          )}
-
-          {briefing.historicalStressTest.sampleSize > 0 && briefing.historicalStressTest.sampleSize < 30 && (
-            <div className="mt-3.5 flex items-center gap-2 rounded border border-[#d97706]/30 bg-[#d97706]/10 px-3 py-2 text-xs text-[#92400e]">
-              <span className="font-bold">Caution:</span>
-              <span>Sample size is below 30 ({briefing.historicalStressTest.sampleSize} past cases matched). Historical patterns with fewer than 30 matches carry higher variance and lower statistical reliability.</span>
-            </div>
-          )}
-
-          {(() => {
-            const validExamples = (briefing.historicalStressTest.examples ?? [])
-              .filter(
-                (example) =>
-                  example?.when &&
-                  example?.whatHappened &&
-                  !/\b(n\/?a|null|undefined|moved\s+n\/?a)\b/i.test(example.whatHappened) &&
-                  !/\b(n\/?a|null|undefined)\b/i.test(example.when) &&
-                  /\d/.test(example.whatHappened),
-              )
-              .sort((a, b) => {
-                const aCross = /cross[- ]ticker|similar chart|different stock/i.test(a.when) ? 1 : 0;
-                const bCross = /cross[- ]ticker|similar chart|different stock/i.test(b.when) ? 1 : 0;
-                return aCross - bCross;
-              })
-              .slice(0, 3);
-
-            if (!validExamples.length) return null;
-
-            return (
-              <div className="mt-5">
-                <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
-                  A few past examples
-                </h5>
-                <ul className="mt-2 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
-                  {validExamples.map((example) => {
-                    const isCross = /cross[- ]ticker|similar chart|different stock/i.test(example.when);
-                    return (
-                      <li key={`${example.when}-${example.whatHappened}`}>
-                        <span className="font-semibold">{example.when}:</span> {example.whatHappened}
-                        {isCross && !example.when.includes("cross-ticker") && (
-                          <span className="ml-2 rounded bg-[#141918]/[0.06] px-1.5 py-0.5 font-mono text-[9px] uppercase text-[#637265]">
-                            cross-ticker
-                          </span>
-                        )}
-                      </li>
-                    );
-                  })}
+                    </li>
+                  ))}
                 </ul>
+              ) : (
+                <p className="mt-3 text-xs leading-relaxed text-[#637265]">
+                  No direct witness contradictions detected across tape, analog, filing, and discourse streams.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Pre-Mortem & Invalidation Boundaries */}
+          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#36521a]">
+                  ✦ Pre-Mortem & Invalidation
+                </h4>
+                <span className="font-mono text-[10px] text-[#738375]">03 / Invalidation</span>
               </div>
-            );
-          })()}
-        </div>
-
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
-          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
-            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">✦ Cross-Pillar Observations</h4>
-            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
-              {briefing.otherThingsWeChecked.slice(0, 3).map((item) => <li key={item}>• {item}</li>)}
-            </ul>
-          </div>
-          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
-            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">✦ Core Executive Takeaways</h4>
-            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
-              {briefing.simpleTakeAways.slice(0, 3).map((item) => <li key={item}>• {item}</li>)}
-            </ul>
-          </div>
-          <div className="rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
-            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">✦ Deliberative Trader Questions</h4>
-            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
-              {briefing.questionsOnlyYouCanAnswer.slice(0, 3).map((item) => <li key={item}>? {item}</li>)}
-            </ul>
+              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+                {briefing.questionsOnlyYouCanAnswer.slice(0, 3).map((item, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-[#486326] font-bold select-none">?</span>
+                    <span className="font-medium text-[#1a221c]">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
 
-        {briefing.whereThingsDoNotAgree.length > 0 && (
-          <div className="mt-5 rounded border border-[#141918]/10 bg-[#fcf9f2] p-4">
-            <h4 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">✦ Signal Divergences & Tensions</h4>
-            <ul className="mt-3 space-y-3 text-xs leading-relaxed text-[#3f4c41]">
-              {briefing.whereThingsDoNotAgree.slice(0, 3).map((item) => (
-                <li key={item.conflict}>
-                  <span className="font-semibold">{item.conflict}</span> {item.whyItMatters}
-                </li>
-              ))}
-            </ul>
+        {/* Cross-Pillar Checked Streams */}
+        {briefing.otherThingsWeChecked?.length > 0 && (
+          <div className="mt-4 rounded-sm border border-[#141918]/10 bg-[#fcf9f2] p-3.5 text-xs text-[#4f5e51]">
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#637566] mr-2">
+              Cross-Pillar Streams Checked:
+            </span>
+            {briefing.otherThingsWeChecked.join(" · ")}
           </div>
         )}
       </section>
 
+      {/* COLLAPSIBLE MIDDLE: Empirical Evidence & Cross-Pillar Signals */}
       <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
         <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
           <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
@@ -390,91 +413,197 @@ export function ResearchMemo({
         </div>
       </details>
 
+      {/* COLLAPSIBLE MIDDLE: Diagnostic Scores, Invalidation Triggers & Plan Questions */}
       <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
         <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
           <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
             <path d="M5 0L10 5L5 10L0 5Z" />
           </svg>
-          Historical Chart Precedents & Empirical Ranges
+          Diagnostic Scores, Invalidation Triggers & Plan Boundaries
         </summary>
-        <MemoSection number="03" title="Historical Analogs & Trajectory Overlay" badge="Precedents">
-        <div className="space-y-6">
-          <p className="max-w-4xl text-sm leading-relaxed text-[#232b25]">
-            {briefing.historicalAnalog.setup}
-          </p>
-
-          {/* Historical Analogs Match Table */}
-          <div className="overflow-x-auto rounded border border-[#141918]/12 bg-[#fcf9f2] shadow-sm">
-            <table className="w-full min-w-[680px] text-left text-xs">
-              <thead className="border-b border-[#141918]/15 bg-[#141918]/[0.03] font-mono text-[10px] uppercase tracking-[0.14em] text-[#486326]">
-                <tr>
-                  <th className="py-3.5 pl-4 pr-3">Historical Setup</th>
-                  <th className="py-3.5 px-3">Date / Episode</th>
-                  <th className="py-3.5 px-3">Pattern Similarity</th>
-                  <th className="py-3.5 pr-4 pl-3">Follow-Through Return</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#141918]/[0.06]">
-                {briefing.historicalAnalog.analogs.slice(0, 5).map((item, index) => (
-                  <tr key={index} className="transition hover:bg-[#141918]/[0.02]">
-                    <td className="py-3.5 pl-4 pr-3 font-mono font-bold text-[#1a221c]">
-                      {item.ticker}
-                    </td>
-                    <td className="py-3.5 px-3 font-mono text-[#617063]">{item.date}</td>
-                    <td className="py-3.5 px-3 font-mono text-[#617063]">{item.similarity}</td>
-                    <td className="py-3.5 pr-4 pl-3 text-[#222b24] font-medium">{item.followed}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Base Rates Briefing Cards if present */}
-          {briefing.historicalAnalog.baseRates?.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-3">
-              {briefing.historicalAnalog.baseRates.map((item) => (
-                <div
-                  key={item.horizon}
-                  className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-3.5 sm:p-4 shadow-sm"
-                >
-                  <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
-                    {item.horizon} · Sample n={item.n}
-                  </div>
-                  <p className="mt-2 text-xs font-semibold leading-snug text-[#1a221c]">{item.range}</p>
-                  <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{item.note}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Trajectory overlay & quantile range bars are promoted into the
-              Historical Precedent Distribution card above (the memo's star
-              visual); this section keeps the tabular precedent detail. */}
-
-          <p className="mt-4 max-w-4xl text-xs leading-relaxed text-[#637265] italic">
-            {briefing.historicalAnalog.caveat}
-          </p>
-        </div>
-        </MemoSection>
-      </details>
-
-      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
-          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
-            <path d="M5 0L10 5L5 10L0 5Z" />
-          </svg>
-          Diagnostic Scores, Invalidation Triggers & Plan Questions
-        </summary>
-        <MemoSection number="04" title="Quantitative Scoring & Plan Boundaries" shaded badge="Governance">
+        <MemoSection number="03" title="Quantitative Scoring & Plan Boundaries" shaded badge="Governance">
           <ConsiderationsSection
             considerations={briefing.considerations}
             scores={scores}
-            aggregate={aggregate}
+            coverage={coverage}
             analogs={pillarData?.analogs}
             analogQuality={briefing.flags?.analogQuality}
           />
         </MemoSection>
       </details>
+
+      {/* BOTTOM SECTION: Deep Quantitative Telemetry & Historical Precedents */}
+      <div id="advanced-precedents" className="scroll-mt-6 border-b border-[#141918]/15">
+        <MemoSection
+          number="04"
+          title="Historical Analogs & Quantitative Telemetry"
+          badge="Deep Telemetry"
+        >
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+              <p className="max-w-3xl text-sm leading-relaxed text-[#232b25]">
+                {briefing.historicalAnalog.setup ||
+                  "Normalized historical analog trajectory overlay (rebased to T₀), return dispersion ranges, and matching historical episodes."}
+              </p>
+              <span className="inline-flex items-center rounded bg-[#486326]/10 px-2.5 py-1 font-mono text-xs font-semibold text-[#38521d] self-start sm:self-auto shrink-0">
+                {briefing.historicalStressTest.sampleSize > 0
+                  ? `${briefing.historicalStressTest.sampleSize} historical precedents matched`
+                  : "0 past cases matched"}
+              </span>
+            </div>
+
+            {/* Normalized SVG Trajectory Chart */}
+            {(pillarData?.analogs?.overlay?.length ?? 0) > 0 && (
+              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
+                    Normalized Historical Trajectory Overlay
+                  </h4>
+                  <span className="font-mono text-[10px] text-[#637265]">
+                    Rebased to 100.0 at trigger state (T₀)
+                  </span>
+                </div>
+                <AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} />
+              </div>
+            )}
+
+            {/* Quantile Distribution Range Bar */}
+            {(pillarData?.analogs?.ranges?.length ?? 0) > 0 && (
+              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+                <UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} />
+              </div>
+            )}
+
+            {/* Empirical Outcome Cards */}
+            {briefing.historicalStressTest.results.length > 0 ? (
+              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326] mb-3">
+                  Historical Outcome Medians & Dispersion
+                </h4>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {briefing.historicalStressTest.results.map((result) => {
+                    const wentUpText = result.wentUp.replace(/^went up/i, "Went up");
+                    const typicalMoveText = result.typicalMove.startsWith("Typical move: ")
+                      ? result.typicalMove
+                      : `Typical move: ${result.typicalMove.replace(/^typical move:\s*/i, "")}`;
+                    const medianText = result.median.replace(/^middle result:\s*/i, "");
+                    const periodLabel = result.period === "Next day" ? "Next 1 trading day" : result.period;
+
+                    return (
+                      <div
+                        key={result.period}
+                        className="rounded-sm border border-[#486326]/25 bg-white/70 p-3.5 shadow-sm sm:p-4"
+                      >
+                        <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                          {periodLabel}
+                        </div>
+                        <p className="mt-2 text-base font-bold leading-snug text-[#1a221c]">{wentUpText}</p>
+                        <p className="mt-1 text-xs text-[#4f5e51]">{typicalMoveText}</p>
+                        <p className="mt-1 text-xs text-[#637265]">Middle result: {medianText}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-xs italic leading-relaxed text-[#637265]">
+                  Historical results are past occurrences only, not predictions.
+                </p>
+              </div>
+            ) : null}
+
+            {briefing.historicalStressTest.sampleSize > 0 && briefing.historicalStressTest.sampleSize < 30 && (
+              <div className="flex items-center gap-2 rounded border border-[#d97706]/30 bg-[#d97706]/10 px-3 py-2 text-xs text-[#92400e]">
+                <span className="font-bold">Caution:</span>
+                <span>
+                  Sample size is below 30 ({briefing.historicalStressTest.sampleSize} past cases matched). Historical patterns with fewer than 30 matches carry higher variance and lower statistical reliability.
+                </span>
+              </div>
+            )}
+
+            {/* Past Examples */}
+            {validExamples.length > 0 && (
+              <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+                <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                  A few past verified occurrences
+                </h5>
+                <ul className="mt-2.5 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+                  {validExamples.map((example) => {
+                    const isCross = /cross[- ]ticker|similar chart|different stock/i.test(example.when);
+                    return (
+                      <li key={`${example.when}-${example.whatHappened}`}>
+                        <span className="font-semibold">{example.when}:</span> {example.whatHappened}
+                        {isCross && !example.when.includes("cross-ticker") && (
+                          <span className="ml-2 rounded bg-[#141918]/[0.06] px-1.5 py-0.5 font-mono text-[9px] uppercase text-[#637265]">
+                            cross-ticker
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {/* Historical Analogs Match Table */}
+            <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-6 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
+                  Closest Historical Analog Matches
+                </h4>
+                <span className="font-mono text-[10px] text-[#637265]">Top verified historical chart matches</span>
+              </div>
+
+              <div className="overflow-x-auto rounded border border-[#141918]/12 bg-white/70">
+                <table className="w-full min-w-[680px] text-left text-xs">
+                  <thead className="border-b border-[#141918]/15 bg-[#141918]/[0.03] font-mono text-[10px] uppercase tracking-[0.14em] text-[#486326]">
+                    <tr>
+                      <th className="py-3.5 pl-4 pr-3">Historical Setup</th>
+                      <th className="py-3.5 px-3">Date / Episode</th>
+                      <th className="py-3.5 px-3">Pattern Similarity</th>
+                      <th className="py-3.5 pr-4 pl-3">Follow-Through Return</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#141918]/[0.06]">
+                    {briefing.historicalAnalog.analogs.slice(0, 5).map((item, index) => (
+                      <tr key={index} className="transition hover:bg-[#141918]/[0.02]">
+                        <td className="py-3.5 pl-4 pr-3 font-mono font-bold text-[#1a221c]">
+                          {item.ticker}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-[#617063]">{item.date}</td>
+                        <td className="py-3.5 px-3 font-mono text-[#617063]">{item.similarity}</td>
+                        <td className="py-3.5 pr-4 pl-3 text-[#222b24] font-medium">{item.followed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Base Rates Briefing Cards if present */}
+              {briefing.historicalAnalog.baseRates?.length > 0 && (
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {briefing.historicalAnalog.baseRates.map((item) => (
+                    <div
+                      key={item.horizon}
+                      className="rounded-sm border border-[#141918]/12 bg-white/70 p-3.5 sm:p-4 shadow-sm"
+                    >
+                      <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                        {item.horizon} · Sample n={item.n}
+                      </div>
+                      <p className="mt-2 text-xs font-semibold leading-snug text-[#1a221c]">{item.range}</p>
+                      <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{item.note}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {briefing.historicalAnalog.caveat && (
+                <p className="mt-4 max-w-4xl text-xs leading-relaxed text-[#637265] italic">
+                  {briefing.historicalAnalog.caveat}
+                </p>
+              )}
+            </div>
+          </div>
+        </MemoSection>
+      </div>
 
       {/* Human Decision Record */}
       <DecisionRecord decisionNote={decisionNote} onDecisionNoteChange={onDecisionNoteChange} />

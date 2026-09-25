@@ -19,6 +19,10 @@ import type {
 } from "@/lib/types";
 
 type Instrument = { native: string; rToken: string; name: string; sector: string };
+type UniverseMeta = { source: "live" | "fallback"; count: number; asOf: string | null };
+type UniverseResponse =
+  | Instrument[]
+  | { universe?: Instrument[]; source?: "live" | "fallback"; asOf?: string };
 import type { PillarStatus, PillarState } from "./components/PipelineSidebar";
 
 function escapeRegExp(value: string) {
@@ -88,6 +92,11 @@ export default function Home() {
   const [instruments, setInstruments] = useState<Instrument[]>(
     UNIVERSE.map(({ native, rToken, name, sector }) => ({ native, rToken, name, sector })),
   );
+  const [universeMeta, setUniverseMeta] = useState<UniverseMeta>({
+    source: "fallback",
+    count: UNIVERSE.length,
+    asOf: null,
+  });
   const [statuses, setStatuses] = useState<PillarState>(EMPTY_PILLARS);
   const [stage, setStage] = useState<"idle" | "pillars" | "synthesis" | "complete">("idle");
   const [pillarMessages, setPillarMessages] = useState<Record<string, string>>({});
@@ -133,10 +142,22 @@ export default function Home() {
     fetch("/api/universe")
       .then(async (response) => {
         if (!response.ok) throw new Error("Universe unavailable");
-        return (await response.json()) as Instrument[];
+        const payload = (await response.json()) as UniverseResponse;
+        const items = Array.isArray(payload) ? payload : payload.universe;
+        if (!Array.isArray(items)) throw new Error("Universe response malformed");
+        return {
+          items,
+          meta: {
+            source: !Array.isArray(payload) && payload.source === "live" ? "live" as const : "fallback" as const,
+            count: items.length,
+            asOf: !Array.isArray(payload) && typeof payload.asOf === "string" ? payload.asOf : null,
+          },
+        };
       })
-      .then((items) => {
-        if (active && items.length) setInstruments(items);
+      .then(({ items, meta }) => {
+        if (!active || !items.length) return;
+        setInstruments(items);
+        setUniverseMeta(meta);
       })
       .catch(() => undefined);
     return () => {
@@ -164,6 +185,7 @@ export default function Home() {
       technicals: "Comparing rToken vs cash session…",
       news: "Scanning news & macro headlines…",
       analogs: "Matching historical charts…",
+      marketStructure: "Resolving RMT peer communities…",
     });
     setStatuses({
       fundamentals: "running",
@@ -346,7 +368,7 @@ export default function Home() {
       <BlackholeBackground variant={view} />
 
       {/* Institutional Top Navigation Bar */}
-      <Header onLoadDemo={runDemo} />
+      <Header onLoadDemo={runDemo} universeMeta={universeMeta} />
 
       {/* Main Container Rendering Either Page 1 (Intake) or Page 2 (Results) */}
       <main className="px-3.5 sm:px-6 md:px-8">
@@ -357,6 +379,7 @@ export default function Home() {
             symbol={symbol}
             onInstrumentChange={handleInstrumentChange}
             instruments={instruments}
+            universeMeta={universeMeta}
             selectedInstrument={selected}
             question={question}
             onQuestionChange={setQuestion}
@@ -391,6 +414,7 @@ export default function Home() {
             symbol={symbol}
             onInstrumentChange={handleInstrumentChange}
             instruments={instruments}
+            universeMeta={universeMeta}
             selectedInstrument={selected}
             question={question}
             onQuestionChange={setQuestion}

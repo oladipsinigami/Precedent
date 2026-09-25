@@ -72,8 +72,10 @@ export async function downloadBriefingPptx(opts: {
   symbol: string;
   regime?: string;
   decisionNote?: string;
+  mode?: "executive" | "full";
 }): Promise<void> {
-  const { briefing, style, symbol, regime, decisionNote } = opts;
+  const { briefing, style, symbol, regime, decisionNote, mode = "full" } = opts;
+  const isExecutive = mode === "executive";
   const profile = STYLES[style] ?? STYLES.swing;
 
   const pptx = new PptxGenJS();
@@ -81,10 +83,14 @@ export async function downloadBriefingPptx(opts: {
   pptx.layout = "PRECEDENT";
   pptx.author = "Precedent Research Desk";
   pptx.company = "Bitget AI Base Camp Hackathon S2 · Track 3";
-  pptx.title = `Precedent Research Memo — ${symbol}`;
+  pptx.title = isExecutive
+    ? `Precedent Executive Briefing — ${symbol}`
+    : `Precedent Quantitative Research Dossier — ${symbol}`;
 
-  const hasAnalogs = (briefing.historicalAnalog?.analogs?.length ?? 0) > 0;
-  const total = 1 + 5 + (hasAnalogs ? 1 : 0); // title + 5 sections (+ optional analog detail)
+  const hasAnalogs = !isExecutive && (briefing.historicalAnalog?.analogs?.length ?? 0) > 0;
+  const total = isExecutive
+    ? 4 // Title + Takeaways/Tensions + Plan Questions + Decision Record
+    : 1 + 5 + (hasAnalogs ? 1 : 0); // title + 5 sections (+ optional analog detail)
   let page = 0;
 
   const newSlide = (section: string) => {
@@ -100,13 +106,19 @@ export async function downloadBriefingPptx(opts: {
     const s = pptx.addSlide();
     s.background = { color: C.bg };
     page += 1;
+    addChrome(s, isExecutive ? "Executive Briefing" : "Overview", page, total);
     s.addShape("rect", { x: 0, y: 0, w: "100%", h: 0.08, fill: { color: C.lime } });
-    s.addText("✦ PRECEDENT · INSTITUTIONAL RESEARCH WORKBENCH", {
-      x: 0.5, y: 0.6, w: 9, h: 0.35, fontFace: FONT_MONO, fontSize: 11, bold: true, color: C.lime, charSpacing: 4,
-    });
+    s.addText(
+      isExecutive
+        ? "✦ PRECEDENT · EXECUTIVE RESEARCH BRIEFING"
+        : "✦ PRECEDENT · QUANTITATIVE RESEARCH DOSSIER",
+      {
+        x: 0.5, y: 0.6, w: 9, h: 0.35, fontFace: FONT_MONO, fontSize: 11, bold: true, color: C.lime, charSpacing: 4,
+      },
+    );
     s.addShape("line", { x: 0.5, y: 1.1, w: 1.6, h: 0, line: { color: C.lime, width: 1.5 } });
     s.addText(safe(briefing.title) || `Research Memo — ${symbol}`, {
-      x: 0.5, y: 1.35, w: 9, h: 1.7, fontFace: FONT_DISPLAY, fontSize: 34, bold: true, color: C.ink, lineSpacingMultiple: 1.05,
+      x: 0.5, y: 1.35, w: 9, h: 1.7, fontFace: FONT_DISPLAY, fontSize: 32, bold: true, color: C.ink, lineSpacingMultiple: 1.05,
     });
     s.addText(
       [
@@ -116,8 +128,10 @@ export async function downloadBriefingPptx(opts: {
         { text: profile.label, options: { color: C.ink, bold: true } },
         { text: "    Regime: ", options: { color: C.mute } },
         { text: regime ?? briefing.regime ?? "normal", options: { color: C.ink } },
+        { text: "    Deck: ", options: { color: C.mute } },
+        { text: isExecutive ? "Executive Summary" : "Full Quantitative Dossier", options: { color: C.lime } },
       ],
-      { x: 0.5, y: 3.2, w: 9, h: 0.4, fontFace: FONT_MONO, fontSize: 12 }
+      { x: 0.5, y: 3.2, w: 9, h: 0.4, fontFace: FONT_MONO, fontSize: 12 },
     );
     s.addText(safe(briefing.whatWeDid), {
       x: 0.5, y: 3.8, w: 9, h: 1.6, fontFace: FONT_BODY, fontSize: 13, color: C.mute, lineSpacingMultiple: 1.3,
@@ -125,8 +139,81 @@ export async function downloadBriefingPptx(opts: {
     s.addShape("line", { x: 0.5, y: 6.6, w: 9, h: 0, line: { color: C.line, width: 0.75 } });
     s.addText(
       "Research briefing only — no BUY/SELL signal, no execution path. Historical results are past occurrences, not predictions.",
-      { x: 0.5, y: 6.72, w: 9, h: 0.5, fontFace: FONT_BODY, fontSize: 9.5, italic: true, color: C.mute }
+      { x: 0.5, y: 6.72, w: 9, h: 0.5, fontFace: FONT_BODY, fontSize: 9.5, italic: true, color: C.mute },
     );
+  }
+
+  if (isExecutive) {
+    // ---------- Executive 2 · Core Takeaways & Tensions ----------
+    {
+      const s = newSlide("01 · Executive Takeaways & Tensions");
+      sectionHeading(s, "Core Takeaways & Signal Tensions", 0.62);
+
+      s.addText("CORE EXECUTIVE TAKEAWAYS", {
+        x: 0.6, y: 1.25, w: 8.8, h: 0.3, fontFace: FONT_MONO, fontSize: 10, bold: true, color: C.lime, charSpacing: 2,
+      });
+      const takeaways = (briefing.simpleTakeAways ?? []).slice(0, 3);
+      s.addText(bullets(takeaways, { maxEach: 200 }) as never, { x: 0.6, y: 1.55, w: 8.8, h: 2.2, valign: "top" });
+
+      s.addText("WHERE THE SIGNALS DIVERGE", {
+        x: 0.6, y: 3.85, w: 8.8, h: 0.3, fontFace: FONT_MONO, fontSize: 10, bold: true, color: C.lime, charSpacing: 2,
+      });
+      const tensions = (briefing.whereThingsDoNotAgree ?? []).slice(0, 3);
+      const tensionItems = tensions.length
+        ? tensions.map((x) => `⚡ ${safe(x.conflict)} — Why it matters: ${safe(x.whyItMatters)}`)
+        : ["No material cross-pillar conflicts were detected in this run."];
+      s.addText(bullets(tensionItems, { maxEach: 220 }) as never, { x: 0.6, y: 4.15, w: 8.8, h: 2.6, valign: "top" });
+    }
+
+    // ---------- Executive 3 · Considerations & Questions ----------
+    {
+      const s = newSlide("02 · Strategy & Questions");
+      sectionHeading(s, `Key Considerations & Plan Questions`, 0.62);
+
+      s.addText(`STYLE CONSIDERATIONS (${profile.label.toUpperCase()})`, {
+        x: 0.6, y: 1.25, w: 8.8, h: 0.3, fontFace: FONT_MONO, fontSize: 10, bold: true, color: C.lime, charSpacing: 2,
+      });
+      const items = [
+        ...(briefing.otherThingsWeChecked ?? []).slice(0, 2),
+        ...(briefing.considerations?.invalidation ?? []).slice(0, 2).map((x) => `Invalidation condition: ${safe(x)}`),
+      ];
+      s.addText(bullets(items, { maxEach: 220 }) as never, { x: 0.6, y: 1.55, w: 8.8, h: 2.3, valign: "top" });
+
+      const qs = (briefing.questionsOnlyYouCanAnswer ?? []).slice(0, 3);
+      if (qs.length) {
+        s.addText("QUESTIONS ONLY YOU CAN ANSWER", {
+          x: 0.6, y: 4.0, w: 8.8, h: 0.3, fontFace: FONT_MONO, fontSize: 10, bold: true, color: C.lime, charSpacing: 2,
+        });
+        s.addText(bullets(qs, { maxEach: 180 }) as never, { x: 0.6, y: 4.3, w: 8.8, h: 2.5, valign: "top" });
+      }
+    }
+
+    // ---------- Executive 4 · Decision Record ----------
+    {
+      const s = newSlide("03 · Trader Decision Record");
+      sectionHeading(s, "Trader Decision Record (Non-Execution)", 0.62);
+      const note = safe(decisionNote);
+      s.addText(
+        note
+          ? note.split("\n").map((line) => ({
+              text: line,
+              options: { fontFace: FONT_BODY, fontSize: 12, color: C.ink, lineSpacingMultiple: 1.15, paraSpaceAfter: 4 },
+            })) as never
+          : "No decision notes were recorded in this session.",
+        { x: 0.6, y: 1.3, w: 8.8, h: 4.6, valign: "top" },
+      );
+      s.addShape("rect", { x: 0.6, y: 6.0, w: 8.8, h: 0.85, fill: { color: C.panel }, line: { color: C.line, width: 0.75 } });
+      s.addText(
+        "Strictly private discretionary journal. Precedent does not interface with brokerage accounts or exchanges and cannot execute trades.",
+        { x: 0.8, y: 6.12, w: 8.4, h: 0.62, fontFace: FONT_BODY, fontSize: 10, color: C.mute, lineSpacingMultiple: 1.2 },
+      );
+    }
+
+    const dateTag = new Date().toISOString().slice(0, 10);
+    const cleanSym = symbol.replace(/[^A-Za-z0-9]/g, "");
+    const fileName = `Precedent-Executive-Briefing-${cleanSym}-${dateTag}.pptx`;
+    await pptx.writeFile({ fileName });
+    return;
   }
 
   // ---------- 2 · Evidence ----------
@@ -224,6 +311,7 @@ export async function downloadBriefingPptx(opts: {
   }
 
   const dateTag = new Date().toISOString().slice(0, 10);
-  const fileName = `Precedent-Research-${symbol.replace(/[^A-Za-z0-9]/g, "")}-${dateTag}.pptx`;
+  const cleanSym = symbol.replace(/[^A-Za-z0-9]/g, "");
+  const fileName = `Precedent-Quant-Dossier-${cleanSym}-${dateTag}.pptx`;
   await pptx.writeFile({ fileName });
 }

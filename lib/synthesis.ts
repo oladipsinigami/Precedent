@@ -12,7 +12,33 @@ export { deterministicBriefing, collectSources } from "./deterministic-briefing"
 function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
-  // 1. OpenRouter models (when OPENROUTER_API_KEY is configured)
+  // 1. Qwen 3.8-27B via Experiential gateway (OpenAI Chat Completions compatible).
+  // First in the waterfall when EXPLABS_API_KEY is set, so research traffic runs
+  // on Experiential credits. Legacy BITGET_QWEN_API_KEY direct endpoint is kept
+  // only as a fallback when EXPLABS is unset.
+  if (process.env.EXPLABS_API_KEY?.trim() && process.env.EXPLABS_API_KEY.trim() !== "[SENSITIVE]") {
+    available.push({
+      label: "experiential/qwen3.8-27b",
+      model: "qwen3.8-27b",
+      client: new OpenAI({
+        apiKey: process.env.EXPLABS_API_KEY.trim(),
+        baseURL: "https://api.experientiallabs.ai/v1",
+        maxRetries: 0,
+      }),
+    });
+  } else if (process.env.BITGET_QWEN_API_KEY?.trim() && process.env.BITGET_QWEN_API_KEY.trim() !== "[SENSITIVE]") {
+    available.push({
+      label: "bitget/qwen3.8-max",
+      model: "qwen3.8-max",
+      client: new OpenAI({
+        apiKey: process.env.BITGET_QWEN_API_KEY.trim(),
+        baseURL: "https://hackathon.bitgetops.com/v1",
+        maxRetries: 0,
+      }),
+    });
+  }
+
+  // 2. OpenRouter models (when OPENROUTER_API_KEY is configured)
   const rawOpenRouterKey =
     process.env.OPENROUTER_API_KEY?.trim() ||
     process.env.OPENROUTER_KEY?.trim() ||
@@ -92,19 +118,6 @@ function providers() {
     });
   }
 
-  // 5. Bitget Qwen
-  if (process.env.BITGET_QWEN_API_KEY?.trim() && process.env.BITGET_QWEN_API_KEY.trim() !== "[SENSITIVE]") {
-    available.push({
-      label: "bitget/qwen3.8-max",
-      model: "qwen3.8-max",
-      client: new OpenAI({
-        apiKey: process.env.BITGET_QWEN_API_KEY.trim(),
-        baseURL: "https://hackathon.bitgetops.com/v1",
-        maxRetries: 0,
-      }),
-    });
-  }
-
   return available;
 }
 
@@ -165,10 +178,20 @@ export async function synthesize(opts: {
 
   const profile = STYLES[opts.style];
   const system = `You are Precedent, an objective quantitative research desk providing structured research memos for tokenized US stocks on Bitget.
+ROLE: You are a CLERK OF EVIDENCE. You do not cheerlead, recommend trades, or predict. Your tone is calm, sourced, and slightly cold. Clarity over heat. Structure over vibe.
+PHILOSOPHY: Pure research · non-execution · no directional bias or hype · every claim attributed · your judgment stays sovereign. You interrogate the setup; you never sell a trade.
+
 CRITICAL FORMAT: Return a RAW JSON object ONLY matching the SCHEMA below. Be concise: keep string values under 25 words. Do not output markdown code blocks or conversational commentary. Start immediately with "{" and end with "}".
-Tone & Guidance: Analytical and objective for a ${profile.label} (${profile.horizon} horizon). Describe historical ranges and current levels ONLY as facts (e.g. "Went up X times out of Y", "Typical move: usually between A% and B%", "Middle result: C%"). Strictly prohibit soft directional or interpretive language: NEVER use "slight edge", "favoring patience", "overnight speculation", "bullish/bearish news sentiment", "remain constructive", "tempts traders to expect the same direction", or any directional lean. Forward-looking language is strictly permitted ONLY within "questionsOnlyYouCanAnswer".
-Technical Glossing: Explain any technical term once in plain language on first mention (e.g. "RSI (a short-term strength score from 0 to 100)"), then use only the short name ("RSI") for later mentions. Avoid repeating the same parenthetical explanation multiple times. Prefer shorter sentences overall.
-Past Examples Guidance: Provide 2 to 3 past examples in "historicalStressTest.examples" based on the retrieved examples. Prefer same-ticker historical occurrences when available. State each outcome clearly in plain language (e.g. "rose about 2.8% over the next 5 days"). Never output "n/a", undefined, or empty outcomes.
+
+READER ORIENTATION CONTRACT (Deliver these 6 dimensions directly across the schema fields):
+1. "whatWeDid": State the setup in ONE sentence (horizon + asset + venue basis e.g. "Bitget 24/7 rails vs NY cash close").
+2. "otherThingsWeChecked": Detail what the live tape is doing now vs cash hours (basis, depth, overnight spread, levels).
+3. "historicalStressTest": State what history rhymes with — and where the rhyme breaks (sample size, quantile dispersion, regime clash).
+4. "simpleTakeAways": State what independent witnesses add or confirm across fundamentals, tape, and discourse.
+5. "whereThingsDoNotAgree": PUSH TENSION FIRST. Identify where the 4 independent witnesses clash (e.g. tape vs filings, headline vs social, momentum vs historical dispersion) and why it matters.
+6. "questionsOnlyYouCanAnswer": Frame the pre-mortem: what can go wrong next week (catalyst drift, volatility holes, specific invalidation levels).
+
+PROHIBITIONS: Strictly prohibit directional calls, hype, or soft bias: NEVER use "buy", "sell", "long", "short", "rip", "send it", "moon", "squeeze", "slight edge", "favoring patience", "constructive", "cautious lean", "tempts traders", or patronizing phrases ("for beginners", "FOMO"). Forward-looking inquiry is permitted ONLY within "questionsOnlyYouCanAnswer".
 ${UNTRUSTED_DATA_RULE}
 
 SCHEMA:
@@ -188,21 +211,34 @@ ${SCHEMA}`;
     .slice(0, 3)
     .map((e) => `${e.when}: ${e.whatHappened}`)
     .join("; ");
+  const technicalSummary = tech
+    ? `Cash price $${tech.native.last ?? "unavailable"}, rToken $${tech.rToken?.last ?? "unavailable"} (basis: ${tech.rTokenGap ?? "unavailable"}). Trend ${tech.trend || "unavailable"}, RSI ${tech.indicators.rsi14 ?? "unavailable"}. Support: ${tech.levels.support.slice(0, 2).join(", ") || "unavailable"}, Resistance: ${tech.levels.resistance.slice(0, 2).join(", ") || "unavailable"}.`
+    : "Technical tape unavailable in this run.";
+  const fundamentalsSummary = fund
+    ? `${untrusted([fund.company], { maxItems: 1, maxLength: 100, fallback: "Company name unavailable" })}. Catalysts: ${untrusted(fund.catalysts.slice(0, 2), { maxItems: 2, fallback: "No verified catalysts returned" })}.`
+    : "Fundamentals unavailable in this run.";
+  const newsSummary = news
+    ? untrusted(news.headlines.slice(0, 2).map((h) => h.title), { maxItems: 2, fallback: "No verified headlines returned" })
+    : "News and macro coverage unavailable in this run.";
+  const market = opts.pillars.marketStructure;
+  const marketSummary = market?.ok
+    ? `RMT community ${market.communityId ?? "unavailable"} across ${market.universeSize} assets; ${market.infoBeyondNoisePct?.toFixed(1) ?? "unavailable"}% information beyond noise. Snapshot ${market.computedAt ?? "timestamp unavailable"}${market.stale ? " (stale; treat as historical context)" : ""}.`
+    : "Market-structure peer communities unavailable in this run.";
 
-  const user = `Stock: ${opts.name.name} (${opts.name.native} / ${opts.name.rToken})
-Trader Style: ${profile.label} (${profile.horizon} horizon)
-Question: ${opts.question}
-Market Regime: ${opts.regime}
+  const user = `ASSET & VENUE: ${opts.name.name} (${opts.name.native} / ${opts.name.rToken} on Bitget 24/7)
+HORIZON & STYLE: ${profile.label} (${profile.horizon} target horizon)
+RESEARCH QUESTION: ${opts.question}
+REGIME FRAME: ${opts.regime}
 
-Retrieved Key Data:
-- Historical Stress Test: ${stress.sampleSize > 0 ? `${stress.sampleSize} past occurrences found.` : "Historical comparison was not available in this run."}
+FOUR INDEPENDENT WITNESSES (Cross-examine for agreement and clash):
+- Witness 1 (Live Tape & Basis): ${technicalSummary}
+- Witness 2 (Historical 10-Yr Analogs): ${stress.sampleSize > 0 ? `${stress.sampleSize} matching setups found.` : "Historical comparison was not available."}
 ${stressResultsSummary}
-  * Past Examples: ${stressExamplesSummary || (stress.sampleSize > 0 ? "AAPL past occurrences" : "None (historical data unavailable)")}
-- Technicals: Cash price $${tech?.native?.last ?? "N/A"}, rToken $${tech?.rToken?.last ?? "N/A"} (basis: ${tech?.rTokenGap ?? "tight"}). Trend ${tech?.trend ?? "steady"}, RSI ${tech?.indicators?.rsi14 ?? 50}. Support: ${(tech?.levels?.support ?? []).slice(0, 2).join(", ") || "support zone"}, Resistance: ${(tech?.levels?.resistance ?? []).slice(0, 2).join(", ") || "resistance zone"}.
-- Fundamentals: ${untrusted([fund?.company], { maxItems: 1, maxLength: 100, fallback: "Stable financials" })}. Catalysts: ${untrusted((fund?.catalysts ?? []).slice(0, 2), { maxItems: 2, fallback: "regular operations" })}.
-- News & Macro: ${untrusted((news?.headlines ?? []).slice(0, 2).map((h) => h.title), { maxItems: 2, fallback: "Neutral macro flow" })}.
+  * Past Occurrences: ${stressExamplesSummary || (stress.sampleSize > 0 ? "Past examples unavailable despite sample size" : "None")}
+- Witness 3 (News & Social Discourse): ${newsSummary}
+- Witness 4 (Fundamentals & Market Structure): ${fundamentalsSummary} | ${marketSummary}
 
-CRITICAL: Return the raw JSON memo now matching the schema.`;
+CRITICAL: Return the raw JSON desk memo now matching the schema.`;
 
   try {
     const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, opts.timeoutMs ?? 42_000);
@@ -431,7 +467,10 @@ async function complete(
         {
           model,
           temperature: 0.2,
-          max_tokens: model.includes("nemotron") ? 1300 : 2500,
+          max_tokens: model.includes("qwen3.8-27b") ? 1600 : model.includes("nemotron") ? 1300 : 2500,
+          // qwen3.8-27b is a reasoning model; minimal effort keeps full research
+          // prompts inside the synthesis time budget (measured ~22s vs ~57s).
+          ...(model.includes("qwen3.8-27b") ? { reasoning: { effort: "minimal" as const } } : {}),
           messages: [
             { role: "system", content: system },
             { role: "user", content: user },
@@ -508,9 +547,13 @@ async function runSequentialSynthesis(
 
     // Fail-fast per candidate: 14s forces hanging free models to yield quickly so
     // the waterfall reaches a responsive provider (or the deterministic fallback)
-    // well within the overall 42s synthesis / 48s pipeline budget
+    // well within the overall 42s synthesis / 48s pipeline budget.
+    // Experiential qwen3.8-27b is a reasoning model (hundreds of reasoning tokens
+    // even for short prompts), so it gets up to 34s; if it still fails, the
+    // pipeline falls back to the deterministic memo instantly.
+    const candidateCapMs = llm.label.startsWith("experiential/") ? 34_000 : 14_000;
     const candidateTimeout = Math.min(
-      14_000,
+      candidateCapMs,
       remainingTime - 1_500,
     );
 
