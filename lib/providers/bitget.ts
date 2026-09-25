@@ -46,6 +46,16 @@ type SpotSymbolsResponse = {
   data?: BitgetRTokenMarket[];
 };
 
+export type BitgetSpotTicker = {
+  symbol?: string;
+  usdtVolume?: string;
+};
+
+type SpotTickersResponse = {
+  code?: string;
+  data?: BitgetSpotTicker[];
+};
+
 let rwaCache: { expires: number; contracts: BitgetRwaContract[] } | undefined;
 let rTokenCache: { expires: number; markets: BitgetRTokenMarket[] } | undefined;
 const candleCache = new Map<string, { expires: number; bars: BitgetCandle[] }>();
@@ -92,6 +102,14 @@ export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
     rTokenInFlight = null;
   });
   return rTokenInFlight;
+}
+
+export async function bitgetSpotTickers(): Promise<BitgetSpotTicker[]> {
+  const response = await fetchJson<SpotTickersResponse>(
+    "https://api.bitget.com/api/v2/spot/market/tickers",
+    { timeoutMs: 12_000, cacheTtlMs: 60_000 },
+  );
+  return response.data ?? [];
 }
 
 export async function bitgetTape(name: NameCard): Promise<Tick | undefined> {

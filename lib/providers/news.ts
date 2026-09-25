@@ -57,6 +57,89 @@ export async function yahooRss(symbol: string): Promise<Headline[]> {
   }
 }
 
+// Words too common in equity headlines to identify a story. Dropping them makes
+// the de-duplication key content-specific: two feeds carrying the same wire story
+// with different lead text and different URLs still collapse to one entry.
+const FILLER_WORDS = new Set([
+  "the", "and", "for", "with", "that", "this", "from", "have", "has", "was", "were", "are",
+  "its", "their", "they", "them", "will", "would", "could", "should", "after", "before",
+  "into", "over", "than", "then", "when", "while", "what", "which", "who", "why", "how",
+  "said", "says", "new", "more", "most", "some", "such", "only", "also", "about", "amid",
+  "stock", "stocks", "shares", "share", "market", "markets", "week", "daily", "update",
+]);
+
+// First few content words of a headline, used as a cross-publisher identity key.
+export function fingerprintTokens(title: string, limit = 6): string[] {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2 && !FILLER_WORDS.has(token))
+    .slice(0, limit);
+}
+
+export function titleFingerprint(title: string): string {
+  return fingerprintTokens(title).join(" ");
+}
+
+// True when `a` is a leading run of `b`. Feeds often carry a shortened version of
+// the same wire story ("...will be worth" vs "...will be worth by 2030"), so a
+// fixed-width key is not stable; containment catches both forms.
+function startsWithTokens(a: string[], b: string[]): boolean {
+  return a.length <= b.length && a.every((token, index) => b[index] === token);
+}
+
+// Publisher-agnostic article key: the same URL syndicated by two feeds collapses.
+export function urlFingerprint(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.hostname.replace(/^www\./, "")}${parsed.pathname.replace(/\/+$/, "")}`.toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+// Blend provider batches so no single feed monopolises the visible headline
+// set. One item is taken from each batch per pass, in the caller's priority
+// order, with de-duplication. Alpha Vantage alone can return 50 items, so without
+// this the first provider would fill all 10 slots.
+export function blendHeadlines(batches: Headline[][], limit: number): Headline[] {
+  const seenTitles = new Set<string>();
+  const seenTitleTokens: string[][] = [];
+  const seenUrls = new Set<string>();
+  const out: Headline[] = [];
+  const cursors = batches.map(() => 0);
+  let progressed = true;
+  while (out.length < limit && progressed) {
+    progressed = false;
+    for (let i = 0; i < batches.length && out.length < limit; i++) {
+      const batch = batches[i];
+      while (cursors[i] < batch.length) {
+        const item = batch[cursors[i]++];
+        const title = item.title.trim();
+        if (!title) continue;
+        const tokens = fingerprintTokens(title);
+        const titleKey = tokens.join(" ");
+        const urlKey = urlFingerprint(item.url);
+        const nearDuplicate =
+          seenTitles.has(titleKey) ||
+          (tokens.length >= 3 &&
+            seenTitleTokens.some(
+              (seen) => startsWithTokens(tokens, seen) || startsWithTokens(seen, tokens),
+            ));
+        if (nearDuplicate || seenUrls.has(urlKey)) continue;
+        seenTitles.add(titleKey);
+        seenTitleTokens.push(tokens);
+        seenUrls.add(urlKey);
+        out.push({ ...item, title });
+        progressed = true;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 export function tagHeadline(title: string): "earnings" | "guidance" | "macro" | "product" | "legal" | "other" {
   const t = title.toLowerCase();
   if (/\bearnings\b|\beps\b|\brevenue\b|\bresults\b/.test(t)) return "earnings";

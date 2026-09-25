@@ -81,19 +81,9 @@ async function cleanedCorrRank(members: string[] | undefined, native: string): P
   try {
     const store = await loadMarketStructureStore();
     if (!store) return undefined;
-    const idx = new Map(store.cleaned.map((r, i) => [r.native, i]));
     const meanToMembers = (n: string): number | null => {
-      const i = idx.get(n);
-      if (i === undefined) return null;
-      const vals = members
-        .filter((m) => m !== n)
-        .map((m) => {
-          const j = idx.get(m);
-          return j === undefined ? null : store.cleaned[i].row[j];
-        })
-        .filter((v): v is number => typeof v === "number");
-      if (!vals.length) return null;
-      return vals.reduce((a, b) => a + b, 0) / vals.length;
+      const value = store.communityStats[n]?.meanResidualToMembers;
+      return Number.isFinite(value) ? value : null;
     };
     const scored = members
       .map((m) => ({ m, s: meanToMembers(m) }))

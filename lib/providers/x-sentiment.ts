@@ -18,81 +18,47 @@ type XSearchResponse = {
   includes?: { users?: { id: string; username?: string; name?: string }[] };
 };
 
-type SorsaSearchResponse = {
-  tweets?: {
-    id: string;
-    full_text?: string;
-    created_at?: string;
-    likes_count?: number;
-    retweet_count?: number;
-    reply_count?: number;
-    view_count?: number;
-    user?: { username?: string };
-  }[];
-};
+function providerFailureReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/request limit exceeded|\b429\b/i.test(message)) return "request limit exceeded";
+  if (/\b(401|403)\b/.test(message)) return `credentials rejected or quota exhausted (${message})`;
+  if (/aborted|timed? out/i.test(message)) return "request timed out";
+  return message ? `API error (${message})` : "API error";
+}
+
+const X_CACHE_TTL_MS = 10 * 60 * 1000;
+const xCache = new Map<
+  string,
+  { expires: number; result: { posts: SocialPost[]; caveat?: string } }
+>();
 
 export async function fetchXSentiment(
   parts: { native: string; name: string; rToken: string; bitgetSymbols?: string[] },
   options: { maxPosts?: number; hours?: number } = {},
 ): Promise<{ posts: SocialPost[]; caveat?: string }> {
+  const cacheKey = `${parts.native}|${options.maxPosts ?? 20}|${options.hours ?? 48}`;
+  const hit = xCache.get(cacheKey);
+  if (hit && hit.expires > Date.now()) return hit.result;
+  const result = await fetchXSentimentUncached(parts, options);
+  if (result.posts.length > 0 || !result.caveat) {
+    xCache.set(cacheKey, { expires: Date.now() + X_CACHE_TTL_MS, result });
+  }
+  return result;
+}
+
+async function fetchXSentimentUncached(
+  parts: { native: string; name: string; rToken: string; bitgetSymbols?: string[] },
+  options: { maxPosts?: number; hours?: number } = {},
+): Promise<{ posts: SocialPost[]; caveat?: string }> {
   const max = options.maxPosts ?? 20;
-  const sorsaKey = process.env.SORSA_API_KEY;
   const token = process.env.X_BEARER_TOKEN;
-  if (!sorsaKey && !token) return { posts: [], caveat: "X discourse unavailable (no X API credentials configured)" };
+  if (!token) return { posts: [], caveat: "X discourse unavailable (no X API credentials configured)" };
 
   try {
     const query = `(${buildSearchQuery(parts)}) lang:en -is:retweet`;
     const hours = options.hours ?? 48;
     const cutoff = Date.now() - hours * 3_600_000;
-    let sorsaFailed = false;
 
-    if (sorsaKey) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 12_000);
-        try {
-          const response = await fetch("https://api.sorsa.io/v3/search-tweets", {
-            method: "POST",
-            headers: { ApiKey: sorsaKey, "Content-Type": "application/json" },
-            body: JSON.stringify({ query, order: "latest" }),
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-          const data = (await response.json()) as SorsaSearchResponse;
-          const posts = (data.tweets ?? [])
-            .filter((post) => post.full_text && (!post.created_at || Date.parse(post.created_at) >= cutoff))
-            .map((post) => {
-              const metrics = {
-                likes: post.likes_count,
-                reposts: post.retweet_count,
-                replies: post.reply_count,
-                views: post.view_count,
-              };
-              return {
-                id: post.id,
-                platform: "x" as const,
-                text: post.full_text ?? "",
-                author: post.user?.username ?? "unknown",
-                url: `https://x.com/i/status/${post.id}`,
-                createdAt: post.created_at ?? new Date().toISOString(),
-                metrics,
-                lean: classifyLean(post.full_text ?? ""),
-                engagementScore: scoreEngagement(metrics),
-              };
-            })
-            .sort((a, b) => b.engagementScore - a.engagementScore)
-            .slice(0, max);
-          return { posts };
-        } finally {
-          clearTimeout(timer);
-        }
-      } catch {
-        if (!token) return { posts: [], caveat: "X discourse unavailable (API error)" };
-        sorsaFailed = true;
-      }
-    }
-
-    if (!token) return { posts: [], caveat: "X discourse unavailable (no X API credentials configured)" };
     const url =
       `https://api.x.com/2/tweets/search/recent?query=${encodeURIComponent(query)}` +
       `&max_results=${Math.min(100, Math.max(10, max))}&tweet.fields=created_at,public_metrics,author_id&expansions=author_id`;
@@ -124,8 +90,12 @@ export async function fetchXSentiment(
       })
       .sort((a, b) => b.engagementScore - a.engagementScore)
       .slice(0, max);
-    return { posts, ...(sorsaFailed ? { caveat: "Sorsa unavailable; official X fallback used" } : {}) };
-  } catch {
-    return { posts: [], caveat: "X discourse unavailable (API error)" };
+    return { posts };
+  } catch (error) {
+    const reason = providerFailureReason(error);
+    return {
+      posts: [],
+      caveat: `X discourse unavailable (official X ${reason})`,
+    };
   }
 }

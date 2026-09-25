@@ -146,7 +146,9 @@ export async function alphaVantageNews(
 
     const response = await fetchJson<AlphaVantageNewsResponse>(
       `https://www.alphavantage.co/query?${params.toString()}`,
-      { timeoutMs: 8_000, cacheTtlMs: 300_000 }, // 5-minute memory cache protects the free 25 req/day quota
+      // 30-minute memory cache: the free tier allows 25 requests/day, and news
+      // does not need 5-minute freshness. Repeat runs on the same symbol are free.
+      { timeoutMs: 8_000, cacheTtlMs: 1_800_000 },
     );
 
     if (response["Error Message"]) {

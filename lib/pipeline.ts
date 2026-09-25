@@ -1,6 +1,6 @@
 import { runAnalogs } from "./pillars/analogs";
 import { runFundamentals } from "./pillars/fundamentals";
-import { runMarketStructure } from "./pillars/market-structure";
+import { isMarketStructureSnapshotStale, runMarketStructure } from "./pillars/market-structure";
 import { runNews } from "./pillars/sentiment";
 import { runTechnicals } from "./pillars/technicals";
 import { bitgetRTokenMarkets, bitgetRwaContracts, type BitgetRTokenMarket, type BitgetRwaContract } from "./providers/bitget";
@@ -326,9 +326,9 @@ function buildDemoBundle(style: TradingStyle, question: string) {
       stability: "stable",
       universeSize: 45,
       cleanedCorrelations: [
-        { peer: "MSFT", raw: 0.68, cleaned: 0.61 },
-        { peer: "GOOGL", raw: 0.59, cleaned: 0.52 },
-        { peer: "NVDA", raw: 0.54, cleaned: 0.46 },
+        { peer: "MSFT", raw: 0.68, residual: 0.61 },
+        { peer: "GOOGL", raw: 0.59, residual: 0.52 },
+        { peer: "NVDA", raw: 0.54, residual: 0.46 },
       ],
       caveats: ["RMT correlation matrix applies Marchenko-Pastur filtering to isolate true sector co-movement."],
       sources: [{ label: `RMT market-structure values · ${SAMPLE_LABEL}` }],
@@ -481,10 +481,14 @@ export async function* runResearch(input: {
 
   for (const id of order) {
     const data = pack[id];
+    const staleMarketStructure =
+      id === "marketStructure" &&
+      isMarketStructureSnapshotStale((data as PillarBundle["marketStructure"]).computedAt);
     yield {
       type: "pillar",
       id,
-      status: data.ok ? "ready" : "degraded",
+      status: data.ok && !staleMarketStructure ? "ready" : "degraded",
+      message: staleMarketStructure ? "Market-structure snapshot is stale; refresh the nightly precompute." : undefined,
       data,
     };
   }

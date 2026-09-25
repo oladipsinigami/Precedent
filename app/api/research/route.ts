@@ -11,8 +11,42 @@ export const maxDuration = 60;
 // Total work budget per request. Kept below maxDuration so the deterministic
 // fallback memo always has time to stream before the platform kills the function.
 const REQUEST_BUDGET_MS = 55_000;
+const MAX_BODY_BYTES = 16_384;
 
 const STYLES: TradingStyle[] = ["day", "swing", "event", "position"];
+
+class BodyTooLargeError extends Error {
+  constructor() {
+    super("Request body exceeds 16 KiB.");
+  }
+}
+
+async function readBoundedBody(req: Request): Promise<string> {
+  const declaredLength = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) throw new BodyTooLargeError();
+  if (!req.body) {
+    const text = await req.text();
+    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) throw new BodyTooLargeError();
+    return text;
+  }
+
+  const reader = req.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new BodyTooLargeError();
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
+  return text;
+}
 
 // Minimal abuse controls: optional shared-secret header plus a fixed-window
 // per-IP request cap. The secret is only enforced when RESEARCH_API_KEY is
@@ -104,8 +138,11 @@ export async function POST(req: Request) {
 
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
+    body = JSON.parse(await readBoundedBody(req));
+  } catch (err) {
+    if (err instanceof BodyTooLargeError) {
+      return Response.json({ error: "Request body exceeds 16 KiB." }, { status: 413 });
+    }
     return Response.json({ error: "Request body must be valid JSON." }, { status: 400 });
   }
 
@@ -133,18 +170,30 @@ export async function POST(req: Request) {
   const isDemo =
     (input.demo === true || demoParam === "true" || demoParam === "1") &&
     style === DEMO_TASK.style &&
-    question === DEMO_TASK.question;
+    question === DEMO_TASK.question &&
+    (!symbol || symbol.toUpperCase() === DEMO_TASK.symbol.toUpperCase());
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      let isClosed = false;
       const send = (event: unknown) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        if (isClosed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        } catch {
+          isClosed = true;
+        }
       };
       const pingInterval = setInterval(() => {
+        if (isClosed) {
+          clearInterval(pingInterval);
+          return;
+        }
         try {
           controller.enqueue(encoder.encode(": keepalive\n\n"));
         } catch {
+          isClosed = true;
           clearInterval(pingInterval);
         }
       }, 3000);
@@ -169,7 +218,7 @@ export async function POST(req: Request) {
           send(event);
         }
       } catch (err) {
-        if (!hasSentBriefing) {
+        if (!hasSentBriefing && !isClosed) {
           try {
             const fallbackName = findNameOrDefault(`${symbol ?? ""} ${question}`);
             const emptyPillars = {
@@ -196,7 +245,13 @@ export async function POST(req: Request) {
         send({ type: "done" });
       } finally {
         clearInterval(pingInterval);
-        controller.close();
+        if (!isClosed) {
+          try {
+            controller.close();
+          } catch {
+            // Controller already closed or errored
+          }
+        }
       }
     },
   });

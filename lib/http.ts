@@ -3,7 +3,43 @@ const YAHOO_UA =
 const SEC_UA = "PrecedentResearch/0.1 (Bitget Hackathon S2; research workbench)";
 
 type CacheEntry = { expires: number; value: unknown };
+const MAX_CACHE_ENTRIES = 1_000;
 const cache = new Map<string, CacheEntry>();
+
+function setCache(url: string, entry: CacheEntry): void {
+  if (cache.size >= MAX_CACHE_ENTRIES) {
+    const now = Date.now();
+    for (const [key, val] of cache) {
+      if (val.expires <= now) cache.delete(key);
+    }
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      let count = 0;
+      for (const key of cache.keys()) {
+        cache.delete(key);
+        count++;
+        if (count >= Math.floor(MAX_CACHE_ENTRIES * 0.2)) break;
+      }
+    }
+  }
+  cache.set(url, entry);
+}
+
+const SENSITIVE_QUERY_KEY = /^(?:api[-_]?key|apikey|key|access[-_]?token|auth[-_]?token|token|secret|password|passphrase|signature|sig)$/i;
+
+export function redactUrlSecrets(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of parsed.searchParams.keys()) {
+      if (SENSITIVE_QUERY_KEY.test(key)) parsed.searchParams.set(key, "REDACTED");
+    }
+    return parsed.toString();
+  } catch {
+    return url.replace(
+      /([?&](?:api[-_]?key|apikey|key|access[-_]?token|auth[-_]?token|token|secret|password|passphrase|signature|sig)=)[^&]*/gi,
+      "$1REDACTED",
+    );
+  }
+}
 
 export async function fetchText(
   url: string,
@@ -23,9 +59,9 @@ export async function fetchText(
       signal: ctrl.signal,
       cache: "no-store",
     });
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${redactUrlSecrets(url)}`);
     const text = await res.text();
-    if (ttl > 0) cache.set(url, { expires: Date.now() + ttl, value: text });
+    if (ttl > 0) setCache(url, { expires: Date.now() + ttl, value: text });
     return text;
   } finally {
     clearTimeout(timer);

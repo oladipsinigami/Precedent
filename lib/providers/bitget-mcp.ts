@@ -1,7 +1,8 @@
-// Minimal MCP-over-HTTP (JSON-RPC 2.0 + SSE) client for Bitget's public
-// market-data MCP service — the same data backend that powers the official
-// `bitget-signal` skill stack (macro-analyst, sentiment-analyst, market-intel,
-// news-briefing, technical-analysis). No API key required.
+// Minimal MCP-over-HTTP (JSON-RPC 2.0 + SSE) client for Bitget's official
+// public data service, `bitget-mcp-server` (agent.bitget.com/mcp) -- the
+// read-only US stock / ETF data layer Bitget documents for its AI tooling.
+// No API key required. This is NOT the third-party `bitget-signal` news feed,
+// which served crypto-only RSS aggregates with empty item arrays.
 //
 // Wire format (verified live): POST JSON-RPC to the endpoint, server replies
 // with `Content-Type: text/event-stream` frames of the form
@@ -10,7 +11,7 @@
 // Session id is returned in the `mcp-session-id` response header and must be
 // echoed on subsequent calls within the session.
 
-const MCP_URL = process.env.BITGET_MCP_URL?.trim() || "https://datahub.noxiaohao.com/mcp";
+const MCP_URL = process.env.BITGET_MCP_URL?.trim() || "https://agent.bitget.com/mcp";
 const PROTOCOL_VERSION = "2024-11-05";
 const CLIENT_INFO = { name: "precedent-research-desk", version: "0.1.0" };
 
