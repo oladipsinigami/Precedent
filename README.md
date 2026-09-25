@@ -289,8 +289,7 @@ Click **"Load recommended demo"** in the top navigation bar. It instantly loads:
 
 ---
 
-## Submission & Documentation
+## Documentation
 
-- [**SUBMISSION.md**](SUBMISSION.md) — Bitget Hackathon submission form text, validation metrics, and checklist.
 - [**PRODUCT-OVERVIEW.md**](PRODUCT-OVERVIEW.md) — In-depth product specification, Clerk of Evidence philosophy, and architectural rules.
 - [**Research-Workbench-Design.md**](Research-Workbench-Design.md) — Visual design system and research desk UX specifications.
