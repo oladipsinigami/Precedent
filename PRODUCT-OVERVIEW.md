@@ -95,75 +95,104 @@ The product does not execute trades or manage positions. The final section prese
 
 The UI includes a human decision reflection field. This lets the trader record what they are deciding, what they are waiting for, and what would change their mind. It is local browser state, not an order or portfolio control.
 
-### 3.5 No bare directional signal
+### 3.5 No bare directional signal or hype
 
-The system must not output a bare directional recommendation. The LLM prompt and post-processor enforce this rule.
+The system must not output directional trade calls, unearned certainty, or influencer hype. The LLM prompt, deterministic fallback, and language guard enforce this rule strictly.
 
-The prohibited words are:
+The prohibited patterns include:
 
-- BUY
-- SELL
-- LONG
-- SHORT
+- Directional recommendations: BUY, SELL, LONG, SHORT.
+- Influencer hype and slang: "going to rip", "to the moon", "send it", "printing cash", "squeeze incoming", "massive rally", "guaranteed profit".
+- Patronizing coaching: "a beginner should note", "for beginners", "fear of missing out", "FOMO".
+- Directional leans: "constructive setup", "cautious lean", "slight edge", "favors higher prices", "room to run".
+- Unearned probability / confidence percentages: "78% confidence", "90% probability".
 
-They must not appear as a headline or final recommendation. The post-processor rewrites them if the model produces them.
+They must not appear as a headline, conclusion, or recommendation. The post-processor actively sanitizes and rewrites them into objective empirical observations.
 
-Confidence percentages must not be used as a headline or final recommendation either.
+Forward-looking inquiry is permitted strictly within trader deliberation questions and invalidation boundaries.
+
+### 3.6 Persona: Clerk of Evidence
+
+Precedent acts as a **Clerk of Evidence**, not a trade advisor, coach, or signal service.
+
+- **Intended Feel**: Calm, sourced, and slightly cold. Clarity over heat. Structure over vibe.
+- **Product Motto**: *Pure research · non-execution · no directional bias or hype · every claim attributed · your judgment stays sovereign.*
+- **Four Independent Witnesses**: Retrieved data is cross-examined across four distinct witnesses that are allowed to disagree:
+  1. *Live Tape & Basis*: 24/7 Bitget order flow vs. New York cash equity close, venue basis, depth, and session spreads.
+  2. *10-Year Historical Analogs*: Empirical setup matching, base rates, quantile dispersion ($p_{10}$ to $p_{90}$), and regime fit.
+  3. *News & Social Discourse*: Verified financial media headlines, editorial lean, and engagement-weighted social sentiment.
+  4. *Fundamentals & Market Structure*: SEC EDGAR XBRL filings, EPS, catalysts, and RMT residual-correlation community stability.
+
+#### Texture of the Writing: Contrast Matrix
+
+| Should feel like | Should not feel like |
+|---|---|
+| Institutional desk note | Influencer thread |
+| Stress-test of a thesis | Trade prediction or forecast |
+| “Here is the basis vs NY close” | “This is going to rip” |
+| Disagreement between pillars | One smooth artificial narrative |
+| Quiet, attributed, multi-stream data | Directional cheerleading or FOMO |
+| “Here is the invalidation point” | “You should enter here” |
+| Cross-examination of witnesses | Conversational coaching for beginners |
+
+#### The 6-Point Reader Orientation Contract
+
+After one quick pass over a Precedent memo, the reader must know:
+
+1. **The setup in one sentence**: Target horizon, underlying asset, and venue basis (e.g. 24/7 Bitget pricing vs. NY cash close).
+2. **What the tape is doing now vs cash hours**: Venue basis gap, depth, session liquidity, and key structural levels.
+3. **What history rhymes with — and where the rhyme breaks**: Historical analog sample size ($n$), follow-through frequency, quantile dispersion ($p_{10}$ to $p_{90}$), and regime clashes.
+4. **What social and fundamentals add or contradict**: Corroboration or friction from SEC filings, earnings disclosures, and headline sentiment.
+5. **What can go wrong next week (Pre-Mortem)**: Catalyst drift, unexpected filings, macro volatility, liquidity vacuums, and predetermined invalidation boundaries.
+6. **What is still unknown**: Explicit disclosure of degraded streams, missing SEC CIKs, limited analog samples, or stale RMT snapshots.
 
 ---
 
 ## 4. Required briefing structure
 
-Every completed research memo follows an editorial, beginner-friendly layout with deep quantitative backing. The memo presents clear, plain-language facts first, supported by collapsible technical accordions and an interactive decision record:
+Every completed research memo follows an editorial institutional desk note layout with deep quantitative backing. The memo presents clear, attributed facts first, supported by collapsible technical accordions and an interactive decision record:
 
 ### 4.1 Document Header & Metadata
-- **Status Banner**: Displays `Beginner-friendly research note` (or `Simplified research note` when the deterministic fallback synthesizer is engaged).
+- **Status Banner**: Displays `Institutional Desk Note · Clerk of Evidence` (or `Quantitative Research Memo · Empirical Baseline` when the deterministic fallback synthesizer is engaged).
 - **Engine Label**: Transparent model attribution showing the active LLM (e.g. `Engine: opencode/ling-3.0-flash-fin-free`) or deterministic fallback indicator (`Engine: Precedent Quantitative Desk (fallback)`).
 - **Memo Title & Style Note**: A natural-language title summarizing the current setup for the asset, paired with horizon-specific guidance (e.g. 5–10 trading sessions for Swing).
 - **Style & Market Badges**: Badges indicating the selected operating style and market context (`Shown for context only`).
 
 ### 4.2 Decision Stress Test (Primary Memo)
 
-The primary body of the memo is structured for immediate comprehension:
+The primary body of the memo delivers the 6-point orientation contract:
 
 #### 1. What we did
-A plain-language narrative explaining what data was retrieved and analyzed across corporate filings, technical price action, Bitget rToken venue prints, news/macro context, and historical chart patterns.
+A crisp, one-sentence orientation stating the target horizon, underlying asset, and venue basis (e.g., cross-examining Bitget 24/7 rails against the NY cash close, 10-year analogs, SEC filings, and recent headline flow).
 
-#### 2. Historical Stress Test (“went up X times out of Y”)
+#### 2. Historical Rhyme & Quantile Dispersion (“went up X times out of Y”)
 The core quantitative anchor of the research memo:
 - **Sample Size**: Total count of verified historical chart matches found (e.g., `300 past cases`) or an explicit note when historical comparison data is unavailable.
 - **Historical Summary**: Objective, factual summary of past pattern follow-through without directional bias.
 - **Horizon Outcome Cards**: Three structured cards covering standard forward windows ("Next 1 trading day", "Next 5 trading days", "Next 10 trading days"):
   - **Frequency / Win Rate**: Explicit factual occurrences formatted strictly as **“went up X times out of Y”** (e.g., "went up 147 times out of 300").
   - **Typical Move**: The middle 80% outcome range (e.g., "usually between -4.8% and +4.7%").
-  - **Middle Result**: The sample median outcome (e.g., "Middle result: -0.1%").
-- **A few past examples**: 2 to 3 verified past occurrences (preferring same-ticker matches like `AAPL (2023-06-15)`) detailing plain-language forward outcomes (e.g., `rose about 0.4% over the next 5 days`). Never displays "n/a", null, or empty outcomes.
+  - **Median Result**: The sample median outcome (e.g., "Median: -0.1%").
+- **Past examples**: 2 to 3 verified past occurrences (preferring same-ticker matches like `AAPL (2023-06-15)`) detailing plain-language forward outcomes (e.g., `rose about 0.4% over the next 5 days`). Never displays "n/a", null, or empty outcomes.
 - **Important Note**: Mandatory caveat stating clearly: *"Historical results are past occurrences only, not predictions."*
 
-#### 3. Other things we checked
-A 3-point bulleted list of plain-language factual observations across the other pillars (corporate fundamentals, technical trends/support/resistance, and news flow).
-
-#### 4. Where things do not agree
-Explicitly exposes key tensions and contradictions between different evidence streams rather than blending them into an artificial consensus score:
-- **Conflict**: States the two differing facts side-by-side (e.g., 24-hour crypto exchange price vs. closed cash equity market; upward recent price momentum vs. split historical analog follow-through; stable long-term earnings vs. short-term tape volatility).
-- **Why it matters**: Explains the practical risk or sizing implication for the trader.
-
-#### 5. Simple takeaways
-A 3-point bulleted list of objective, essential observations summarizing the current setup without directional advice or speculative bias.
-
-#### 6. Questions only you can answer
-Forward-looking reflection questions tailored to the trader's operating horizon, invalidation criteria, and risk tolerance. Forward-looking language is strictly confined to this section.
+#### 3. Top 3-Column Summary Cards
+Organized directly below the historical snapshot to give the reader an instant synthesis of the setup:
+- **Card 1: Core Verified Takeaways (01 / Takeaways)**: Plain-language, verified empirical observations across tape, corporate disclosures, and news.
+- **Card 2: Witness Clashes & Divergences (02 / Divergences)**: Pushes tension first—states the two differing facts side-by-side (e.g. tape momentum vs. cautious headlines; crypto venue basis vs. closed equity cash market; reported profitability vs. secondary price fluctuations) and explains why the divergence matters.
+- **Card 3: Pre-Mortem & Invalidation Boundaries (03 / Invalidation)**: Deliberation and pre-mortem questions addressing what can go wrong next week, catalyst drift, and precise invalidation triggers.
 
 ### 4.3 Human Decision Record
 Positioned directly below the research memo, the Human Decision Record is an interactive, browser-local reflection module:
 - Allows the trader to record their personal thesis, planned entry/exit criteria, and what specific evidence would invalidate their setup.
 - Enforces the core product principle: **Research first. Decide yourself.** Precedent never executes trades, manages positions, or transmits orders to an exchange. All decisions remain strictly with the human trader.
 
-### 4.4 Expandable Technical Accordions
+### 4.4 Expandable Technical Accordions & Deep Telemetry
 For quantitative traders who require deep inspection, the memo provides collapsible technical detail sections:
-- **Technical details (01 Evidence & 02 Where the Facts Differ)**: Full source-attributed data (SEC EDGAR XBRL filings, Yahoo Finance technical levels, Bitget rToken tape basis, news sentiment, and Marcenko-Pastur RMT market structure eigenstructure and community stability) alongside full tension statements.
-- **Historical chart details (03 Chart details)**: Chart Library state string, 5-row analog match table with similarity distances, base rates across 1d/5d/10d excess-return bands, quantile distribution range bar (`<UnsignedRanges />`), and normalized SVG trajectory comparison chart (`<AnalogOverlay />`).
-- **Additional technical scoring (04 Additional details)**: Horizon-specific considerations, explicit invalidation triggers, and Structure & Fundamentals flags.
+- **01 Verified Evidence & Source Attribution**: Full source-attributed data across all 4 witnesses (SEC EDGAR XBRL filings, Yahoo Finance technical levels, Bitget rToken tape basis, news sentiment, and Marcenko-Pastur RMT market structure eigenstructure and community stability).
+- **02 Where the Signals Diverge**: Complete, unabridged tension matrix contrasting conflicting witness streams.
+- **03 Quantitative Scoring & Plan Boundaries**: Horizon-specific considerations, explicit invalidation triggers, and Structure & Fundamentals flags.
+- **04 Historical Analogs & Deep Quantitative Telemetry (`#advanced-precedents`)**: Chart Library state string, 5-row analog match table with similarity distances, base rates across 1d/5d/10d excess-return bands, quantile distribution range bar (`<UnsignedRanges />`), and normalized SVG trajectory comparison chart (`<AnalogOverlay />`).
 
 ---
 
