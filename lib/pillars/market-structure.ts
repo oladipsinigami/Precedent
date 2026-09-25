@@ -14,13 +14,25 @@ export type MarketStructureStore = {
   mpPlus: number;
   signalEigenvalues: number;
   barSource?: string;
-  communities: Record<string, { id: string; members: string[] }>;
-  raw: { native: string; row: number[] }[];
-  cleaned: { native: string; row: number[] }[];
+  communities: Record<string, string>;
+  communityMembers: Record<string, string[]>;
+  communityStats: Record<string, { meanResidualToMembers: number }>;
+  correlations: { native: string; peers: { native: string; raw: number; residual: number }[] }[];
+  communityCount?: number;
+  largestCommunity?: number;
+  largestCommunityShare?: number;
+  singletonCommunities?: number;
+  communityMinAvgCorr?: number;
   note: string;
 };
 
 const STORE_PATH = path.join(process.cwd(), "data", "market-structure.json");
+export const MARKET_STRUCTURE_SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000;
+
+export function isMarketStructureSnapshotStale(computedAt?: string): boolean {
+  const computedAtMs = computedAt ? Date.parse(computedAt) : Number.NaN;
+  return !Number.isFinite(computedAtMs) || Date.now() - computedAtMs > MARKET_STRUCTURE_SNAPSHOT_MAX_AGE_MS;
+}
 
 let cached: MarketStructureStore | null = null;
 let cachedMtimeMs = 0;
@@ -55,8 +67,9 @@ export async function runMarketStructure(name: NameCard): Promise<MarketStructur
         sources: [{ label: "RMT precompute (missing)" }],
       };
     }
-    const entry = store.communities[name.native];
-    if (!entry) {
+    const communityId = store.communities[name.native];
+    const members = communityId ? store.communityMembers[communityId] : undefined;
+    if (!communityId || !members?.length) {
       return {
         ...base,
         universeSize: store.universeSize,
@@ -69,36 +82,45 @@ export async function runMarketStructure(name: NameCard): Promise<MarketStructur
         sources: [{ label: "RMT precompute snapshot" }],
       };
     }
-    const idx = store.raw.findIndex((r) => r.native === name.native);
-    const peers = idx >= 0 ? entry.members.filter((m) => m !== name.native).slice(0, 6) : [];
-    const cleanedCorrelations = peers
-      .map((peer) => {
-        const peerIdx = store.raw.findIndex((r) => r.native === peer);
-        if (idx < 0 || peerIdx < 0) return null;
-        return {
-          peer,
-          raw: store.raw[idx].row[peerIdx] ?? 0,
-          cleaned: store.cleaned[idx].row[peerIdx] ?? 0,
-        };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
+    const row = store.correlations.find((item) => item.native === name.native);
+    const peers = (row?.peers ?? []).slice(0, 6);
+    const cleanedCorrelations = peers.map((peer) => ({
+      peer: peer.native,
+      raw: peer.raw,
+      residual: peer.residual,
+    }));
+    const stale = isMarketStructureSnapshotStale(store.computedAt);
+    const cohort = members.length > 1;
+    const caveats = [
+      `≈${store.infoBeyondNoisePct.toFixed(1)}% of this universe's eigenstructure carries information beyond noise (MP edge ${store.mpPlus.toFixed(2)}).`,
+      ...(store.skipped.length ? [`${store.skipped.length} names skipped for short history and named in the snapshot.`] : []),
+      ...(!cohort
+        ? [
+            `${name.native} forms no distinct cohort at this cut: its market-mode-removed correlations do not average ${store.communityMinAvgCorr ?? 0.3} against any cluster, so the peer list below is its strongest residual partners rather than a community.`,
+          ]
+        : []),
+      ...(store.largestCommunityShare !== undefined && store.largestCommunityShare > 0.6
+        ? [
+            `Community structure is coarse this run: the largest cluster holds ${(store.largestCommunityShare * 100).toFixed(0)}% of the ${store.universeSize}-asset universe, so peer lists are a market-wide basket rather than a tight sector cohort.`,
+          ]
+        : []),
+      ...(stale ? [`Snapshot is older than ${Math.round(MARKET_STRUCTURE_SNAPSHOT_MAX_AGE_MS / 3_600_000)} hours; treat community structure as historical context until npm run precompute refreshes it.`] : []),
+    ];
 
     return {
       ok: true,
-      communityId: entry.id,
-      communityMembers: entry.members,
+      stale,
+      communityId,
+      communityMembers: members,
       marketModeStrength: store.marketModeStrength,
       cleanedCorrelations,
       infoBeyondNoisePct: store.infoBeyondNoisePct,
-      stability: `Snapshot from ${store.computedAt} across ${store.universeSize} assets and ${store.sharedBars} shared sessions. Community assignment reflects this snapshot only; refresh with npm run precompute.`,
+      stability: `Snapshot from ${store.computedAt} across ${store.universeSize} assets and ${store.sharedBars} shared sessions. Communities are average-linkage clusters of market-mode-removed correlations${store.communityCount !== undefined ? ` (${store.communityCount} clusters, largest holding ${(100 * (store.largestCommunityShare ?? 0)).toFixed(0)}% of the universe)` : ""}; the Marcenko-Pastur split is a signal-versus-noise diagnostic on the raw matrix. Assignment reflects this snapshot only; ${stale ? "it is stale — run npm run precompute before relying on it." : "the nightly precompute should refresh it."}`,
       universeSize: store.universeSize,
       computedAt: store.computedAt,
-      caveats: [
-        `≈${store.infoBeyondNoisePct.toFixed(1)}% of this universe's eigenstructure carries information beyond noise (MP edge ${store.mpPlus.toFixed(2)}).`,
-        ...(store.skipped.length ? [`${store.skipped.length} names skipped for short history and named in the snapshot.`] : []),
-      ],
+      caveats,
       sources: [
-        { label: "RMT precompute snapshot (Marcenko-Pastur filtered)" },
+        { label: `RMT precompute snapshot (market-mode removed, average-linkage communities${stale ? "; stale" : ""})` },
         { label: store.barSource ?? "Historical bars used by the precompute job" },
       ],
     };

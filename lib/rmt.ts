@@ -117,40 +117,120 @@ export function splitSpectrum(corr: number[][], nObs: number): SpectrumSplit {
   };
 }
 
-// Greedy threshold clustering on the cleaned matrix (MVP community pass).
-// Assets linked by cleaned correlation >= threshold merge via union-find.
-// A Louvain pass on the same precomputed matrix is the documented upgrade.
-export function assignCommunities(cleaned: number[][], threshold = 0.3): number[] {
-  const n = cleaned.length;
-  const parent = Array.from({ length: n }, (_, i) => i);
-  const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
-  const union = (a: number, b: number) => {
-    parent[find(a)] = find(b);
-  };
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (cleaned[i][j] >= threshold) union(i, j);
-    }
-  }
-  const remap = new Map<number, number>();
-  let next = 0;
-  return Array.from({ length: n }, (_, i) => {
-    const root = find(i);
-    if (!remap.has(root)) remap.set(root, next++);
-    return remap.get(root) as number;
-  });
+// Standardise a return series to zero mean and unit variance. A series with no
+// dispersion (or a single observation) becomes all zeros rather than NaN.
+function standardise(series: number[]): number[] {
+  const n = series.length;
+  if (n < 2) return series.map(() => 0);
+  const mean = series.reduce((a, b) => a + b, 0) / n;
+  const variance = series.reduce((a, b) => a + (b - mean) * (b - mean), 0) / n;
+  const sd = Math.sqrt(variance);
+  return sd > 0 ? series.map((v) => (v - mean) / sd) : series.map(() => 0);
 }
 
-// Zero out sub-MP structure: keep the diagonal plus entries whose
-// magnitude survives a simple proportional threshold derived from the
-// MP edge. Returns the cleaned matrix used for community detection
-// and for cleaned-vs-raw correlation reporting.
-export function cleanedMatrix(corr: number[][], keepFraction = 1): number[][] {
-  const n = corr.length;
-  return corr.map((row, i) =>
-    row.map((v, j) => {
-      if (i === j) return 1;
-      return Math.abs(v) >= 0.15 * keepFraction ? v : 0;
-    }),
-  );
+// Remove the dominant common factor(s) before any similarity work.
+//
+// Why this matters: in a 494-name equity universe the largest eigenvalue carries
+// ~22% of total variance, so every pairwise correlation is dominated by market
+// beta rather than structure. A threshold graph on those raw correlations
+// percolates into one giant component (measured: 490 of 494 names in a single
+// "community"), which makes the peer cohort meaningless.
+//
+// We estimate each factor as the equal-weight cross-sectional mean of
+// standardised returns, regress it out of every series, and re-standardise.
+// Repeating the step deflates successive factors (market, then sector, ...).
+export function removeMarketMode(returns: number[][], factors = 1): number[][] {
+  const t = returns[0]?.length ?? 0;
+  if (t < 3 || returns.length < 3) return returns;
+  let current = returns.map(standardise);
+  for (let f = 0; f < factors; f++) {
+    const factor = new Array<number>(t).fill(0);
+    for (const series of current) for (let k = 0; k < t; k++) factor[k] += series[k];
+    for (let k = 0; k < t; k++) factor[k] /= current.length;
+    const mean = factor.reduce((a, b) => a + b, 0) / t;
+    const centered = factor.map((v) => v - mean);
+    const varFactor = centered.reduce((a, v) => a + v * v, 0) / t;
+    current = current.map((series) => {
+      const meanS = series.reduce((a, b) => a + b, 0) / t;
+      const s = series.map((v) => v - meanS);
+      const cov = s.reduce((a, v, k) => a + v * centered[k], 0) / t;
+      const beta = varFactor > 0 ? cov / varFactor : 0;
+      return standardise(s.map((v, k) => v - beta * centered[k]));
+    });
+  }
+  return current;
+}
+
+// Agglomerative average-linkage clustering on d = max(0, 1 - correlation).
+//
+// Why not single linkage: single linkage chains assets through intermediate
+// links, so a dense block of near-duplicate index ETFs (SPY/VOO/IVV,
+// QQQ/QQQM/TQQQ, GLD/IAU) connects the entire universe into one component at
+// any threshold, and even a symmetric k-nearest-neighbour graph stays connected
+// at K=3. Average linkage merges two clusters only when their *average* pairwise
+// correlation clears the cut, which cannot chain: measured on the same data it
+// yields ~111 clusters with the largest holding 17% of the universe, and banks,
+// oil, gold/miners and semis land in separate, interpretable groups.
+export function assignCommunitiesByAverageLinkage(
+  similarity: number[][],
+  minAvgCorr = 0.3,
+): number[] {
+  const n = similarity.length;
+  if (n === 0) return [];
+  const cluster = new Int32Array(n).map((_, i) => i);
+  if (n === 1) return [0];
+
+  const dist = new Float64Array(n * n);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = Math.max(0, 1 - similarity[i][j]);
+      dist[i * n + j] = d;
+      dist[j * n + i] = d;
+    }
+  }
+  const size = new Float64Array(n).fill(1);
+  const alive = new Uint8Array(n).fill(1);
+  const maxDist = 1 - minAvgCorr;
+  let active = n;
+
+  while (active > 1) {
+    let best = Infinity;
+    let bi = -1;
+    let bj = -1;
+    for (let i = 0; i < n; i++) {
+      if (!alive[i]) continue;
+      for (let j = i + 1; j < n; j++) {
+        if (!alive[j]) continue;
+        const d = dist[i * n + j];
+        if (d < best) {
+          best = d;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    if (bi === -1 || best > maxDist) break;
+    const si = size[bi];
+    const sj = size[bj];
+    for (let k = 0; k < n; k++) {
+      if (!alive[k] || k === bi || k === bj) continue;
+      const updated = (si * dist[k * n + bi] + sj * dist[k * n + bj]) / (si + sj);
+      dist[k * n + bi] = updated;
+      dist[bi * n + k] = updated;
+    }
+    for (let k = 0; k < n; k++) if (cluster[k] === bj) cluster[k] = bi;
+    size[bi] = si + sj;
+    alive[bj] = 0;
+    active -= 1;
+  }
+
+  const remap = new Map<number, number>();
+  let next = 0;
+  const labels = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const root = cluster[i];
+    if (!remap.has(root)) remap.set(root, next++);
+    labels[i] = remap.get(root) as number;
+  }
+  return labels;
 }
