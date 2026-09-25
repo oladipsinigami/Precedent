@@ -12,12 +12,12 @@ import {
   type Bar,
 } from "../lib/indicators";
 import {
-  assignCommunities,
-  cleanedMatrix,
+  assignCommunitiesByAverageLinkage,
   correlationMatrix,
   jacobiEigenvalues,
   logReturns,
   marcenkoPasturEdges,
+  removeMarketMode,
   splitSpectrum,
 } from "../lib/rmt";
 import { reweightBriefing } from "../lib/reweight";
@@ -159,19 +159,57 @@ const cases: [string, () => void][] = [
     approx(split.values[0], 1 + (n - 1) * rho, 1e-9, "market mode");
     assert.equal(split.signalCount, 1);
   }],
-  ["assignCommunities groups linked assets", () => {
-    const m = [
-      [1, 0.5, 0, 0],
-      [0.5, 1, 0, 0],
-      [0, 0, 1, 0.4],
-      [0, 0, 0.4, 1],
-    ];
-    assert.deepEqual(assignCommunities(m), [0, 0, 1, 1]);
-    assert.deepEqual(assignCommunities(m, 0.45), [0, 0, 1, 2]);
+  ["removeMarketMode deflates a planted common factor", () => {
+    // Every series loads on the same planted factor with a small idiosyncratic
+    // wobble, so raw correlations are all ~0.98 and no structure is visible.
+    // Once the common factor is regressed out, the apparent similarity goes away.
+    const t = 60;
+    const factor = Array.from({ length: t }, (_, k) => Math.sin(k / 4) + 0.5 * Math.cos(k / 7));
+    const returns = Array.from({ length: 8 }, (_, i) =>
+      Array.from({ length: t }, (_, k) => factor[k] + 0.15 * Math.sin(k / 3 + i * 1.7)),
+    );
+    const meanAbs = (m: number[][]) => {
+      let sum = 0;
+      let count = 0;
+      for (let i = 0; i < m.length; i++) {
+        for (let j = i + 1; j < m.length; j++) {
+          sum += Math.abs(m[i][j]);
+          count++;
+        }
+      }
+      return sum / count;
+    };
+    const before = correlationMatrix(returns);
+    const after = correlationMatrix(removeMarketMode(returns));
+    assert.ok(meanAbs(before) > 0.9, `raw pairs should be dominated by the factor, got ${meanAbs(before)}`);
+    assert.ok(meanAbs(after) < 0.6, `residual pairs should be much weaker, got ${meanAbs(after)}`);
+    assert.equal(after[0][0], 1, "diagonal must stay 1");
+    assert.ok(Math.abs(after[0][1] - after[1][0]) < 1e-12, "residual matrix must stay symmetric");
   }],
-  ["cleanedMatrix zeroes weak correlations and keeps the diagonal", () => {
-    const out = cleanedMatrix([[0.9, 0.1], [-0.2, 0.9]]);
-    assert.deepEqual(out, [[1, 0], [-0.2, 1]]);
+  ["assignCommunitiesByAverageLinkage groups blocks and refuses to chain", () => {
+    const blocks = [
+      [1, 0.8, 0.8, 0.05, 0.05],
+      [0.8, 1, 0.8, 0.05, 0.05],
+      [0.8, 0.8, 1, 0.05, 0.05],
+      [0.05, 0.05, 0.05, 1, 0.7],
+      [0.05, 0.05, 0.05, 0.7, 1],
+    ];
+    const labels = assignCommunitiesByAverageLinkage(blocks, 0.3);
+    assert.equal(labels[0], labels[1]);
+    assert.equal(labels[0], labels[2]);
+    assert.equal(labels[3], labels[4]);
+    assert.notEqual(labels[0], labels[3]);
+    // Bridge chain: single linkage would fuse all four through 0.75 hops, but the
+    // average across the growing cluster falls to 0.25 and must stop the merge.
+    const chain = [
+      [1, 0.75, 0, 0],
+      [0.75, 1, 0.75, 0],
+      [0, 0.75, 1, 0.75],
+      [0, 0, 0.75, 1],
+    ];
+    const chained = assignCommunitiesByAverageLinkage(chain, 0.3);
+    assert.ok(new Set(chained).size > 1, "average linkage must not chain a bridge into one cluster");
+    assert.notEqual(chained[0], chained[3], "the far end of the chain must stay separate");
   }],
 
   // ---------- reweight ----------
