@@ -2,7 +2,7 @@ import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { runResearch } from "@/lib/pipeline";
 import { DEMO_TASK } from "@/lib/style-profiles";
 import type { ResearchEvent, TradingStyle } from "@/lib/types";
-import { findName, findNameOrDefault } from "@/lib/universe";
+import { findName, findNameBySymbol, findNameOrDefault } from "@/lib/universe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -220,7 +220,9 @@ export async function POST(req: Request) {
       } catch (err) {
         if (!hasSentBriefing && !isClosed) {
           try {
-            const fallbackName = findNameOrDefault(`${symbol ?? ""} ${question}`);
+            const fallbackName =
+              findNameBySymbol(symbol ?? "") ??
+              findNameOrDefault(`${symbol ?? ""} ${question}`);
             const emptyPillars = {
               fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
               technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },

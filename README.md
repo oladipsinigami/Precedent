@@ -22,7 +22,7 @@ The five things worth opening first, in order of how much they prove:
 | **Real-time 24/7 tape vs cash close cross-check** | **Live venue basis engine** — cross-examines continuous Bitget 24/7 rToken pricing against the 4:00 PM New York equity close, quantifying overnight basis spread, book depth, and session liquidity gap risk. | [`lib/pillars/technicals.ts`](lib/pillars/technicals.ts) · [`lib/providers/bitget.ts`](lib/providers/bitget.ts) |
 | **It checks its own work & enforces compliance** | **Active Language Guard** — 21 automated compliance rules that actively sanitize directional hype, influencer slang (`rip`, `moon`, `guaranteed profit`), and patronizing coaching into cold empirical facts. Discloses all unverified streams as transparent caveats. | [`lib/language-guard.ts`](lib/language-guard.ts) · [`scripts/test-language-guard.ts`](scripts/test-language-guard.ts) |
 | **We went past the happy path** | **Market Structure & Provider Audits** — evaluated and purged the dead 23s `bitget-signal` feed in favor of official `bitget-mcp-server`; solved single-linkage clustering collapse (which chained 490 of 494 assets into one cluster) by implementing average-linkage RMT correlation communities (103 clean clusters). | [Engineering Audits](#engineering-audits) · [`lib/rmt.ts`](lib/rmt.ts) |
-| **It is not a demo shell** | **50+ automated tests across 6 test suites** — language guard, prompt safety, RMT math, security, headline blending, and provider health. Full type check and strict lint pass with zero errors. | [Test Suite](#testing--verification) · `npm test` |
+| **It is not a demo shell** | **60 automated tests across 7 test suites** — language guard, prompt safety, RMT math, security, headline blending, provider health, and universe resolution. Full type check and strict lint pass with zero errors. | [Test Suite](#testing--verification) · `npm test` |
 
 ---
 
@@ -78,7 +78,7 @@ After one pass over a Precedent memo, the reader immediately knows:
 $ npm test
 
 > precedent@0.1.0 test
-> tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts && tsx scripts/test-math.ts && tsx scripts/test-security.ts && tsx scripts/test-news-blend.ts && tsx scripts/test-news-providers.ts
+> tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts && tsx scripts/test-math.ts && tsx scripts/test-security.ts && tsx scripts/test-news-blend.ts && tsx scripts/test-news-providers.ts && tsx scripts/test-universe-resolution.ts
 
 [PASS] Headline BUY
 [PASS] Headline STRONG BUY
@@ -107,8 +107,9 @@ ok - 21 math & RMT checks passed
 ok - 5 security/data-integrity checks passed
 ok - 5 headline-blend checks passed
 ok - 3 news-provider checks passed
+ok - 4 universe-resolution checks passed
 
-50+ automated checks passed (100% pass rate).
+60 automated checks passed (100% pass rate).
 ```
 
 ### Live Research Synthesis Trace
@@ -253,6 +254,7 @@ Precedent enforces strict quality gates before any code merges:
 | **Security & Data Integrity** | `scripts/test-security.ts` | URL secret redaction, RMT snapshot freshness and staleness detection, and residual correlation structure. |
 | **Headline Blending** | `scripts/test-news-blend.ts` | Balanced multi-provider blending, fingerprint deduplication, and domain normalization. |
 | **Provider Resilience** | `scripts/test-news-providers.ts` | Graceful degradation and fallback handling across upstream news APIs. |
+| **Universe Resolution** | `scripts/test-universe-resolution.ts` | Explicit combobox selection precedence over question mentions, case-insensitivity, and fallback behavior. |
 
 Run tests:
 ```bash

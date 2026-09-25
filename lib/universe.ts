@@ -141,6 +141,17 @@ export function findNameOrDefault(query: string): NameCard {
   return findName(query) ?? UNIVERSE[0];
 }
 
+// Exact ticker/rToken lookup for an instrument the user explicitly selected.
+// Scanning free text for a selected instrument lets any other ticker named in
+// the question outrank the selection, so the choice is matched precisely.
+export function findNameBySymbol(symbol: string): NameCard | undefined {
+  const target = symbol.trim().toUpperCase();
+  if (!target) return undefined;
+  return UNIVERSE.find(
+    (n) => n.native.toUpperCase() === target || n.rToken.toUpperCase() === target,
+  );
+}
+
 export function nameFromBitgetContract(contract: { symbol: string; baseCoin: string }): NameCard {
   const native = contract.baseCoin;
   const known = UNIVERSE.find((name) => name.native === native);

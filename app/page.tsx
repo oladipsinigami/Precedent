@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { DEMO_TASK, STYLES } from "@/lib/style-profiles";
 import { reweightBriefing } from "@/lib/reweight";
-import { findNameOrDefault, UNIVERSE } from "@/lib/universe";
+import { findNameBySymbol, findNameOrDefault, UNIVERSE } from "@/lib/universe";
 import { BlackholeBackground } from "./components/BlackholeBackground";
 import { Header } from "./components/Header";
 import { IntakeView } from "./components/IntakeView";
@@ -244,7 +244,9 @@ export default function Home() {
         (s) => s === "ready" || s === "degraded",
       );
       if (hasCompletedPillars || Object.keys(collectedPillars).length > 0) {
-        const fallbackName = findNameOrDefault(`${activeSymbol ?? ""} ${activeQuestion}`);
+        const fallbackName =
+          findNameBySymbol(activeSymbol ?? "") ??
+          findNameOrDefault(`${activeSymbol ?? ""} ${activeQuestion}`);
         const defaultEmptyPillars: PillarBundle = {
           fundamentals: { ok: false, company: fallbackName.name, ticker: fallbackName.native, latestFilings: [], catalysts: [], notes: [], sources: [] },
           technicals: { ok: false, native: { last: 0, changePct: 0, high52: 0, low52: 0, volume: 0, asOf: "" }, trend: "unavailable", momentum: "unavailable", volatility: "unavailable", levels: { support: [], resistance: [] }, indicators: {}, spark: [], notes: [], sources: [] },

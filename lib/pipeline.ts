@@ -8,7 +8,7 @@ import { detectRegime } from "./regime";
 import { DEMO_TASK } from "./style-profiles";
 import { deterministicBriefing, synthesize } from "./synthesis";
 import type { Briefing, PillarBundle, PillarId, ResearchEvent, StructureFlags, TradingStyle } from "./types";
-import { findName, nameFromBitgetContract, nameFromBitgetRTokenMarket, type NameCard } from "./universe";
+import { findName, findNameBySymbol, nameFromBitgetContract, nameFromBitgetRTokenMarket, type NameCard } from "./universe";
 
 // Time budget defaults. Callers (the API route) normally pass an explicit deadline
 // derived from the serverless maxDuration; these apply when none is provided.
@@ -28,6 +28,12 @@ function queryMentions(query: string, value: string): boolean {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`, "i").test(query);
 }
+
+// An instrument the trader picked in the combobox is an explicit choice and must
+// win over any ticker merely mentioned in the question. Scanning the combined
+// text instead would let an early mention of an unrelated instrument (e.g. a
+// benchmark in the phrasing) hijack the run and research the wrong company.
+const resolveExplicitSymbol = findNameBySymbol;
 
 // In-memory cache with short TTL (10 minutes) for Bitget markets, contracts, and demo data
 const cache = new Map<string, { data: unknown; expires: number }>();
@@ -416,9 +422,21 @@ export async function* runResearch(input: {
   const requested = `${input.symbol ?? ""} ${input.question}`;
   // Live Bitget discovery enriches or resolves the instrument. It runs whether
   // or not the built-in universe matched, so newly listed rTokens work too.
-  let name = findName(requested);
+  // An explicit combobox selection is resolved first and only enriched below;
+  // otherwise a ticker named in the question could outrank the user's choice.
+  let name = resolveExplicitSymbol(input.symbol ?? "") ?? findName(requested);
   try {
+    const explicit = resolveExplicitSymbol(input.symbol ?? "");
     const rToken = (await getCachedBitgetRTokenMarkets()).find((item) => {
+      if (explicit) {
+        // Only enrich the chosen instrument; do not rescan the whole question.
+        const target = (input.symbol ?? "").trim().toUpperCase();
+        return (
+          item.symbol.toUpperCase() === target ||
+          item.baseCoin.toUpperCase() === target ||
+          item.baseCoin.slice(1).toUpperCase() === target
+        );
+      }
       return (
         queryMentions(requested, item.baseCoin) ||
         queryMentions(requested, item.symbol) ||
@@ -426,7 +444,7 @@ export async function* runResearch(input: {
       );
     });
     if (rToken) name = nameFromBitgetRTokenMarket(rToken);
-    else {
+    else if (!explicit) {
       const contract = (await getCachedBitgetRwaContracts()).find((item) => {
         return queryMentions(requested, item.baseCoin) || queryMentions(requested, item.symbol);
       });
