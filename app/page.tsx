@@ -8,6 +8,7 @@ import { findNameBySymbol, findNameOrDefault, UNIVERSE } from "@/lib/universe";
 import { BlackholeBackground } from "./components/BlackholeBackground";
 import { Header } from "./components/Header";
 import { IntakeView } from "./components/IntakeView";
+import { ProductTour } from "./components/ProductTour";
 import { ResultsView } from "./components/ResultsView";
 import type {
   Briefing,
@@ -81,7 +82,6 @@ const EMPTY_PILLARS: PillarState = {
   marketStructure: "pending",
 };
 
-// UX-1: the Trader Decision Record journal persists locally across reloads.
 const DECISION_NOTE_STORAGE_KEY = "precedent-decision-note";
 
 export default function Home() {
@@ -106,18 +106,15 @@ export default function Home() {
   const [decisionNote, setDecisionNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [tourToken, setTourToken] = useState(0);
 
-  // UX-1: hydrate the decision note from localStorage once, then persist every
-  // edit so the deliberation journal survives page reloads (and repeat demo
-  // runs). The save effect skips its first invocation so the mount render
-  // never overwrites the stored note before hydration applies.
   const skipInitialDecisionNoteSave = useRef(true);
   useEffect(() => {
     try {
       const saved = localStorage.getItem(DECISION_NOTE_STORAGE_KEY);
       if (saved) setDecisionNote(saved);
     } catch {
-      // localStorage unavailable (e.g. private mode) — journal stays session-only.
+      // localStorage unavailable
     }
   }, []);
   useEffect(() => {
@@ -128,7 +125,7 @@ export default function Home() {
     try {
       localStorage.setItem(DECISION_NOTE_STORAGE_KEY, decisionNote);
     } catch {
-      // Persistence failure is non-fatal; the in-memory note still works.
+      // Persistence failure is non-fatal
     }
   }, [decisionNote]);
 
@@ -177,8 +174,6 @@ export default function Home() {
     setBriefing(null);
     setPillarData(null);
     setMeta(null);
-    // Decision note intentionally NOT reset: the journal persists across runs
-    // and reloads via localStorage (UX-1); the trader clears it explicitly.
     setStage("pillars");
     setPillarMessages({
       fundamentals: "Pulling SEC filings…",
@@ -356,8 +351,6 @@ export default function Home() {
     setView("intake");
   }
 
-  // One-click judge walkthrough: loads the recommended demo task and starts
-  // it immediately against the server's cached demo fast path (demo: true).
   function runDemo() {
     if (busy) return;
     loadDemo();
@@ -366,13 +359,15 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen text-[#e7ebef]">
-      {/* Contextual Moving Blackhole Background (Prominent on Intake, Subdued on Results) */}
       <BlackholeBackground variant={view} />
 
-      {/* Institutional Top Navigation Bar */}
-      <Header onLoadDemo={runDemo} universeMeta={universeMeta} />
+      <Header
+        onLoadDemo={runDemo}
+        onStartTour={() => setTourToken((n) => n + 1)}
+        universeMeta={universeMeta}
+      />
+      <ProductTour view={view} requestToken={tourToken} />
 
-      {/* Main Container Rendering Either Page 1 (Intake) or Page 2 (Results) */}
       <main className="px-3.5 sm:px-6 md:px-8">
         {view === "intake" ? (
           <IntakeView
@@ -409,7 +404,6 @@ export default function Home() {
             statuses={statuses}
           />
         ) : (
-          // Fallback if results view is entered without a briefing
           <IntakeView
             style={style}
             onStyleChange={handleStyleChange}
