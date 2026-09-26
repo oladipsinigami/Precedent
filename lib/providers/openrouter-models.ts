@@ -24,8 +24,12 @@ const REQUEST_TIMEOUT_MS = 6_000;
 const MIN_CONTEXT_LENGTH = 16_000;
 
 // Cap the waterfall so a large free catalog cannot push synthesis past the
-// request deadline. Providers are tried in order; each miss moves on.
-const MAX_DISCOVERED_MODELS = 12;
+// request deadline. Providers are tried in order; each miss moves on. Kept
+// small on purpose: a reachable free model needs the whole synthesis budget to
+// emit a full memo, so there is realistically time for a handful of attempts,
+// not a dozen. The catalog is still queried live, so a retired slug is replaced
+// by whatever is actually offered today.
+const MAX_DISCOVERED_MODELS = 5;
 
 // Verified free models, ordered by desk preference. The live catalog fills in
 // around these, so a retired or rate-limited model simply falls through to the

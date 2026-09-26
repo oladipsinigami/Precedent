@@ -248,6 +248,9 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
 
   try {
     const { parsed, effectiveModelLabel } = await runSequentialSynthesis(llms, system, user, opts.timeoutMs ?? 42_000);
+    // The 90s default is only a fallback for callers that pass no explicit
+    // budget; the API route derives one from the request deadline.
+
     const adapted = adaptRetailBriefing(parsed, fallback, opts, flags);
     const cleanLabel = effectiveModelLabel.replace(" (retry)", "");
     const briefing: Briefing = {
@@ -444,6 +447,7 @@ function isTransientError(err: unknown): boolean {
     msg.includes("upstream request failed") ||
     msg.includes("server_error") ||
     msg.includes("empty model output") ||
+    msg.includes("truncated at max_tokens") ||
     msg.includes("no json") ||
     msg.includes("unexpected token") ||
     msg.includes("json at position") ||
@@ -473,7 +477,11 @@ async function complete(
         {
           model,
           temperature: 0.2,
-          max_tokens: model.includes("qwen3.8-27b") ? 1600 : model.includes("nemotron") ? 1300 : 2500,
+          // Reasoning models bill reasoning tokens against max_tokens: lfm-2.5
+          // spent 697 of 762 tokens on reasoning and was cut off mid-object,
+          // which then failed JSON parsing. A truncated completion looks exactly
+          // like a bad model, so the ceiling must cover reasoning plus the memo.
+          max_tokens: model.includes("qwen3.8-27b") ? 4000 : 6000,
           // qwen3.8-27b is a reasoning model; minimal effort keeps full research
           // prompts inside the synthesis time budget (measured ~22s vs ~57s).
           ...(model.includes("qwen3.8-27b") ? { reasoning: { effort: "minimal" as const } } : {}),
@@ -499,6 +507,12 @@ async function complete(
       if (!Array.isArray(choices) || !choices.length) {
         throw new Error(`Provider returned no choices: ${JSON.stringify(chat).slice(0, 150)}`);
       }
+      // A completion cut off at the token ceiling is unusable JSON. Surface it as
+      // a transient failure so the waterfall moves to the next available model
+      // rather than reporting the run as a parse error.
+      if (choices[0]?.finish_reason === "length") {
+        throw new Error("completion truncated at max_tokens (finish_reason=length)");
+      }
       const msg = choices[0]?.message;
       let content = typeof msg?.content === "string" ? msg.content.trim() : "";
       const reasoning = typeof msg?.reasoning === "string" ? msg.reasoning.trim() : "";
@@ -519,7 +533,17 @@ async function complete(
       const isTimeout = err?.name === "AbortError" || controller.signal.aborted;
       const errorDescription = isTimeout ? `timeout after ${timeoutMs / 1000}s` : err?.message || String(err);
 
-      if (attempt === 1 && isTransientError(err) && Date.now() - startedAt < timeoutMs / 2) {
+      // A rate-limited candidate should not be retried in place: the point of the
+      // sequential walk is to move on to the next available model, and re-asking
+      // the same free endpoint after 500ms just burns budget. Genuine transport
+      // and server errors still get one in-place retry.
+      const rateLimited = /\b429\b|rate.?limit|too many requests/i.test(err?.message ?? "");
+      if (
+        attempt === 1 &&
+        !rateLimited &&
+        isTransientError(err) &&
+        Date.now() - startedAt < timeoutMs / 2
+      ) {
         console.warn(`[Synthesis] Model ${model} transient failure on attempt 1 (${errorDescription}). Retrying in 500ms...`);
         await new Promise((r) => setTimeout(r, 500));
         continue;
@@ -537,7 +561,7 @@ async function runSequentialSynthesis(
   llms: { label: string; model: string; client: OpenAI }[],
   system: string,
   user: string,
-  totalTimeoutMs = 42_000,
+  totalTimeoutMs = 90_000,
 ): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
   const errors: string[] = [];
   const startTime = Date.now();
@@ -554,16 +578,18 @@ async function runSequentialSynthesis(
     // Fail-fast per candidate so a hanging provider yields quickly and the
     // waterfall reaches a responsive one (or the deterministic fallback) well
     // within the overall synthesis / pipeline budget.
-    // Experiential qwen3.8-27b is a reasoning model (hundreds of reasoning tokens
-    // even for short prompts), so it gets the longest allowance.
-    // OpenRouter free endpoints are rate-limited and often slow to first byte,
-    // and there can be a dozen of them in the discovered catalog. A short cap
-    // lets the walk actually rotate across them inside the total budget instead
-    // of stalling on the first one.
+    //
+    // Experiential qwen3.8-27b is a reasoning model, and the OpenRouter free
+    // tier is small and heavily contended: both need a long window to emit a
+    // full memo (measured at 45s+ for a realistic four-witness prompt). That is
+    // affordable because a free model that is rate-limited, retired, or slow to
+    // accept returns almost immediately, so a broken candidate costs ~0.2s and
+    // the next one is tried straight away. Only a candidate that actually starts
+    // generating can consume the window.
     const candidateCapMs = llm.label.startsWith("experiential/")
       ? 34_000
-      : llm.label.startsWith("openrouter/") && llm.model.endsWith(":free")
-        ? 7_000
+      : llm.label.startsWith("openrouter/")
+        ? 40_000
         : 14_000;
     const candidateTimeout = Math.min(
       candidateCapMs,

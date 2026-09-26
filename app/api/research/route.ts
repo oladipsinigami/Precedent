@@ -6,11 +6,16 @@ import { findName, findNameBySymbol, findNameOrDefault } from "@/lib/universe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// The synthesis waterfall needs room for a slow-but-working candidate: a free
+// OpenRouter model was measured at ~46s to emit a full four-witness memo, and a
+// rate-limited one returns in ~0.2s so the walk still moves on quickly. The
+// deterministic fallback is built inside the request budget below, so raising
+// the ceiling does not remove the guaranteed-completion path.
+export const maxDuration = 120;
 
 // Total work budget per request. Kept below maxDuration so the deterministic
 // fallback memo always has time to stream before the platform kills the function.
-const REQUEST_BUDGET_MS = 55_000;
+const REQUEST_BUDGET_MS = 108_000;
 const MAX_BODY_BYTES = 16_384;
 
 const STYLES: TradingStyle[] = ["day", "swing", "event", "position"];

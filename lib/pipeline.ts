@@ -12,8 +12,13 @@ import { findName, findNameBySymbol, nameFromBitgetContract, nameFromBitgetRToke
 
 // Time budget defaults. Callers (the API route) normally pass an explicit deadline
 // derived from the serverless maxDuration; these apply when none is provided.
-const DEFAULT_BUDGET_MS = 55_000;
-const SYNTHESIS_MAX_MS = 48_000;
+const DEFAULT_BUDGET_MS = 108_000;
+// Sized for the slowest realistic candidate rather than a fast paid provider: a
+// free OpenRouter model needs ~45s to emit a full memo, and the waterfall may
+// burn a few sub-second rate-limit rejections before reaching it. A paid or
+// Experiential model that answers early still returns immediately; this is only
+// a ceiling.
+const SYNTHESIS_MAX_MS = 96_000;
 // Below this, an LLM call is unlikely to finish, so go straight to the deterministic memo.
 const SYNTHESIS_MIN_MS = 8_000;
 // Reserved for building the fallback memo and streaming it back.

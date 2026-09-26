@@ -21,7 +21,7 @@ async function main() {
     "context length clears the synthesis floor",
     models.every((m) => m.contextLength >= 16_000),
   );
-  check("waterfall stays inside the per-request candidate cap", models.length <= 12);
+  check("waterfall stays inside the per-request candidate cap", models.length <= 5);
   check(
     "qwen3.8-27b is tried first when the catalog offers it",
     !models.some((m) => m.id === "qwen/qwen3.8-27b:free") || models[0].id === "qwen/qwen3.8-27b:free",
