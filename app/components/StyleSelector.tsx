@@ -13,7 +13,7 @@ export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSe
   const stylesList = Object.keys(STYLES) as TradingStyle[];
 
   return (
-    <div>
+    <div data-tour="tour-style">
       <div className="flex flex-wrap items-center justify-between gap-1">
         <label className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-[#c7d3de]">
           <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#d4ff3f]" viewBox="0 0 10 10" fill="currentColor">
@@ -43,7 +43,6 @@ export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSe
                   : "border-white/[0.08] bg-[#0b0e13]/80 hover:border-white/20 hover:bg-[#0e1218]"
               }`}
             >
-              {/* Geometric corner bracket on the active card */}
               {isSelected && (
                 <svg
                   aria-hidden="true"
