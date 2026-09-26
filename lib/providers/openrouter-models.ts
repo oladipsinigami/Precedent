@@ -4,12 +4,14 @@ type OpenRouterModel = {
   id: string;
   name?: string;
   context_length?: number;
-  // Free models are published with a ":free" slug suffix on OpenRouter.
-  architecture?: { input_modalities?: string[]; output_modalities?: string[] };
+  // The catalog also exposes `architecture` (input/output modalities), but the
+  // memo is a plain text-in/text-out JSON synthesis, so every free slug that
+  // clears the context floor is a usable synthesizer and no modality filtering
+  // is needed. Keeping an unused field here previously implied a filter that
+  // was never applied.
 };
 
 export type OpenRouterFreeModel = { id: string; contextLength: number };
-
 // OpenRouter's public catalog is unauthenticated, so the free tier can be
 // discovered even when the request has no usable key. The list churns daily
 // (free models are added and retired), so it is fetched live and cached for
@@ -47,8 +49,6 @@ let inFlight: Promise<OpenRouterFreeModel[]> | null = null;
 function normalizeCatalog(raw: OpenRouterModel[]): OpenRouterFreeModel[] {
   return raw
     .filter((m) => typeof m?.id === "string" && m.id.endsWith(":free"))
-    // Text-in/text-out only: the memo schema is plain JSON, so a vision-only
-    // or embedding-style free endpoint is not a usable synthesizer.
     .map((m) => ({ id: m.id, contextLength: m.context_length ?? 0 }))
     .filter((m) => m.contextLength >= MIN_CONTEXT_LENGTH);
 }

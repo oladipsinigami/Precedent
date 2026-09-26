@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
-import { guardBriefing, cleanHistoricalSummary, didLastGuardRewrite } from "./language-guard";
+import { guardBriefing, cleanHistoricalSummary } from "./language-guard";
 import { openRouterFreeModels } from "./providers/openrouter-models";
 import { UNTRUSTED_DATA_RULE, untrusted } from "./prompt-safety";
 import { STYLES } from "./style-profiles";
@@ -260,23 +260,23 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
       isFallback: false,
     };
     console.log(`[Synthesis] Successfully generated full LLM memo using ${cleanLabel}.`);
-    const guarded = guardBriefing(normalizeBriefing(briefing, fallback));
-    if (didLastGuardRewrite()) {
-      console.log(`[Synthesis] Language guard actively sanitized prohibited directional language in LLM memo.`);
-    }
+    const guarded = guardBriefing(normalizeBriefing(briefing, fallback), (rewriteCount) => {
+      if (rewriteCount > 0) {
+        console.log(`[Synthesis] Language guard actively sanitized prohibited directional language in LLM memo.`);
+      }
+    });
     return guarded;
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.warn(`[Synthesis] All sequential synthesis candidates failed: ${errMsg}. Falling back to deterministic briefing.`);
-    const guardedFallback = guardBriefing({
-      ...fallback,
-      isFallback: true,
-      model: "Precedent Quantitative Desk",
-    });
-    if (didLastGuardRewrite()) {
-      console.log(`[Synthesis] Language guard sanitized deterministic fallback memo.`);
-    }
-    return guardedFallback;
+    return guardBriefing(
+      { ...fallback, isFallback: true, model: "Precedent Quantitative Desk" },
+      (rewriteCount) => {
+        if (rewriteCount > 0) {
+          console.log(`[Synthesis] Language guard sanitized deterministic fallback memo.`);
+        }
+      },
+    );
   }
 
   function adaptRetailBriefing(

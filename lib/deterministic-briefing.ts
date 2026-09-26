@@ -1,5 +1,5 @@
 ﻿import { fmtPct } from "./http";
-import { guardBriefing, didLastGuardRewrite } from "./language-guard";
+import { guardBriefing } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
 import type { NameCard } from "./universe";
@@ -16,10 +16,13 @@ export function collectSources(pillars: PillarBundle) {
 
 // Pillar sentences are authored as complete sentences and so already end in
 // terminal punctuation. Interpolating one into a template that adds its own
-// period produced "not NAV.." in the rendered memo, so strip the trailing mark
-// before an outer template supplies it.
+// punctuation produced "not NAV.." in the rendered memo, so strip any trailing
+// run of terminal marks (and whitespace) before an outer template supplies its
+// own. The class covers every mark a pillar sentence may legitimately end on,
+// not just "." — otherwise a sentence ending in "!" or "?" reintroduces the
+// same double-punctuation defect.
 function inline(sentence: string): string {
-  return sentence.replace(/[.\s]+$/, "");
+  return sentence.replace(/[.!?:;…]+[\s]*$/, "");
 }
 
 export function deterministicBriefing(opts: {
@@ -427,11 +430,11 @@ export function deterministicBriefing(opts: {
     },
     sources: collectSources(pillars),
   };
-  const guarded = guardBriefing(result);
-  if (didLastGuardRewrite()) {
-    console.log(`[DeterministicBriefing] Language guard actively sanitized briefing text.`);
-  }
-  return guarded;
+  return guardBriefing(result, (rewriteCount) => {
+    if (rewriteCount > 0) {
+      console.log(`[DeterministicBriefing] Language guard actively sanitized briefing text.`);
+    }
+  });
 }
 
 export function formatAnalogOutcome(

@@ -22,16 +22,13 @@ const INFLUENCER_HYPE =
 const PATRONIZING_COACHING =
   /\b(a\s+beginner\s+should\s+note|for\s+beginners?|beginners?\s+should|fear\s+of\s+missing\s+out|\bFOMO\b)\b/gi;
 
-let lastRewriteCount = 0;
-let lastRewriteOccurred = false;
-
-export function didLastGuardRewrite(): boolean {
-  return lastRewriteOccurred;
-}
-
-export function getLastRewriteCount(): number {
-  return lastRewriteCount;
-}
+// The rewrite report is delivered per call through the `onResult` callback on
+// guardBriefing. It used to be published in module-level `let` bindings read
+// back via didLastGuardRewrite()/getLastRewriteCount(), which is unsafe on
+// serverless: one instance serves concurrent requests, so that channel belonged
+// to whichever request finished last rather than to the caller's own memo.
+// Keeping the count in the closure that already computes it removes the shared
+// state entirely rather than locking it.
 
 function matches(regex: RegExp, text: string): boolean {
   regex.lastIndex = 0;
@@ -387,7 +384,10 @@ function scrubList(
     );
 }
 
-export function guardBriefing(briefing: Briefing): Briefing {
+export function guardBriefing(
+  briefing: Briefing,
+  onResult?: (rewriteCount: number) => void,
+): Briefing {
   const seenGlossary = new Set<string>();
   let localRewriteCount = 0;
 
@@ -472,14 +472,12 @@ export function guardBriefing(briefing: Briefing): Briefing {
     questions: scrubList(briefing.considerations?.questions, seenGlossary, onRewrite),
   };
 
-  lastRewriteCount = localRewriteCount;
-  lastRewriteOccurred = localRewriteCount > 0;
-
   if (localRewriteCount > 0) {
     console.info(
       `[LanguageGuard] Sanitized research memo: ${localRewriteCount} prohibited directional or verdict pattern(s) rewritten.`,
     );
   }
+  onResult?.(localRewriteCount);
 
   return {
     ...briefing,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 
 export type TourView = "intake" | "results";
 
@@ -130,7 +130,14 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
-  const steps = useMemo(() => visibleSteps(view), [view, open, requestToken]);
+  // Recomputed on every render rather than memoized. visibleSteps() reads the
+  // DOM to find anchors, which React cannot track, so the previous useMemo
+  // listed `open` and `requestToken` as manual cache-busters purely to re-read
+  // the document. That both tripped react-hooks/exhaustive-deps and hid the real
+  // dependency. The list is 16 items filtered by a querySelector each, so the
+  // direct call is cheaper than the bookkeeping it replaces and is always
+  // consistent with what is actually mounted.
+  const steps = visibleSteps(view);
   const step = steps[index];
 
   const close = useCallback(() => {

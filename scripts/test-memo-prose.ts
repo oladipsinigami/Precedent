@@ -62,4 +62,30 @@ check("no raw EDGAR MMDD fiscal code leaks into the memo", !/Fiscal year end on 
 check("no empty sentence fragments are emitted", !/\.\s*\./.test(allText));
 check("memo still reports the analog sample size", briefing.historicalStressTest.sampleSize === 300);
 
+// Pillar sentences are authored as complete sentences, so they can legitimately
+// end in any terminal mark. inline() only needs to strip the mark that an outer
+// template is about to supply; if it handled "." alone, a pillar ending in "!"
+// or "?" would render "basis!- gap" style double punctuation in the memo.
+const endings = [".", "!", "?", ":", ";", ". ", "…", "?!", ""];
+const rendered = endings.map((mark) => {
+  const marked = { ...pillars, technicals: { ...pillars.technicals, rTokenGap: `Venue basis is open${mark}` } };
+  const b = deterministicBriefing({
+    style: "swing" as TradingStyle,
+    question: "Where do the pillars disagree?",
+    name,
+    regime: "trending-up" as Regime,
+    pillars: marked as PillarBundle,
+    flags: undefined,
+  });
+  return [
+    ...b.otherThingsWeChecked,
+    ...b.whereThingsDoNotAgree.map((t) => t.conflict),
+    ...b.simpleTakeAways,
+  ].join(" ");
+});
+
+check("no doubled terminal punctuation for any pillar ending", !rendered.some((t) => /[.!?:;…]{2,}/.test(t)));
+check("no orphaned punctuation before whitespace (e.g. '! .')", !rendered.some((t) => /[.!?:;]\s+[.!?:;]/.test(t)));
+check("the sentence still ends in a single period", rendered.every((t) => /[.!?:;…]\s*$/.test(t.trim()) || t.trim() === ""));
+
 console.log(`\n${passed} memo-prose checks passed.`);
