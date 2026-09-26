@@ -94,7 +94,7 @@ export function IntakeForm({
                 </span>
               </div>
 
-              <div className="mt-2">
+              <div className="mt-2" data-tour="tour-asset">
                 <TokenSearchCombobox
                   instruments={instruments}
                   selectedSymbol={symbol}
@@ -104,7 +104,7 @@ export function IntakeForm({
               </div>
             </div>
 
-            <div>
+            <div data-tour="tour-venue">
               <label className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#c7d3de]">
                 <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#d4ff3f]/70" viewBox="0 0 10 10" fill="currentColor">
                   <path d="M5 0L10 5L5 10L0 5Z" />
@@ -137,7 +137,7 @@ export function IntakeForm({
           </div>
 
           {/* Quick-Pick Popular Tickers */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div className="mt-3 flex flex-wrap items-center gap-1.5" data-tour="tour-popular">
             <span className="font-mono text-[10px] uppercase tracking-wider text-[#556472]">
               Popular Focus:
             </span>
@@ -164,7 +164,7 @@ export function IntakeForm({
         </div>
 
         {/* Research Question */}
-        <div>
+        <div data-tour="tour-question">
           <div className="flex items-center justify-between">
             <label
               htmlFor="research-question"
@@ -191,7 +191,7 @@ export function IntakeForm({
           />
 
           {/* Quick prompt suggestions */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2" data-tour="tour-angles">
             <span className="font-mono text-[10px] uppercase text-[#617180]">Suggested Angles:</span>
             {(onFillDemo || onLoadDemo) && (
               <button
@@ -230,6 +230,7 @@ export function IntakeForm({
 
           <button
             type="submit"
+            data-tour="tour-submit"
             disabled={busy || question.trim().length < 8}
             className={`group relative flex w-full sm:w-auto items-center justify-center gap-3 overflow-hidden rounded-sm px-6 py-3.5 sm:py-3 font-mono text-xs font-bold uppercase tracking-[0.14em] transition-all disabled:cursor-not-allowed disabled:opacity-40 min-h-[48px] ${
               isDemoMatched && !busy

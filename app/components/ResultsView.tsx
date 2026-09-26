@@ -65,6 +65,7 @@ export function ResultsView({
         <button
           type="button"
           onClick={onBackToIntake}
+          data-tour="tour-back"
           className="group flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center sm:justify-start gap-2.5 rounded-sm border border-white/[0.14] bg-[#0c1015] px-4 py-2 text-xs font-semibold text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
         >
           <span className="font-mono text-sm transition-transform duration-200 group-hover:-translate-x-1 text-[#d4ff3f]">
@@ -104,6 +105,7 @@ export function ResultsView({
             onClick={() =>
               document.getElementById("decision-record")?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
+            data-tour="tour-journal-jump"
             className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-sm border border-white/[0.14] bg-[#0c1015] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
             title="Jump to the Trader Decision Record at the end of the memo"
           >
@@ -112,6 +114,7 @@ export function ResultsView({
           </button>
 
           {/* Dual Export Actions */}
+          <div className="flex flex-wrap items-center gap-2" data-tour="tour-exports">
           <button
             type="button"
             onClick={() => handleDownload("executive")}
@@ -167,13 +170,14 @@ export function ResultsView({
               </>
             )}
           </button>
+          </div>
 
           <PipelineSummary statuses={statuses} pillarData={pillarData} />
         </div>
       </div>
 
 
-      <div className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-[#0c1016]/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
+      <div data-tour="tour-reweight" className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-[#0c1016]/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
           <div>
             <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9eb0bf]">
@@ -212,6 +216,7 @@ export function ResultsView({
       </div>
 
       {/* The Master Archival Paper Memo */}
+      <div data-tour="tour-memo">
       <ResearchMemo
         briefing={briefing}
         style={style}
@@ -219,6 +224,7 @@ export function ResultsView({
         decisionNote={decisionNote}
         onDecisionNoteChange={onDecisionNoteChange}
       />
+      </div>
 
       {/* Bottom Footer Navigation */}
       <div className="mt-8 sm:mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-white/[0.08] pt-5 sm:pt-6">

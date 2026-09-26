@@ -56,6 +56,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
   return (
     <section
       id="decision-record"
+      data-tour="tour-decision"
       className="relative scroll-mt-6 border-t-2 border-[#486326] bg-[#e2e9de] px-4 py-6 shadow-[0_-18px_44px_-24px_rgba(18,22,20,0.45)] sm:px-10 sm:py-10"
     >
       {/* Header */}
