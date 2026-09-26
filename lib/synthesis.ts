@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
 import { computeFlags } from "./flags";
 import { guardBriefing, cleanHistoricalSummary, didLastGuardRewrite } from "./language-guard";
+import { openRouterFreeModels } from "./providers/openrouter-models";
 import { UNTRUSTED_DATA_RULE, untrusted } from "./prompt-safety";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
@@ -9,7 +10,7 @@ import type { NameCard } from "./universe";
 
 export { deterministicBriefing, collectSources } from "./deterministic-briefing";
 
-function providers() {
+async function providers() {
   const available: { label: string; model: string; client: OpenAI }[] = [];
 
   // 1. Qwen 3.8-27B via Experiential gateway (OpenAI Chat Completions compatible).
@@ -57,16 +58,21 @@ function providers() {
       },
     });
 
+    // The free catalog churns daily and individual free endpoints rate-limit
+    // independently, so the waterfall is built from the live catalog instead of
+    // a pinned list. runSequentialSynthesis already advances to the next
+    // candidate on a miss, which is exactly the desired behaviour: the memo is
+    // written by whichever free model is reachable this run.
+    const discovered = await openRouterFreeModels();
+    const explicit = process.env.OPENROUTER_MODEL?.trim();
     const candidateModels = [
-      process.env.OPENROUTER_MODEL,
-      "meta-llama/llama-3.3-70b-instruct:free",
-      "google/gemini-2.0-flash-exp:free",
-      "liquid/lfm-2.5-2.6b:free",
-    ].filter(Boolean) as string[];
+      ...(explicit ? [explicit] : []),
+      ...discovered.map((m) => m.id),
+    ];
 
     for (const model of [...new Set(candidateModels)]) {
       available.push({
-        label: model.startsWith("openrouter/") ? model : `openrouter/${model}`,
+        label: `openrouter/${model}`,
         model,
         client,
       });
@@ -173,7 +179,7 @@ export async function synthesize(opts: {
     flags = undefined;
   }
   const fallback = deterministicBriefing({ ...opts, flags });
-  const llms = providers();
+  const llms = await providers();
   if (!llms.length) return guardBriefing({ ...fallback, isFallback: true, model: "Precedent Quantitative Desk" });
 
   const profile = STYLES[opts.style];
@@ -545,13 +551,20 @@ async function runSequentialSynthesis(
       break;
     }
 
-    // Fail-fast per candidate: 14s forces hanging free models to yield quickly so
-    // the waterfall reaches a responsive provider (or the deterministic fallback)
-    // well within the overall 42s synthesis / 48s pipeline budget.
+    // Fail-fast per candidate so a hanging provider yields quickly and the
+    // waterfall reaches a responsive one (or the deterministic fallback) well
+    // within the overall synthesis / pipeline budget.
     // Experiential qwen3.8-27b is a reasoning model (hundreds of reasoning tokens
-    // even for short prompts), so it gets up to 34s; if it still fails, the
-    // pipeline falls back to the deterministic memo instantly.
-    const candidateCapMs = llm.label.startsWith("experiential/") ? 34_000 : 14_000;
+    // even for short prompts), so it gets the longest allowance.
+    // OpenRouter free endpoints are rate-limited and often slow to first byte,
+    // and there can be a dozen of them in the discovered catalog. A short cap
+    // lets the walk actually rotate across them inside the total budget instead
+    // of stalling on the first one.
+    const candidateCapMs = llm.label.startsWith("experiential/")
+      ? 34_000
+      : llm.label.startsWith("openrouter/") && llm.model.endsWith(":free")
+        ? 7_000
+        : 14_000;
     const candidateTimeout = Math.min(
       candidateCapMs,
       remainingTime - 1_500,
