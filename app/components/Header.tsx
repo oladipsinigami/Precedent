@@ -2,10 +2,11 @@
 
 interface HeaderProps {
   onLoadDemo: () => void;
+  onStartTour?: () => void;
   universeMeta: { source: "live" | "fallback"; count: number; asOf: string | null };
 }
 
-export function Header({ onLoadDemo, universeMeta }: HeaderProps) {
+export function Header({ onLoadDemo, onStartTour, universeMeta }: HeaderProps) {
   const universeLive = universeMeta.source === "live";
   const universeLabel = universeLive
     ? `${universeMeta.count.toLocaleString("en-US")} rTokens Live`
@@ -16,7 +17,7 @@ export function Header({ onLoadDemo, universeMeta }: HeaderProps) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#07090c]/85 backdrop-blur-xl">
       <div className="mx-auto flex max-w-[1520px] items-center justify-between px-3.5 py-2.5 sm:px-6 sm:py-3.5 lg:px-8">
-        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0" data-tour="tour-brand">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm bg-gradient-to-br from-[#d4ff3f] to-[#b2e612] font-mono text-xs font-black text-[#080a0d] shadow-[0_0_18px_rgba(212,255,63,0.35)]">
             P
           </div>
@@ -42,6 +43,7 @@ export function Header({ onLoadDemo, universeMeta }: HeaderProps) {
           </span>
 
           <div
+            data-tour="tour-universe"
             className={`flex items-center gap-1.5 sm:gap-2 rounded-full border px-2.5 py-1 sm:px-3 sm:py-1 ${
               universeLive
                 ? "border-white/[0.09] bg-white/[0.03] text-[#a8b8c7]"
@@ -58,8 +60,20 @@ export function Header({ onLoadDemo, universeMeta }: HeaderProps) {
             </span>
           </div>
 
+          {onStartTour && (
+            <button
+              type="button"
+              onClick={onStartTour}
+              className="hidden min-h-[44px] items-center rounded-md border border-white/15 bg-white/[0.04] px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#c8d4df] transition hover:border-[#d4ff3f]/50 hover:text-white sm:inline-flex"
+              title="Explain every control on this screen"
+            >
+              Quick tour
+            </button>
+          )}
+
           <button
             type="button"
+            data-tour="tour-demo"
             onClick={onLoadDemo}
             className="group flex min-h-[44px] items-center gap-1.5 rounded-md bg-[#d4ff3f] px-3 text-xs font-bold text-[#080a0d] shadow-[0_0_18px_rgba(212,255,63,0.35)] transition hover:bg-white"
             title="Load and run the recommended demo walkthrough (AAPL swing stress-test)"
@@ -71,6 +85,17 @@ export function Header({ onLoadDemo, universeMeta }: HeaderProps) {
           </button>
         </div>
       </div>
+      {onStartTour && (
+        <div className="border-t border-white/[0.06] px-3.5 py-2 sm:hidden">
+          <button
+            type="button"
+            onClick={onStartTour}
+            className="flex min-h-[40px] w-full items-center justify-center rounded-md border border-white/15 bg-white/[0.04] font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[#d4ff3f]"
+          >
+            Quick tour · explain this screen
+          </button>
+        </div>
+      )}
     </header>
   );
 }
