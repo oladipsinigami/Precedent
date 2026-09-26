@@ -1,4 +1,4 @@
-import { fmtPct } from "./http";
+﻿import { fmtPct } from "./http";
 import { guardBriefing, didLastGuardRewrite } from "./language-guard";
 import { STYLES } from "./style-profiles";
 import type { Briefing, PillarBundle, Regime, TradingStyle } from "./types";
@@ -14,6 +14,14 @@ export function collectSources(pillars: PillarBundle) {
   ];
 }
 
+// Pillar sentences are authored as complete sentences and so already end in
+// terminal punctuation. Interpolating one into a template that adds its own
+// period produced "not NAV.." in the rendered memo, so strip the trailing mark
+// before an outer template supplies it.
+function inline(sentence: string): string {
+  return sentence.replace(/[.\s]+$/, "");
+}
+
 export function deterministicBriefing(opts: {
   style: TradingStyle;
   question: string;
@@ -24,7 +32,7 @@ export function deterministicBriefing(opts: {
 }): Briefing {
   const { pillars, name, style, regime, flags } = opts;
   const profile = STYLES[style] ?? STYLES.swing;
-  const asksAboutOvernight = /\b(overnight|7\s*[×x]\s*24|cash|basis|bitget|session|intraday|open|close|gap)\b/i.test(opts.question);
+  const asksAboutOvernight = /\b(overnight|7\s*[Ã—x]\s*24|cash|basis|bitget|session|intraday|open|close|gap)\b/i.test(opts.question);
   const isDayOrOvernight = style === "day" || asksAboutOvernight;
   const analogHorizon = profile.analogHorizon;
   const ranges = pillars?.analogs?.ranges ?? [];
@@ -64,7 +72,7 @@ export function deterministicBriefing(opts: {
   }
   if (pillars?.news?.headlines?.[0]) {
     evidence.push({
-      claim: `Lead headline: “${pillars.news.headlines[0].title}” (${pillars.news.headlines[0].publisher}).`,
+      claim: `Lead headline: â€œ${pillars.news.headlines[0].title}â€ (${pillars.news.headlines[0].publisher}).`,
       source: pillars.news.headlines[0].publisher,
       pillar: "news" as const,
     });
@@ -72,7 +80,7 @@ export function deterministicBriefing(opts: {
   if (pillars?.news?.social?.x?.[0]) {
     const top = pillars.news.social.x[0];
     evidence.push({
-      claim: `Top X post (@${top.author}, ${top.lean}): “${top.text.slice(0, 160)}”. Aggregate X lean across ${pillars.news.social.x.length} posts is engagement-weighted.`,
+      claim: `Top X post (@${top.author}, ${top.lean}): â€œ${top.text.slice(0, 160)}â€. Aggregate X lean across ${pillars.news.social.x.length} posts is engagement-weighted.`,
       source: "X discourse",
       pillar: "news" as const,
     });
@@ -94,7 +102,7 @@ export function deterministicBriefing(opts: {
           residualPeers.map((p) => `${p.peer} (${p.residual.toFixed(2)})`).join(", ") || "none above the cut"
         }`;
     evidence.push({
-      claim: `Market structure: ${name.native} ${cohortClause}; market-mode share ${ms.marketModeStrength !== undefined ? (ms.marketModeStrength * 100).toFixed(1) + "%" : "n/a"}; ≈${ms.infoBeyondNoisePct?.toFixed(1)}% of eigenstructure beyond noise.${ms.stale ? ` Snapshot from ${ms.computedAt ?? "an unknown time"} is stale and is historical context only.` : ""}`,
+      claim: `Market structure: ${name.native} ${cohortClause}; market-mode share ${ms.marketModeStrength !== undefined ? (ms.marketModeStrength * 100).toFixed(1) + "%" : "n/a"}; â‰ˆ${ms.infoBeyondNoisePct?.toFixed(1)}% of eigenstructure beyond noise.${ms.stale ? ` Snapshot from ${ms.computedAt ?? "an unknown time"} is stale and is historical context only.` : ""}`,
       source: "RMT precompute snapshot",
       pillar: "marketStructure" as const,
     });
@@ -132,7 +140,7 @@ export function deterministicBriefing(opts: {
     tension.push({
       left: "Bitget trades 24/7 on crypto exchange rails.",
       right: pillars?.technicals?.rTokenGap
-        ? `US cash market is closed overnight, establishing venue basis: ${pillars.technicals.rTokenGap}.`
+        ? `US cash market is closed overnight, establishing venue basis: ${inline(pillars.technicals.rTokenGap)}.`
         : "US cash equity market is closed overnight, operating only during standard daytime hours.",
       whyItMatters:
         "Overnight rToken quotes reflect off-hours crypto venue liquidity; basis spreads frequently mean-revert or gap sharply upon NY cash market open.",
@@ -216,7 +224,7 @@ export function deterministicBriefing(opts: {
   const otherChecked = isDayOrOvernight
     ? [
         pillars?.technicals?.rTokenGap
-          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${inline(pillars.technicals.rTokenGap)}.`
           : "Tape & Venue Basis: Bitget trades 24/7 on crypto rails, while the primary US equity market closes overnight.",
         "Liquidity & Spread: Off-hours rToken trading operates with thinner order depth, exposing positions to opening basis gap risk.",
         pillars?.fundamentals?.eps
@@ -232,10 +240,10 @@ export function deterministicBriefing(opts: {
           ? `SEC EDGAR Filing Tape: Latest disclosure is ${pillars.fundamentals.latestFilings[0].form} dated ${pillars.fundamentals.latestFilings[0].filed}.`
           : "SEC Filing Tape: Corporate disclosure feed returned limited reporting in this run.",
         pillars?.technicals?.rTokenGap
-          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${inline(pillars.technicals.rTokenGap)}.`
           : "Tape & Venue Basis: Bitget 24/7 trading operates continuously across closed cash market sessions.",
         pillars?.news?.headlines?.[0]
-          ? `Lead Editorial Headline: “${pillars.news.headlines[0].title}” (${pillars.news.headlines[0].publisher}).`
+          ? `Lead Editorial Headline: â€œ${pillars.news.headlines[0].title}â€ (${pillars.news.headlines[0].publisher}).`
           : "News & Macro: Live headline stream verified where coverage was active.",
       ];
 
@@ -252,7 +260,7 @@ export function deterministicBriefing(opts: {
           ? `Past 10-year analogs (n=${band.n}) show positive follow-through in ${Math.round(band.pUp * band.n)} of ${band.n} sessions, with quantile dispersion spanning ${fmtPct(band.p10)} (p10) to ${fmtPct(band.p90)} (p90).`
           : "Historical chart comparison was not available in this run; focus on verified technical support/resistance levels and venue order flow.",
         pillars?.technicals?.rTokenGap
-          ? `24/7 Bitget price vs NY cash close: ${pillars.technicals.rTokenGap}.`
+          ? `24/7 Bitget price vs NY cash close: ${inline(pillars.technicals.rTokenGap)}.`
           : "Bitget 24/7 trading functions continuously independent of daytime cash session schedules.",
         "Historical analog distributions indicate realization dispersion, not deterministic forward paths.",
       ];
@@ -276,30 +284,30 @@ export function deterministicBriefing(opts: {
   const unverified: string[] = [];
   if (!pillars?.fundamentals?.ok) {
     unverified.push(
-      pillars?.fundamentals?.error || "Fundamentals partial — no SEC CIK available for this rToken.",
+      pillars?.fundamentals?.error || "Fundamentals partial â€” no SEC CIK available for this rToken.",
     );
   }
   if (!pillars?.technicals?.ok) {
     unverified.push(
-      pillars?.technicals?.error || "Technicals & Tape partial — Bitget venue order flow or cash session spread unavailable.",
+      pillars?.technicals?.error || "Technicals & Tape partial â€” Bitget venue order flow or cash session spread unavailable.",
     );
   }
   if (!pillars?.news?.ok) {
     unverified.push(
-      pillars?.news?.error || "News & Macro partial — multi-channel news flow was incomplete.",
+      pillars?.news?.error || "News & Macro partial â€” multi-channel news flow was incomplete.",
     );
   } else if (pillars?.news?.caveats?.length) {
-    pillars.news.caveats.forEach((c) => unverified.push(`News & Macro note — ${c}`));
+    pillars.news.caveats.forEach((c) => unverified.push(`News & Macro note â€” ${c}`));
   }
   const analogSampleSize = band?.n ?? 0;
   if (!pillars?.analogs?.ok || analogSampleSize === 0) {
-    unverified.push("Historical analog matches unavailable — 0 past cases found.");
+    unverified.push("Historical analog matches unavailable â€” 0 past cases found.");
   } else if (analogSampleSize < 30) {
     unverified.push(`Historical analog sample is limited (${analogSampleSize} cases).`);
   }
 
   const result: Briefing = {
-    title: `${name.rToken} — ${profile.label} stress test`,
+    title: `${name.rToken} â€” ${profile.label} stress test`,
     whatWeDid: whatWeDidText,
     historicalStressTest: {
       summary: band && band.n > 0
@@ -361,7 +369,7 @@ export function deterministicBriefing(opts: {
     tension,
     historicalAnalog: {
       setup: pillars?.analogs?.state
-        ? `Current Chart Library state “${pillars.analogs.state}” on ${pillars.analogs.session}. Previous: “${pillars.analogs.prevState}”. Regime frame: ${regime}.`
+        ? `Current Chart Library state â€œ${pillars.analogs.state}â€ on ${pillars.analogs.session}. Previous: â€œ${pillars.analogs.prevState}â€. Regime frame: ${regime}.`
         : "Historical pattern comparison was not available in this run; live technical and fundamental levels are prioritized.",
       analogs: (pillars?.analogs?.closest ?? []).slice(0, 5).map((a) => {
         const returns = [
@@ -382,7 +390,7 @@ export function deterministicBriefing(opts: {
       }),
       baseRates: ranges.map((r) => ({
         horizon: r.horizon,
-        range: `p10 ${fmtPct(r.p10)} · median ${fmtPct(r.p50)} · p90 ${fmtPct(r.p90)} · share of positive excess ${Math.round(r.pUp * 100)}% of the sample`,
+        range: `p10 ${fmtPct(r.p10)} Â· median ${fmtPct(r.p50)} Â· p90 ${fmtPct(r.p90)} Â· share of positive excess ${Math.round(r.pUp * 100)}% of the sample`,
         n: r.n,
         note: "Excess versus a date-matched liquid-stock baseline, not raw return, and not a forecast.",
       })),
@@ -406,7 +414,7 @@ export function deterministicBriefing(opts: {
       invalidation: [
         band
           ? `Realization outside the historical distribution for ${analogHorizon} (${fmtPct(band.p10)} to ${fmtPct(band.p90)}) represents an outlier regime break.`
-          : "Without analog bands, invalidation must be anchored to explicit structural support/resistance levels — the desk does not assume a trade side.",
+          : "Without analog bands, invalidation must be anchored to explicit structural support/resistance levels â€” the desk does not assume a trade side.",
         pillars?.fundamentals?.catalysts?.[0]
           ? `An unscheduled 8-K or regulatory filing that alters the documented disclosure tape (${pillars.fundamentals.catalysts[0]}) reopens fundamental assumptions.`
           : "Monitor upcoming SEC filings; the recorded EDGAR state represents the last verified corporate baseline.",

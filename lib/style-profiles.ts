@@ -51,3 +51,30 @@ export const DEMO_TASK = {
   question:
     "I'm a swing trader. Stress-test the current AAPL rToken setup into next week — especially the 7×24 window versus the cash session. What did historically similar charts do next, and where do the pillars disagree?",
 };
+
+/**
+ * Normalize a free-typed question so the demo fast path matches the intended
+ * walkthrough instead of demanding a byte-identical string. The demo question is
+ * filled by a UI control, so a drifted em dash, an ASCII "x" for "×", collapsed
+ * whitespace, or a curly apostrophe would otherwise silently fall through to the
+ * live pipeline — which is slower and, for a judge, indistinguishable from the
+ * fast path simply being broken.
+ *
+ * Folding is deliberately conservative: it normalizes typography and spacing but
+ * never wording, so an ordinary research question still runs live.
+ */
+export function normalizeQuestion(question: string): string {
+  return question
+    // Curly quotes/apostrophes -> ASCII, and the various Unicode dashes -> "-".
+    .replace(/[\u2018\u2019\u201B\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201F\u2033]/g, '"')
+    .replace(/[\u2010-\u2015\u2212]/g, "-")
+    // Multiplication/cross signs -> "x" so "7×24" and "7x24" are the same.
+    .replace(/[\u00D7\u2715\u2716\u2A2F]/g, "x")
+    // Ellipsis and non-breaking/hair spaces -> a single space.
+    .replace(/\u2026/g, "...")
+    .replace(/[\u00A0\u2007\u202F\u2009]/g, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}

@@ -5,7 +5,7 @@ import { runNews } from "./pillars/sentiment";
 import { runTechnicals } from "./pillars/technicals";
 import { bitgetRTokenMarkets, bitgetRwaContracts, type BitgetRTokenMarket, type BitgetRwaContract } from "./providers/bitget";
 import { detectRegime } from "./regime";
-import { DEMO_TASK } from "./style-profiles";
+import { DEMO_TASK, normalizeQuestion } from "./style-profiles";
 import { deterministicBriefing, synthesize } from "./synthesis";
 import type { Briefing, PillarBundle, PillarId, ResearchEvent, StructureFlags, TradingStyle } from "./types";
 import { findName, findNameBySymbol, nameFromBitgetContract, nameFromBitgetRTokenMarket, type NameCard } from "./universe";
@@ -82,7 +82,8 @@ function isDemoRequest(input: {
   useCachedMemo?: boolean;
 }): boolean {
   if (!input.demo && !input.useCachedMemo) return false;
-  return input.style === DEMO_TASK.style && input.question.trim() === DEMO_TASK.question.trim();
+  if (input.style !== DEMO_TASK.style) return false;
+  return normalizeQuestion(input.question) === normalizeQuestion(DEMO_TASK.question);
 }
 
 function buildDemoBundle(style: TradingStyle, question: string) {

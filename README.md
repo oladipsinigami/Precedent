@@ -22,7 +22,7 @@ The five things worth opening first, in order of how much they prove:
 | **Real-time 24/7 tape vs cash close cross-check** | **Live venue basis engine** — cross-examines continuous Bitget 24/7 rToken pricing against the 4:00 PM New York equity close, quantifying overnight basis spread, book depth, and session liquidity gap risk. | [`lib/pillars/technicals.ts`](lib/pillars/technicals.ts) · [`lib/providers/bitget.ts`](lib/providers/bitget.ts) |
 | **It checks its own work & enforces compliance** | **Active Language Guard** — 21 automated compliance rules that actively sanitize directional hype, influencer slang (`rip`, `moon`, `guaranteed profit`), and patronizing coaching into cold empirical facts. Discloses all unverified streams as transparent caveats. | [`lib/language-guard.ts`](lib/language-guard.ts) · [`scripts/test-language-guard.ts`](scripts/test-language-guard.ts) |
 | **We went past the happy path** | **Market Structure & Provider Audits** — evaluated and purged the dead 23s `bitget-signal` feed in favor of official `bitget-mcp-server`; solved single-linkage clustering collapse (which chained 490 of 494 assets into one cluster) by implementing average-linkage RMT correlation communities (103 clean clusters). | [Engineering Audits](#engineering-audits) · [`lib/rmt.ts`](lib/rmt.ts) |
-| **It is not a demo shell** | **60 automated tests across 7 test suites** — language guard, prompt safety, RMT math, security, headline blending, provider health, and universe resolution. Full type check and strict lint pass with zero errors. | [Test Suite](#testing--verification) · `npm test` |
+| **It is not a demo shell** | **86 automated checks across 10 test suites** — language guard, prompt safety, RMT math, security, headline blending, provider health, universe resolution, live LLM free-catalog rotation, demo fast-path matching, and memo prose integrity. Full type check and strict lint pass with zero errors. | [Test Suite](#testing--verification) · `npm test` |
 
 ---
 
@@ -108,8 +108,11 @@ ok - 5 security/data-integrity checks passed
 ok - 5 headline-blend checks passed
 ok - 3 news-provider checks passed
 ok - 4 universe-resolution checks passed
+ok - 7 openrouter-free-rotation checks passed
+ok - 9 demo-fast-path checks passed
+ok - 5 memo-prose checks passed
 
-60 automated checks passed (100% pass rate).
+86 automated checks passed (100% pass rate).
 ```
 
 ### Live Research Synthesis Trace

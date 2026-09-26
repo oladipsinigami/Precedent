@@ -4,6 +4,25 @@ import { simfinFundamentalsSummary } from "../providers/simfin";
 import type { FundamentalsPillar } from "../types";
 import type { NameCard } from "../universe";
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+] as const;
+
+// EDGAR reports fiscalYearEnd as a bare MMDD string ("0926" for a late-September
+// close), which is unreadable in trader-facing prose. Render it as a month plus
+// day, and fall back to the raw value for anything that is not a 4-digit MMDD so
+// no information is invented.
+function formatFiscalYearEnd(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) return "unknown";
+  if (!/^\d{4}$/.test(value)) return value;
+  const month = Number(value.slice(0, 2));
+  const day = Number(value.slice(2, 4));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return value;
+  return `${MONTHS[month - 1]} ${day}`;
+}
+
 export async function runFundamentals(name: NameCard): Promise<FundamentalsPillar> {
   try {
     const [snap, atom, simfin] = await Promise.all([
@@ -118,7 +137,7 @@ export async function runFundamentals(name: NameCard): Promise<FundamentalsPilla
 
     if (snap) {
       notes.push(
-        `Fiscal year end on file: ${snap.fiscalYearEnd ?? "unknown"}. Upcoming catalysts are inferred from recent 8-Ks, not from a paid calendar.`,
+        `Fiscal year end on file: ${formatFiscalYearEnd(snap.fiscalYearEnd)}. Upcoming catalysts are inferred from recent 8-Ks, not from a paid calendar.`,
       );
     } else {
       notes.push("SEC CIK filings unavailable for this symbol; fundamental context provided via SimFin.");
@@ -184,7 +203,7 @@ export async function runFundamentals(name: NameCard): Promise<FundamentalsPilla
       ok: true,
       company,
       ticker: name.native,
-      fiscalYearEnd: snap?.fiscalYearEnd,
+      fiscalYearEnd: snap?.fiscalYearEnd ? formatFiscalYearEnd(snap.fiscalYearEnd) : undefined,
       sector,
       latestFilings: snap?.filings ?? [],
       eps,

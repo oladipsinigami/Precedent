@@ -1,6 +1,6 @@
 import { deterministicBriefing } from "@/lib/deterministic-briefing";
 import { runResearch } from "@/lib/pipeline";
-import { DEMO_TASK } from "@/lib/style-profiles";
+import { DEMO_TASK, normalizeQuestion } from "@/lib/style-profiles";
 import type { ResearchEvent, TradingStyle } from "@/lib/types";
 import { findName, findNameBySymbol, findNameOrDefault } from "@/lib/universe";
 
@@ -169,13 +169,16 @@ export async function POST(req: Request) {
 
   const symbol = typeof input.symbol === "string" ? input.symbol.trim().slice(0, 20) : undefined;
 
-  // Demo fast path only activates on an explicit flag plus an exact
+  // Demo fast path only activates on an explicit flag plus a normalized
   // DEMO_TASK match, so ordinary research questions never replay sample data.
+  // The comparison folds typography and spacing rather than demanding a
+  // byte-identical string, so a drifted em dash or an ASCII "x" for "7×24" in
+  // the UI does not silently drop a judge onto the slower live pipeline.
   const demoParam = new URL(req.url).searchParams.get("demo");
   const isDemo =
     (input.demo === true || demoParam === "true" || demoParam === "1") &&
     style === DEMO_TASK.style &&
-    question === DEMO_TASK.question &&
+    normalizeQuestion(question) === normalizeQuestion(DEMO_TASK.question) &&
     (!symbol || symbol.toUpperCase() === DEMO_TASK.symbol.toUpperCase());
 
   const encoder = new TextEncoder();
