@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 
 export type TourView = "intake" | "results";
 
@@ -115,7 +115,7 @@ const STORAGE_KEY = "precedent-tour-seen-v1";
 function visibleSteps(view: TourView) {
   return STEPS.filter((step) => step.view === "any" || step.view === view).filter((step) => {
     if (typeof document === "undefined") return true;
-    return Boolean(document.querySelector(`[data-tour=\"${step.id}\"]`));
+    return Boolean(document.querySelector(`[data-tour="${step.id}"]`));
   });
 }
 
@@ -170,7 +170,7 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
         setRect(null);
         return;
       }
-      const el = document.querySelector(`[data-tour=\"${step.id}\"]`) as HTMLElement | null;
+      const el = document.querySelector(`[data-tour="${step.id}"]`) as HTMLElement | null;
       if (!el) {
         setRect(null);
         return;
@@ -212,18 +212,14 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
       }
     : null;
 
-  const tooltipStyle: React.CSSProperties = isMobile
-    ? {
-        left: 12,
-        right: 12,
-        bottom: 16,
-        top: "auto",
-      }
+  const tooltipStyle: CSSProperties = isMobile
+    ? { left: 12, right: 12, bottom: 16, top: "auto" }
     : highlight
       ? {
-          top: highlight.top + highlight.height + 12 > window.innerHeight - 220
-            ? Math.max(highlight.top - 200, 16)
-            : highlight.top + highlight.height + 12,
+          top:
+            highlight.top + highlight.height + 12 > window.innerHeight - 220
+              ? Math.max(highlight.top - 200, 16)
+              : highlight.top + highlight.height + 12,
           left: Math.min(Math.max(highlight.left, 16), window.innerWidth - 380),
           width: 360,
         }
