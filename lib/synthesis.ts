@@ -458,12 +458,22 @@ function isTransientError(err: unknown): boolean {
   );
 }
 
+// A hedged candidate abandoned because a sibling answered. Distinguished from a
+// real failure so the walk neither retries it nor reports it as an error.
+class CancelledCandidateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CancelledCandidateError";
+  }
+}
+
 async function complete(
   client: OpenAI,
   model: string,
   system: string,
   user: string,
   timeoutMs = 16_000,
+  externalSignal?: AbortSignal,
 ): Promise<{ text: string; actualModel?: string }> {
   let lastError: unknown;
   const startedAt = Date.now();
@@ -471,6 +481,14 @@ async function complete(
   for (let attempt = 1; attempt <= 2; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // A hedged loser is cancelled by the caller once a sibling has already
+    // answered. Without this the abandoned request would keep its whole
+    // per-candidate window open and keep consuming the shared free-tier quota.
+    const onExternalAbort = () => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort();
+      else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+    }
 
     try {
       const chat = await client.chat.completions.create(
@@ -531,7 +549,16 @@ async function complete(
     } catch (err: any) {
       lastError = err;
       const isTimeout = err?.name === "AbortError" || controller.signal.aborted;
-      const errorDescription = isTimeout ? `timeout after ${timeoutMs / 1000}s` : err?.message || String(err);
+      const cancelled = externalSignal?.aborted === true;
+      const errorDescription = cancelled
+        ? "cancelled (a sibling candidate answered first)"
+        : isTimeout
+          ? `timeout after ${timeoutMs / 1000}s`
+          : err?.message || String(err);
+
+      // A cancelled hedged loser is a success for the walk, not a failure to
+      // retry: a sibling already returned the memo we were asked for.
+      if (cancelled) throw new CancelledCandidateError(errorDescription);
 
       // A rate-limited candidate should not be retried in place: the point of the
       // sequential walk is to move on to the next available model, and re-asking
@@ -551,10 +578,213 @@ async function complete(
       throw new Error(`${model} failed on attempt ${attempt}: ${errorDescription}`);
     } finally {
       clearTimeout(timer);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
     }
   }
 
   throw lastError || new Error(`${model} failed after retry`);
+}
+
+// How long the first candidate is given to answer alone before the next one is
+// launched alongside it.
+//
+// The strictly sequential walk assumed a contended free model either rejects
+// fast (429 in ~0.2s) or answers. Production did neither reliably: measured live
+// across repeated runs, the two preferred front-runners (qwen3.8-27b,
+// llama-3.3-70b) never once produced a memo, while liquid answered in 24-35s and
+// ling in 60-90s. A stalling front-runner therefore burned the full 40s
+// per-candidate window, and two of them pushed a 25s run out to 90s with no
+// answer on screen. Hedging removes that dead time: the next candidate starts
+// while the current one is still thinking, so the clock is set by the model that
+// actually answers rather than by however many dead ones precede it.
+export const HEDGE_DELAY_MS = 6_000;
+// How many candidates start with no hedge delay. Two is enough to cover the
+// common case where a free slug is retired or throttled and rejects in ~0.2s,
+// without opening the whole list at once and spending the shared quota.
+export const INITIAL_BURST = 2;
+// Concurrency ceiling. The free tier is shared and rate-limited, so a candidate
+// that accepts and then stalls still occupies a slot for its full window; three
+// keeps the winner reachable while bounding how much quota can be tied up.
+export const MAX_CONCURRENT_CANDIDATES = 3;
+// Below this a candidate cannot plausibly finish, so it is not started at all.
+const MIN_CANDIDATE_BUDGET_MS = 6_000;
+
+export function candidateCapMs(label: string): number {
+  if (label.startsWith("experiential/")) return 34_000;
+  if (label.startsWith("openrouter/")) return 40_000;
+  return 14_000;
+}
+
+export type SynthesisAttemptResult = { text: string; actualModel?: string };
+export type SynthesisCandidateRef = { label: string; model: string };
+
+/**
+ * Race the candidate list and return the first one that answers.
+ *
+ * `attempt` performs a single candidate call. It is injected rather than inlined
+ * so the scheduling itself - hedge delay, concurrency cap, overall budget, and
+ * cancellation of the losers - can be exercised deterministically with fakes
+ * instead of against the live, rate-limited free tier.
+ */
+export async function raceCandidates<T extends SynthesisCandidateRef>(
+  llms: T[],
+  totalTimeoutMs: number,
+  attempt: (llm: T, candidateTimeoutMs: number, signal: AbortSignal) => Promise<SynthesisAttemptResult>,
+): Promise<{ index: number; result: SynthesisAttemptResult; elapsedMs: number }> {
+  const errors: string[] = [];
+  const startTime = Date.now();
+
+  // Aborted the moment one candidate wins, so the losers stop holding the free
+  // tier's quota open for the rest of their window.
+  const winner = new AbortController();
+
+  type Outcome =
+    | { ok: true; index: number; result: SynthesisAttemptResult }
+    | { ok: false; index: number; error: string };
+
+  const inFlight = new Map<number, Promise<Outcome>>();
+  const settledQueue: Outcome[] = [];
+  let wake: (() => void) | null = null;
+  let launched = 0;
+  let settledCount = 0;
+  let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+  let nextLaunchAt: ReturnType<typeof setTimeout> | undefined;
+
+  const launch = (index: number) => {
+    const llm = llms[index];
+    const remainingTime = totalTimeoutMs - (Date.now() - startTime);
+    if (remainingTime < 6_000) {
+      errors.push(`${llm.label}: insufficient time remaining (${remainingTime}ms)`);
+      return;
+    }
+    // Fail-fast per candidate, and never past the overall budget: a candidate
+    // that is still going when the walk ends is worth nothing, while one that
+    // succeeds is always the first to settle.
+    const candidateTimeout = Math.min(candidateCapMs(llm.label), remainingTime - 1_500);
+
+    console.log(
+      `[Synthesis] Launching candidate [${index + 1}/${llms.length}]: ${llm.label} (timeout ${candidateTimeout / 1000}s, in flight ${inFlight.size})`,
+    );
+
+    const task = (async (): Promise<Outcome> => {
+      try {
+        const result = await attempt(llm, candidateTimeout, winner.signal);
+        return { ok: true, index, result };
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, index, error: message };
+      }
+    })();
+
+    // Outcomes go onto a queue that the main loop drains, rather than being
+    // awaited through Promise.race. Promise.race enumerates its iterable once,
+    // synchronously, at call time - so a candidate launched by a later hedge
+    // timer was never part of the race already being awaited, and the walk sat
+    // on an earlier candidate until it expired before noticing the winner had
+    // already answered.
+    inFlight.set(index, task);
+    void task.then(
+      (outcome) => {
+        settledQueue.push(outcome);
+        wake?.();
+      },
+      (err: unknown) => {
+        settledQueue.push({
+          ok: false,
+          index,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        wake?.();
+      },
+    );
+  };
+
+  // Advance the window: start another candidate once the hedge delay elapses
+  // while one is still unresolved, and refill immediately when a slot frees.
+  //
+  // This has to be a rolling hedge rather than "refill on settle". The measured
+  // front-runners accept the request and then stall for their whole 40s window,
+  // so with refill-on-settle two dead candidates were only replaced after both
+  // had timed out and the winner still waited out the full stall behind them.
+  // Rolling keeps the next candidate in flight long before a stalled one gives
+  // up, so the wall clock is set by the answering model rather than by however
+  // many dead ones sit ahead of it.
+  const canLaunchMore = () =>
+    settledCount < llms.length &&
+    launched < llms.length &&
+    inFlight.size < MAX_CONCURRENT_CANDIDATES &&
+    totalTimeoutMs - (Date.now() - startTime) >= MIN_CANDIDATE_BUDGET_MS;
+
+  const scheduleNext = () => {
+    if (hedgeTimer) {
+      clearTimeout(hedgeTimer);
+      hedgeTimer = undefined;
+    }
+    if (!canLaunchMore()) return;
+    launch(launched++);
+    if (inFlight.size > 0 && canLaunchMore()) {
+      hedgeTimer = setTimeout(scheduleNext, HEDGE_DELAY_MS);
+    }
+  };
+
+  // Initial burst with no hedge delay, then roll.
+  while (launched < INITIAL_BURST && canLaunchMore()) launch(launched++);
+  if (inFlight.size > 0 && canLaunchMore()) {
+    hedgeTimer = setTimeout(scheduleNext, HEDGE_DELAY_MS);
+  }
+
+  try {
+    while (inFlight.size > 0) {
+      if (settledQueue.length === 0) {
+        // Nothing settled yet: park until an attempt pushes its outcome. The
+        // executor runs synchronously, so no outcome can slip in between the
+        // check above and the assignment of `wake`.
+        await new Promise<void>((resolve) => {
+          wake = resolve;
+        });
+        wake = null;
+      }
+      const outcome = settledQueue.shift();
+      if (!outcome) break;
+      inFlight.delete(outcome.index);
+      settledCount++;
+
+      if (outcome.ok) {
+        if (hedgeTimer) clearTimeout(hedgeTimer);
+        if (nextLaunchAt) clearTimeout(nextLaunchAt);
+        // Cancel the losers before returning so their sockets and quota stop.
+        winner.abort();
+        console.log(
+          `[Synthesis] ${llms[outcome.index].label} answered in ${((Date.now() - startTime) / 1000).toFixed(1)}s!`,
+        );
+        return {
+          index: outcome.index,
+          result: outcome.result,
+          elapsedMs: Date.now() - startTime,
+        };
+      }
+
+      if (outcome.error.includes("cancelled")) {
+        // Sibling already won and aborted this one; nothing to report.
+        continue;
+      }
+      console.warn(`[Synthesis] Candidate ${llms[outcome.index].label} failed: ${outcome.error}`);
+      errors.push(`${llms[outcome.index].label}: ${outcome.error}`);
+      scheduleNext();
+    }
+  } finally {
+    if (hedgeTimer) clearTimeout(hedgeTimer);
+    if (nextLaunchAt) clearTimeout(nextLaunchAt);
+    // Release any parked waiter so the function cannot linger on it.
+    wake = null;
+    // Every candidate is settled or abandoned at this point; make sure nothing
+    // is left running if the walk exits via the throw below.
+    if (!winner.signal.aborted) winner.abort();
+    for (const [, task] of inFlight) void task.catch(() => undefined);
+    inFlight.clear();
+  }
+
+  throw new Error(`All candidate free models failed: ${errors.join(" | ")}`);
 }
 
 async function runSequentialSynthesis(
@@ -563,66 +793,26 @@ async function runSequentialSynthesis(
   user: string,
   totalTimeoutMs = 90_000,
 ): Promise<{ parsed: RetailBriefing; effectiveModelLabel: string }> {
-  const errors: string[] = [];
-  const startTime = Date.now();
+  const { index, result, elapsedMs } = await raceCandidates(
+    llms,
+    totalTimeoutMs,
+    (llm, candidateTimeoutMs, signal) =>
+      complete(llm.client, llm.model, system, user, candidateTimeoutMs, signal),
+  );
 
-  for (let i = 0; i < llms.length; i++) {
-    const llm = llms[i];
-    const elapsed = Date.now() - startTime;
-    const remainingTime = totalTimeoutMs - elapsed;
-    if (remainingTime < 6_000) {
-      console.warn(`[Synthesis] Insufficient time remaining (${remainingTime}ms) to attempt ${llm.label}.`);
-      break;
-    }
+  const parsed = parseModelJson(result.text) as RetailBriefing;
+  const actualModel = result.actualModel;
+  const effectiveModelLabel =
+    actualModel &&
+    actualModel !== llms[index].model &&
+    actualModel !== llms[index].model.replace(":free", "")
+      ? `${llms[index].label} (${actualModel})`
+      : llms[index].label;
 
-    // Fail-fast per candidate so a hanging provider yields quickly and the
-    // waterfall reaches a responsive one (or the deterministic fallback) well
-    // within the overall synthesis / pipeline budget.
-    //
-    // Experiential qwen3.8-27b is a reasoning model, and the OpenRouter free
-    // tier is small and heavily contended: both need a long window to emit a
-    // full memo (measured at 45s+ for a realistic four-witness prompt). That is
-    // affordable because a free model that is rate-limited, retired, or slow to
-    // accept returns almost immediately, so a broken candidate costs ~0.2s and
-    // the next one is tried straight away. Only a candidate that actually starts
-    // generating can consume the window.
-    const candidateCapMs = llm.label.startsWith("experiential/")
-      ? 34_000
-      : llm.label.startsWith("openrouter/")
-        ? 40_000
-        : 14_000;
-    const candidateTimeout = Math.min(
-      candidateCapMs,
-      remainingTime - 1_500,
-    );
-
-    console.log(`[Synthesis] Attempting candidate [${i + 1}/${llms.length}]: ${llm.label} (timeout ${candidateTimeout / 1000}s)...`);
-
-    try {
-      const { text, actualModel } = await complete(
-        llm.client,
-        llm.model,
-        system,
-        user,
-        candidateTimeout,
-      );
-      const parsed = parseModelJson(text) as RetailBriefing;
-      const effectiveModelLabel =
-        actualModel &&
-        actualModel !== llm.model &&
-        actualModel !== llm.model.replace(":free", "")
-          ? `${llm.label} (${actualModel})`
-          : llm.label;
-      console.log(`[Synthesis] Model ${llm.label} succeeded in ${((Date.now() - startTime) / 1000).toFixed(1)}s!`);
-      return { parsed, effectiveModelLabel };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Synthesis] Candidate ${llm.label} failed: ${msg}`);
-      errors.push(`${llm.label}: ${msg}`);
-    }
-  }
-
-  throw new Error(`All candidate free models failed: ${errors.join(" | ")}`);
+  console.log(
+    `[Synthesis] Synthesized with ${effectiveModelLabel} in ${(elapsedMs / 1000).toFixed(1)}s!`,
+  );
+  return { parsed, effectiveModelLabel };
 }
 
 function parseModelJson(text: string): any {
