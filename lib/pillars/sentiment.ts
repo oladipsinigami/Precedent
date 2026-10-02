@@ -1,6 +1,5 @@
 import { blendHeadlines, googleNews, leanHeadline, tagHeadline, yahooRss } from "../providers/news";
 import { majorityLean } from "../providers/social";
-import { fetchXSentiment } from "../providers/x-sentiment";
 import { yahooNews } from "../providers/yahoo";
 import { youcomNews } from "../providers/youcom";
 import { BITGET_MCP_SOURCE_LABEL, bitgetMarketFearGreed } from "../providers/bitget-data";
@@ -18,14 +17,13 @@ import type { NameCard } from "../universe";
 
 export async function runNews(name: NameCard): Promise<NewsPillar> {
   try {
-    const [yf, rss, gNews, youcom, av, macro, xResult, adanos, fearGreed] = await Promise.all([
+    const [yf, rss, gNews, youcom, av, macro, adanos, fearGreed] = await Promise.all([
       yahooNews(name.native).catch(() => []),
       yahooRss(name.native).catch(() => []),
       googleNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       youcomNews(`${name.name} ${name.native} stock earnings OR guidance`).catch(() => []),
       alphaVantageNews(name.native).catch(() => []),
       googleNews("Federal Reserve OR CPI OR tariffs US stocks").catch(() => []),
-      fetchXSentiment({ native: name.native, name: name.name, rToken: name.rToken, bitgetSymbols: name.bitgetSymbols }),
       adanosSocialSummary(name.native).catch(() => null),
       // Market-wide sentiment from Bitget's own MCP data layer. Reported as
       // context only: it is a gauge of broad risk appetite, not a signal about
@@ -44,7 +42,6 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
     }));
 
     const availabilityIssues: string[] = [];
-    if (xResult.caveat) availabilityIssues.push(xResult.caveat);
     if (!process.env.ALPHAVANTAGE_API_KEY) {
       availabilityIssues.push("Alpha Vantage News/Sentiment unavailable: ALPHAVANTAGE_API_KEY is not configured");
     } else if (!av.length) {
@@ -78,7 +75,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
         ]
       : availabilityIssues;
 
-    const mergedXPosts = [...(adanos?.xPosts ?? []), ...xResult.posts];
+    const mergedXPosts = adanos?.xPosts ?? [];
     const seenSocial = new Set<string>();
     const socialX = mergedXPosts.filter((p) => {
       const k = p.text.toLowerCase().slice(0, 60);
@@ -97,7 +94,7 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
     const aggregateLean = allLeans.length ? majorityLean(allLeans) : "insufficient";
 
     const xCount = socialX.length;
-    const volumeNote = xCount >= 15 ? "X volume elevated vs a quiet baseline for this name." : undefined;
+    const volumeNote = xCount >= 15 ? "Social discourse volume elevated vs a quiet baseline for this name." : undefined;
 
     const notes = [
       `${headlines.length} equity-relevant headlines after de-duplication.`,
@@ -113,9 +110,9 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
       headlines.some((h) => h.tag === "earnings" || h.tag === "guidance")
         ? "Earnings/guidance language is present in the recent tape of headlines."
         : "No obvious earnings/guidance headline in the recent sample — do not invent one.",
-      xCount
-        ? `${xCount} X posts retrieved, engagement-ranked (aggregate X lean: ${majorityLean(socialX.map((p) => p.lean))}).`
-        : "No X posts retrieved this run.",
+      ...(xCount
+        ? [`${xCount} social posts retrieved, engagement-ranked (aggregate social lean: ${majorityLean(socialX.map((p) => p.lean))}).`]
+        : []),
       ...(socialReddit.length
         ? [`${socialReddit.length} Reddit discussion posts retrieved from top communities.`]
         : []),
@@ -173,11 +170,6 @@ export async function runNews(name: NameCard): Promise<NewsPillar> {
         { label: "Yahoo Finance search/news" },
         { label: "Yahoo Finance RSS" },
         { label: "Google News RSS" },
-        ...(xResult.posts.length
-          ? [{ label: "X discourse" }]
-          : xCount
-            ? []
-            : [{ label: "X discourse (unavailable this run)" }]),
       ],
     };
   } catch (err) {
