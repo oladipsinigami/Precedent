@@ -4,6 +4,55 @@ import type { Bar } from "../indicators";
 import type { AnalogFollowThrough, AnalogsPillar, OverlaySeries, Regime } from "../types";
 import type { NameCard } from "../universe";
 
+const SHARE_CLASS_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ["GOOG", "GOOGL"],
+  ["BRK.A", "BRK.B"],
+  ["FOX", "FOXA"],
+  ["NWS", "NWSA"],
+];
+
+function isShareClassSibling(native: string, candidate: string): boolean {
+  const upper = (value: string) => value.toUpperCase();
+  return SHARE_CLASS_PAIRS.some(
+    ([a, b]) =>
+      (upper(candidate) === upper(a) && upper(native) === upper(b)) ||
+      (upper(candidate) === upper(b) && upper(native) === upper(a)),
+  );
+}
+
+// Ticking "related" off a bare prefix made any single-letter ticker related to
+// everything: "AAPL".startsWith("A") is true, so unrelated one- and two-letter
+// symbols outranked genuinely comparable peers. Relatedness is now explicit.
+export function sameIssuer(native: string, candidate: string, members: ReadonlySet<string>): boolean {
+  if (candidate.toUpperCase() === native.toUpperCase()) return true;
+  if (isShareClassSibling(native, candidate)) return true;
+  return members.has(candidate);
+}
+
+
+export type RankableCandidate = { ticker: string; distance: number };
+
+// Pure ranking shared by both discovery paths so a single rule decides what
+// counts as comparable. Order: same ticker, then same issuer (share-class
+// sibling or community member), then the provider's own distance.
+export function rankAnalogCandidates<T extends RankableCandidate>(
+  native: string,
+  candidates: readonly T[],
+  members: ReadonlySet<string> = new Set(),
+): T[] {
+  return [...candidates].sort((a, b) => {
+    const aSame = a.ticker === native ? 0 : 1;
+    const bSame = b.ticker === native ? 0 : 1;
+    if (aSame !== bSame) return aSame - bSame;
+
+    const aRelated = sameIssuer(native, a.ticker, members) ? 0 : 1;
+    const bRelated = sameIssuer(native, b.ticker, members) ? 0 : 1;
+    if (aRelated !== bRelated) return aRelated - bRelated;
+
+    return a.distance - b.distance;
+  });
+}
+
 function overlayFromBars(
   id: string,
   label: string,
@@ -219,24 +268,15 @@ export async function runAnalogs(
     const analogs = packet.data.analogs_of_new_state;
     const members = new Set(opts.communityMembers ?? []);
 
-    const ranked = [...(analogs.closest ?? [])].sort((a, b) => {
-      const aSame = a[0] === name.native ? 0 : 1;
-      const bSame = b[0] === name.native ? 0 : 1;
-      if (aSame !== bSame) return aSame - bSame;
-
-      const aRelated = a[0].startsWith(name.native) || name.native.startsWith(a[0]) ? 0 : 1;
-      const bRelated = b[0].startsWith(name.native) || name.native.startsWith(b[0]) ? 0 : 1;
-      if (aRelated !== bRelated) return aRelated - bRelated;
-
-      const aIn = members.has(a[0]) ? 0 : 1;
-      const bIn = members.has(b[0]) ? 0 : 1;
-      if (aIn !== bIn) return aIn - bIn;
-
-      return a[2] - b[2];
-    });
+    const ranked = rankAnalogCandidates(
+      name.native,
+      (analogs.closest ?? []).map(([ticker, _label, distance]) => ({ ticker, distance })),
+      members,
+    );
     const poolRaw = ranked.slice(0, 15);
+    const rawByTicker = new Map((analogs.closest ?? []).map((row) => [row[0], row] as const));
 
-    const uniqueTickers = [...new Set(poolRaw.map((x) => x[0]))].filter((t) => t !== name.native);
+    const uniqueTickers = [...new Set(poolRaw.map((x) => x.ticker))].filter((t) => t !== name.native);
     const charts = await Promise.all(
       uniqueTickers.map(async (ticker) => {
         try {
@@ -254,7 +294,9 @@ export async function runAnalogs(
 
     const poolComputed: AnalogFollowThrough[] = [
       ...sameTickerAnalogs,
-      ...poolRaw.map(([ticker, date, distance]) => {
+      ...poolRaw.map(({ ticker, distance }) => {
+        const row = rawByTicker.get(ticker);
+        const date = row?.[1] ?? "";
         const bars = byTicker[ticker] ?? [];
         return {
           ticker,
@@ -280,8 +322,8 @@ export async function runAnalogs(
       const bSame = b.sameName ? 0 : 1;
       if (aSame !== bSame) return aSame - bSame;
 
-      const aRelated = a.ticker.startsWith(name.native) || name.native.startsWith(a.ticker) || members.has(a.ticker) ? 0 : 1;
-      const bRelated = b.ticker.startsWith(name.native) || name.native.startsWith(b.ticker) || members.has(b.ticker) ? 0 : 1;
+      const aRelated = sameIssuer(name.native, a.ticker, members) ? 0 : 1;
+      const bRelated = sameIssuer(name.native, b.ticker, members) ? 0 : 1;
       if (aRelated !== bRelated) return aRelated - bRelated;
 
       const aScore = (a.ret5d !== null ? 4 : 0) + (a.ret1d !== null ? 2 : 0) + (a.ret10d !== null ? 1 : 0);
