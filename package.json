@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "precompute": "tsx scripts/precompute-market-structure.ts",
-    "test": "tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts && tsx scripts/test-math.ts && tsx scripts/test-security.ts && tsx scripts/test-news-blend.ts && tsx scripts/test-news-providers.ts && tsx scripts/test-universe-resolution.ts && tsx scripts/test-openrouter-rotation.ts && tsx scripts/test-demo-fast-path.ts && tsx scripts/test-memo-prose.ts && tsx scripts/test-synthesis-waterfall.ts && tsx scripts/test-language-guard-concurrency.ts && tsx scripts/test-risk.ts && tsx scripts/test-trade-intent.ts && tsx scripts/test-analog-ranking.ts && tsx scripts/test-sample-banner.ts && tsx scripts/test-analog-basis.ts && tsx scripts/test-analog-tiers.ts && tsx scripts/test-evidence-language.ts"
+    "test": "tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts && tsx scripts/test-math.ts && tsx scripts/test-security.ts && tsx scripts/test-news-blend.ts && tsx scripts/test-news-providers.ts && tsx scripts/test-universe-resolution.ts && tsx scripts/test-openrouter-rotation.ts && tsx scripts/test-demo-fast-path.ts && tsx scripts/test-memo-prose.ts && tsx scripts/test-synthesis-waterfall.ts && tsx scripts/test-language-guard-concurrency.ts && tsx scripts/test-risk.ts && tsx scripts/test-trade-intent.ts && tsx scripts/test-analog-ranking.ts && tsx scripts/test-sample-banner.ts && tsx scripts/test-analog-basis.ts && tsx scripts/test-analog-tiers.ts && tsx scripts/test-evidence-language.ts && tsx scripts/test-considerations-cap.ts"
   },
   "dependencies": {
     "animejs": "^4.5.0",

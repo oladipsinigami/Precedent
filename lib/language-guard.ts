@@ -385,6 +385,36 @@ function rewrite(
   return out;
 }
 
+/**
+ * Trim the three open-ended consideration lists so they stay scannable.
+ * Tunable: three items per list and twenty words per item, because these
+ * render as narrow columns and a longer line is not read. Every briefing
+ * already passes through here, so no other call site is needed.
+ */
+export const CONSIDERATIONS_MAX_ITEMS = 3;
+export const CONSIDERATIONS_MAX_WORDS = 20;
+
+const EVIDENCE_MARKER = /(\d|\d{4,}|\.\d|%)/;
+const NAMED_SOURCE = /(SEC|EDGAR|Bitget|Nasdaq|Fed|FOMC|rToken|analogs?|bands?|memos?|candles?|snapshot|filing|headline|RSS|X |community|tape|close|open|session)/i;
+
+function isAnchored(item: string): boolean {
+  return EVIDENCE_MARKER.test(item) || NAMED_SOURCE.test(item);
+}
+
+export function capConsiderations(items: string[] | undefined | null): string[] {
+  return (items ?? [])
+    .map((item) => (item ?? "").trim())
+    .filter(Boolean)
+    .map((item) => {
+      const words = item.split(/\s+/);
+      return words.length > CONSIDERATIONS_MAX_WORDS
+        ? words.slice(0, CONSIDERATIONS_MAX_WORDS).join(" ").replace(/[,;:]\s*\s*$/, "")
+        : item;
+    })
+    .filter(isAnchored)
+    .slice(0, CONSIDERATIONS_MAX_ITEMS);
+}
+
 function scrubList(
   items: string[] | undefined | null,
   seen: Set<string> = new Set(),
@@ -483,9 +513,9 @@ export function guardBriefing(
     caveat: rewrite(briefing.historicalAnalog?.caveat, seenGlossary, onRewrite),
   };
   const considerations = {
-    forStyle: scrubList(briefing.considerations?.forStyle, seenGlossary, onRewrite),
-    invalidation: scrubList(briefing.considerations?.invalidation, seenGlossary, onRewrite),
-    questions: scrubList(briefing.considerations?.questions, seenGlossary, onRewrite),
+    forStyle: capConsiderations(scrubList(briefing.considerations?.forStyle, seenGlossary, onRewrite)),
+    invalidation: capConsiderations(scrubList(briefing.considerations?.invalidation, seenGlossary, onRewrite)),
+    questions: capConsiderations(scrubList(briefing.considerations?.questions, seenGlossary, onRewrite)),
   };
 
   if (localRewriteCount > 0) {

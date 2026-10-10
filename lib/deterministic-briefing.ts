@@ -444,7 +444,7 @@ export function deterministicBriefing(opts: {
     },
     considerations: {
       forStyle: [
-        `This memo is framed for a ${profile.label} horizon (${profile.horizon}).`,
+        `Horizon: ${profile.label}, ${profile.horizon}.`,
         analogHorizon === "1d"
           ? "Single-session horizon prioritizes 24/7 rToken basis and overnight gap risk into the NY cash open."
           : analogHorizon === "10d"
@@ -452,7 +452,7 @@ export function deterministicBriefing(opts: {
             : "Swing horizon prioritizes 5-session analog dispersion and tension between tape momentum and news flow.",
         pillars?.technicals?.rTokenGap ?? "rToken venue print was not on the tape this run.",
         pillars?.marketStructure?.ok
-          ? `Community ${pillars.marketStructure.communityId} membership indicates peer moves inside that group carry higher explanatory power than broad index beta.`
+          ? `${pillars.marketStructure.communityMembers?.length ?? 0} names share this peer community; analog matching draws from them.`
           : "No community membership resolved this run; peer comparison requires manual tracking.",
       ],
       invalidation: [
@@ -464,7 +464,7 @@ export function deterministicBriefing(opts: {
           : "Monitor upcoming SEC filings; the recorded EDGAR state represents the last verified corporate baseline.",
       ],
       questions: [
-        "Is the analog quantile dispersion wide enough that standing aside represents the disciplined institutional choice?",
+        `How wide is the ${analogHorizon} dispersion (${band ? `${fmtPct(band.p10)} to ${fmtPct(band.p90)}` : "unavailable"}) relative to your tolerance?`,
         "If cash equity is offline while rToken trades 24/7, which venue's pricing governs your execution rules?",
         "Which witness stream, if it inverted tomorrow, would force immediate thesis invalidation?",
       ],
