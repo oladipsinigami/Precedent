@@ -6,6 +6,8 @@
 
 Built for the [Bitget AI Base Camp S2 Hackathon](https://dorahacks.io/) · Track 3 — AI Trading Desk (AI Research Workbench) · Apache-2.0
 
+[![tests](https://github.com/oladipsinigami/Precedent/actions/workflows/test.yml/badge.svg)](https://github.com/oladipsinigami/Precedent/actions/workflows/test.yml)
+
 ---
 
 **Live demo:** [precedent-liard-eight.vercel.app](https://precedent-liard-eight.vercel.app/) · **Fast path:** Click *"Load recommended demo"* in the header
@@ -23,7 +25,7 @@ The five things worth opening first, in order of how much they prove:
 | **Its ranges are graded out of sample** | **Coverage journal** — every daily 4-in-5 range is locked *before* the session, appended, and graded the next close by a scheduled workflow. The boundary is fitted on the earlier portion of history and graded on the later portion, so the containment figure is not a tautology on one window. | [`lib/risk/coverage.ts`](lib/risk/coverage.ts) · [`scripts/coverage-journal.ts`](scripts/coverage-journal.ts) · [`data/coverage-journal.json`](data/coverage-journal.json) |
 | **It checks its own work & enforces compliance** | **Active Language Guard** — 21 automated compliance rules that actively sanitize directional hype, influencer slang (`rip`, `moon`, `guaranteed profit`), and patronizing coaching into cold empirical facts. Discloses all unverified streams as transparent caveats. | [`lib/language-guard.ts`](lib/language-guard.ts) · [`scripts/test-language-guard.ts`](scripts/test-language-guard.ts) |
 | **We went past the happy path** | **Market Structure & Provider Audits** — evaluated and purged the dead 23s `bitget-signal` feed in favor of official `bitget-mcp-server`; solved single-linkage clustering collapse (which chained 490 of 494 assets into one cluster) by implementing average-linkage RMT correlation communities. Cluster count is read from the committed snapshot, not hardcoded. | [Engineering Audits](#engineering-audits) · [`lib/rmt.ts`](lib/rmt.ts) |
-| **It is not a demo shell** | **199 automated checks across 14 test suites** — language guard, guard concurrency isolation, prompt safety, RMT math, security, headline blending, provider health, universe resolution, live LLM free-catalog rotation, demo fast-path matching, memo prose integrity, risk/cost/sizing maths, and a published trade-intent parser table. Full type check passes and `next build` completes. | [Test Suite](#testing--verification) · `npm test` |
+| **It is not a demo shell** | **228 automated checks across 14 test suites** — language guard, guard concurrency isolation, prompt safety, RMT math, security, headline blending, provider health, universe resolution, live LLM free-catalog rotation, demo fast-path matching, memo prose integrity, risk/cost/sizing maths, and a published trade-intent parser table. Full type check passes and `next build` completes. | [Test Suite](#testing--verification) · `npm test` |
 
 ---
 
@@ -78,43 +80,22 @@ After one pass over a Precedent memo, the reader immediately knows:
 ```text
 $ npm test
 
-> precedent@0.1.0 test
-> tsx scripts/test-language-guard.ts && tsx scripts/test-prompt-safety.ts && tsx scripts/test-math.ts && tsx scripts/test-security.ts && tsx scripts/test-news-blend.ts && tsx scripts/test-news-providers.ts && tsx scripts/test-universe-resolution.ts
-
-[PASS] Headline BUY
-[PASS] Headline STRONG BUY
-[PASS] Final Recommendation BUY
-[PASS] Verdict SHORT
-[PASS] 78% chance
-[PASS] 90% probability
-[PASS] You should enter here
-[PASS] Strong sell signal
-[PASS] Going to rip
-[PASS] To the moon
-[PASS] Guaranteed profit
-[PASS] A beginner should note
-[PASS] Fear of missing out FOMO
-[PASS] Went up X times out of Y
-[PASS] Typical move
-[PASS] Tape and filings disagree
-[PASS] Questions only you can answer
-[PASS] Mandatory disclaimer
-[PASS] Attributed discourse sentiment
-[PASS] Basis vs NY close
-[PASS] Quantile dispersion p10/p90
 All 21 language-guard cases passed.
-ok - 6 prompt-safety checks passed
-ok - 21 math & RMT checks passed
-ok - 5 security/data-integrity checks passed
-ok - 5 headline-blend checks passed
-ok - 3 news-provider checks passed
-ok - 4 universe-resolution checks passed
-ok - 7 openrouter-free-rotation checks passed
-ok - 9 demo-fast-path checks passed
-ok - 8 memo-prose checks passed
-ok - 9 language-guard-concurrency checks passed
+6 prompt-safety checks passed
+21 math checks passed
+5 security/data-integrity checks passed
+5 headline-blend checks passed
+3 news-provider checks passed
+4 universe-resolution checks passed
+7 openrouter-free-rotation checks passed.
+9 demo-fast-path checks passed.
+12 memo-prose checks passed.
+19 synthesis-waterfall checks passed.
+9 language-guard-concurrency checks passed.
+49 risk checks passed
+58 trade-intent checks passed
 
-199 automated checks passed (100% pass rate).
+228 automated checks passed (100% pass rate).
 ```
 
 ### Live Research Synthesis Trace
@@ -226,7 +207,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm test
 ```
 
-Runs 199 unit and integration checks across 14 suites, including the risk/cost/sizing maths and a published trade-intent parser table.
+Runs 228 unit and integration checks across 14 suites, including the risk/cost/sizing maths and a published trade-intent parser table.
 
 ---
 
@@ -262,8 +243,13 @@ Precedent enforces strict quality gates before any code merges:
 | **Security & Data Integrity** | `scripts/test-security.ts` | URL secret redaction, RMT snapshot freshness and staleness detection, and residual correlation structure. |
 | **Headline Blending** | `scripts/test-news-blend.ts` | Balanced multi-provider blending, fingerprint deduplication, and domain normalization. |
 | **Provider Resilience** | `scripts/test-news-providers.ts` | Graceful degradation and fallback handling across upstream news APIs. |
+| **LLM Free-Catalog Rotation** | `scripts/test-openrouter-rotation.ts` | Live free-model catalog discovery, context-length filtering, and candidate ordering. |
+| **Demo Fast Path** | `scripts/test-demo-fast-path.ts` | Question normalisation idempotence and typography folding. |
+| **Memo Prose Integrity** | `scripts/test-memo-prose.ts` | Doubled punctuation, mojibake, em-dash leak, terminal punctuation, and analog sample-size preservation. |
+| **Synthesis Waterfall** | `scripts/test-synthesis-waterfall.ts` | Candidate concurrency, burst sizing, hedging delay, and timeout budgeting. |
+| **Language Guard Concurrency** | `scripts/test-language-guard-concurrency.ts` | Per-call rewrite counts and absence of module-level shared state. |
 | **Universe Resolution** | `scripts/test-universe-resolution.ts` | Explicit combobox selection precedence over question mentions, case-insensitivity, and fallback behavior. |
-| **Risk, Cost & Sizing** | `scripts/test-risk.ts` | 42 checks: order-book walk direction and level consumption, depth exhaustion, fee and slippage reconciliation, bps derived from dollars, cost-free vs cost-loaded sizing, the fitted size respecting its limit, and `unavailable` on missing streams. |
+| **Risk, Cost & Sizing** | `scripts/test-risk.ts` | 49 checks: order-book walk direction and level consumption, depth exhaustion, fee and slippage reconciliation, bps derived from dollars, cost-free vs cost-loaded sizing, the fitted size respecting its limit, and `unavailable` on missing streams. |
 | **Trade Intent Parsing** | `scripts/test-trade-intent.ts` | 58 checks over 14 trader sentences: asset, side, size, hold and loss limit, percent-limit conversion, rules-before-Claude precedence, and the miss table. |
 
 Run tests:
