@@ -1,6 +1,8 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useRef } from "react";
+import { animate, utils } from "animejs";
+import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion/tokens";
 import { TokenSearchCombobox } from "./TokenSearchCombobox";
 import { StyleSelector } from "./StyleSelector";
 import type { TradingStyle } from "@/lib/types";
@@ -22,6 +24,7 @@ interface IntakeFormProps {
   onSubmit: (event?: FormEvent) => void;
   onLoadDemo?: () => void;
   onFillDemo?: () => void;
+  demoToken?: number;
 }
 
 export function IntakeForm({
@@ -38,7 +41,14 @@ export function IntakeForm({
   onSubmit,
   onLoadDemo,
   onFillDemo,
+  demoToken = 0,
 }: IntakeFormProps) {
+  const ctaArrowRef = useRef<HTMLSpanElement | null>(null);
+  const ctaProgressRef = useRef<HTMLSpanElement | null>(null);
+  const venueBoxRef = useRef<HTMLDivElement | null>(null);
+  const chipsContainerRef = useRef<HTMLDivElement | null>(null);
+  const firstSymbolMountRef = useRef(true);
+
   const isDemoMatched =
     symbol === "AAPL" &&
     style === "swing" &&
@@ -51,8 +61,91 @@ export function IntakeForm({
 
   const POPULAR_TOKENS = ["NVDA", "TSLA", "AAPL", "MSTU", "VOO", "SMH", "SGOV", "MSFT"];
 
+  useEffect(() => {
+    if (firstSymbolMountRef.current && demoToken === 0) {
+      firstSymbolMountRef.current = false;
+      return;
+    }
+    firstSymbolMountRef.current = false;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    if (venueBoxRef.current) {
+      animate(venueBoxRef.current, {
+        opacity: [0.35, 1],
+        translateY: [4, 0],
+        duration: MOTION_DURATION.micro,
+        ease: MOTION_EASE.default,
+      });
+    }
+    const activeChip = chipsContainerRef.current?.querySelector<HTMLElement>(
+      `[data-chip-symbol="${symbol.toUpperCase()}"]`,
+    );
+    if (activeChip) {
+      animate(activeChip, {
+        scale: [0.94, 1],
+        duration: MOTION_DURATION.micro,
+        ease: MOTION_EASE.default,
+      });
+    }
+  }, [symbol, demoToken]);
+
+  useEffect(() => {
+    const bar = ctaProgressRef.current;
+    if (!bar) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      utils.set(bar, { opacity: busy ? 1 : 0, scaleX: busy ? 1 : 0 });
+      return;
+    }
+    if (busy) {
+      utils.set(bar, { opacity: 1, scaleX: 0 });
+      const anim = animate(bar, {
+        scaleX: [0, 0.96],
+        duration: 1350,
+        ease: MOTION_EASE.expo,
+      });
+      return () => {
+        anim.pause();
+      };
+    }
+    utils.set(bar, { opacity: 0, scaleX: 0 });
+  }, [busy]);
+
+  const handleCtaEnter = () => {
+    if (
+      busy ||
+      question.trim().length < 8 ||
+      !ctaArrowRef.current ||
+      (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      return;
+    }
+    animate(ctaArrowRef.current, {
+      translateX: 2.5,
+      translateY: -2,
+      duration: MOTION_DURATION.microFast,
+      ease: MOTION_EASE.default,
+    });
+  };
+
+  const handleCtaLeave = () => {
+    if (
+      !ctaArrowRef.current ||
+      (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      return;
+    }
+    animate(ctaArrowRef.current, {
+      translateX: 0,
+      translateY: 0,
+      duration: MOTION_DURATION.microFast,
+      ease: MOTION_EASE.default,
+    });
+  };
+
   return (
     <form
+      data-anim="intake-panel"
       onSubmit={onSubmit}
       className="relative overflow-hidden rounded-sm border border-white/[0.1] bg-ink/95 shadow-[0_24px_60px_rgba(0,0,0,0.65)] backdrop-blur-xl"
     >
@@ -111,7 +204,10 @@ export function IntakeForm({
                 </svg>
                 Venue & Tape Context
               </label>
-              <div className="mt-2 flex min-h-[48px] items-center justify-between rounded-sm border border-white/[0.08] bg-blot/70 px-3 py-2 sm:px-4">
+              <div
+                ref={venueBoxRef}
+                className="mt-2 flex min-h-[48px] items-center justify-between rounded-sm border border-white/[0.08] bg-blot/70 px-3 py-2 sm:px-4"
+              >
                 <div className="min-w-0 pr-2">
                   <div className="truncate text-xs font-medium text-slate-mid">
                     {selectedInstrument?.name ?? "Asset"} · {selectedInstrument?.sector ?? "Equity"}
@@ -137,7 +233,7 @@ export function IntakeForm({
           </div>
 
           {/* Quick-Pick Popular Tickers */}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5" data-tour="tour-popular">
+          <div ref={chipsContainerRef} className="mt-3 flex flex-wrap items-center gap-1.5" data-tour="tour-popular">
             <span className="font-mono text-[10px] uppercase tracking-wider text-slate">
               Popular Focus:
             </span>
@@ -148,6 +244,8 @@ export function IntakeForm({
                 <button
                   key={ticker}
                   type="button"
+                  data-anim="intake-chip"
+                  data-chip-symbol={ticker}
                   disabled={busy}
                   onClick={() => onInstrumentChange(ticker)}
                   className={`flex min-h-[36px] sm:min-h-0 items-center justify-center rounded border px-2.5 py-1 sm:py-0.5 font-mono text-[11px] transition ${
@@ -221,7 +319,10 @@ export function IntakeForm({
         </details>
 
         {/* Submit & Guidance Bar */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/[0.08] pt-5">
+        <div
+          data-anim="intake-cta"
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-white/[0.08] pt-5"
+        >
           <div className="max-w-md text-xs leading-relaxed text-slate-line">
             Precedent measures the round trip and the events inside your hold, then the memo cross-examines five evidence streams. Every claim is attributed. Nothing is a forecast.
           </div>
@@ -230,7 +331,9 @@ export function IntakeForm({
             type="submit"
             data-tour="tour-submit"
             disabled={busy || question.trim().length < 8}
-            className={`group relative flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-sm border px-5 py-3 font-mono text-[11px] font-bold uppercase tracking-[0.12em] transition-all disabled:cursor-not-allowed disabled:opacity-30 min-h-[44px] ${
+            onMouseEnter={handleCtaEnter}
+            onMouseLeave={handleCtaLeave}
+            className={`group relative overflow-hidden flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-sm border px-5 py-3 font-mono text-[11px] font-bold uppercase tracking-[0.12em] transition-all disabled:cursor-not-allowed disabled:opacity-30 min-h-[44px] ${
               isDemoMatched && !busy
                 ? "border-lime/60 bg-lime/10 text-lime hover:border-lime hover:bg-lime/15"
                 : "border-white/[0.14] bg-white/[0.03] text-slate-line hover:border-lime/50 hover:text-lime"
@@ -251,9 +354,17 @@ export function IntakeForm({
             ) : (
               <>
                 <span>Synthesize Research Memo</span>
-                <span className="transition-transform duration-200 group-hover:translate-x-0.5">→</span>
+                <span ref={ctaArrowRef} data-anim="form-cta-arrow" className="inline-block">
+                  ↗
+                </span>
               </>
             )}
+            <span
+              ref={ctaProgressRef}
+              data-anim="form-cta-progress"
+              style={{ transformOrigin: "left center", transform: "scaleX(0)", opacity: 0 }}
+              className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-lime"
+            />
           </button>
         </div>
       </div>

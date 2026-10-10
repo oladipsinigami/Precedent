@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+import { animate } from "animejs";
+import { MOTION_DURATION, MOTION_EASE } from "@/lib/motion/tokens";
 import { STYLES } from "@/lib/style-profiles";
 import type { TradingStyle } from "@/lib/types";
 
@@ -11,9 +14,45 @@ interface StyleSelectorProps {
 
 export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSelectorProps) {
   const stylesList = Object.keys(STYLES) as TradingStyle[];
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const firstMountRef = useRef(true);
+
+  useEffect(() => {
+    if (firstMountRef.current) {
+      firstMountRef.current = false;
+      return;
+    }
+    const root = containerRef.current;
+    if (
+      !root ||
+      (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    ) {
+      return;
+    }
+
+    const activeCard = root.querySelector<HTMLElement>(`[data-style-card="${currentStyle}"]`);
+    const activeBadge = root.querySelector<HTMLElement>(`[data-style-horizon="${currentStyle}"]`);
+
+    if (activeCard) {
+      animate(activeCard, {
+        translateY: [0, -3],
+        scale: [0.98, 1.03],
+        duration: MOTION_DURATION.micro,
+        ease: MOTION_EASE.default,
+      });
+    }
+    if (activeBadge) {
+      animate(activeBadge, {
+        opacity: [0.3, 1],
+        translateY: [3, 0],
+        duration: MOTION_DURATION.micro,
+        ease: MOTION_EASE.default,
+      });
+    }
+  }, [currentStyle]);
 
   return (
-    <div data-tour="tour-style">
+    <div ref={containerRef} data-tour="tour-style">
       <div className="flex flex-wrap items-center justify-between gap-1">
         <label className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.18em] text-slate-mid">
           <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-lime" viewBox="0 0 10 10" fill="currentColor">
@@ -35,6 +74,8 @@ export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSe
             <button
               key={item}
               type="button"
+              data-anim="intake-style-card"
+              data-style-card={item}
               disabled={disabled}
               onClick={() => onStyleChange(item)}
               className={`group relative flex min-h-[78px] flex-col justify-between rounded-sm border p-2.5 sm:p-3 text-left transition-all duration-150 ${
@@ -79,7 +120,10 @@ export function StyleSelector({ currentStyle, onStyleChange, disabled }: StyleSe
 
               <div className="mt-2.5 sm:mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[9px] uppercase tracking-wider text-slate">
                 <span>Analog:</span>
-                <span className={isSelected ? "font-bold text-lime" : "text-slate-text"}>
+                <span
+                  data-style-horizon={item}
+                  className={isSelected ? "font-bold text-lime inline-block" : "text-slate-text inline-block"}
+                >
                   {profile.analogHorizon}
                 </span>
               </div>

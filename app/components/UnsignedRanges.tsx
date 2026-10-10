@@ -1,12 +1,99 @@
 "use client";
 
+import { animate, utils } from "animejs";
+import { animateCountUp } from "@/lib/motion/count-up";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import type { AnalogRange } from "@/lib/types";
 
 interface UnsignedRangesProps {
   ranges: AnalogRange[];
+  tier?: string;
+  runId?: number;
+  animateResult?: boolean;
+  skipAnimation?: boolean;
 }
 
-export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
+const TONE: Record<string, string> = {
+  insufficient: "border-warn/40 bg-warn/10 text-warn",
+  weak: "border-amber/40 bg-amber/10 text-amber-deep",
+  moderate: "border-moss/30 bg-moss/10 text-moss-deep",
+  strong: "border-moss/40 bg-moss/15 text-moss-deep",
+};
+
+export function UnsignedRanges({
+  ranges,
+  runId = 0,
+  animateResult = false,
+  skipAnimation = false,
+  tier,
+}: UnsignedRangesProps) {
+  const tierLabel =
+    tier === "insufficient"
+      ? "insufficient"
+      : tier === "weak"
+        ? "thin"
+        : tier === "moderate"
+          ? "moderate"
+          : tier === "strong"
+            ? "deep"
+            : null;
+  const { rootRef } = useAnimeScope<HTMLDivElement>(
+    ({ root }) => {
+      if (!animateResult || skipAnimation) return;
+
+      ranges.forEach((item, idx) => {
+        const nNode = root.querySelector<HTMLElement>(`[data-range-n="${idx}"]`);
+        const p50Node = root.querySelector<HTMLElement>(`[data-range-p50="${idx}"]`);
+        const bandNode = root.querySelector<HTMLElement>(`[data-range-band="${idx}"]`);
+        const tickNode = root.querySelector<HTMLElement>(`[data-range-tick="${idx}"]`);
+        const isSmallSample = skipAnimation || item.n < 30;
+
+        animateCountUp(nNode, {
+          from: 0,
+          to: item.n,
+          decimals: 0,
+          prefix: "n = ",
+          suffix: " matches",
+          delay: 140 + idx * 45,
+          skipAnimation: isSmallSample,
+        });
+
+        animateCountUp(p50Node, {
+          from: 0,
+          to: item.p50,
+          decimals: 2,
+          prefix: item.p50 >= 0 ? "+" : "",
+          suffix: "%",
+          delay: 160 + idx * 45,
+          skipAnimation: isSmallSample,
+        });
+
+        if (!isSmallSample && bandNode) {
+          utils.set(bandNode, { scaleX: 0, transformOrigin: "center center" });
+          animate(bandNode, {
+            scaleX: [0, 1],
+            duration: 340,
+            delay: 150 + idx * 55,
+            ease: MOTION_EASE.expo,
+          });
+        }
+
+        if (!isSmallSample && tickNode) {
+          utils.set(tickNode, { scaleY: 0, opacity: 0, transformOrigin: "center center" });
+          animate(tickNode, {
+            scaleY: [0, 1],
+            opacity: [0, 1],
+            duration: 240,
+            delay: 320 + idx * 55,
+            ease: MOTION_EASE.default,
+          });
+        }
+      });
+    },
+    [runId],
+  );
+
   if (!ranges.length) {
     return (
       <div className="mt-6 rounded border border-shell/10 bg-shell/[0.02] p-4 text-xs text-mute-dim">
@@ -16,7 +103,7 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
   }
 
   return (
-    <div className="mt-7">
+    <div ref={rootRef} className="mt-7">
       <div className="mb-3 flex items-center justify-between">
         <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-moss">
           ✦ Historical Excess Return Distributions · Empirical Base Rates
@@ -27,7 +114,7 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        {ranges.map((item) => {
+        {ranges.map((item, idx) => {
           // Calculate scale for horizontal range bar
           const maxAbs = Math.max(Math.abs(item.p10), Math.abs(item.p90), 5);
           const getPosPct = (val: number) => ((val + maxAbs) / (maxAbs * 2)) * 100;
@@ -46,7 +133,18 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
                   <span className="font-mono text-xs font-bold uppercase tracking-wider text-moss-deep">
                     {item.horizon} Horizon
                   </span>
-                  <span className="font-mono text-[10px] text-ink-faint">n = {item.n} matches</span>
+                  <span className="flex items-baseline gap-2 font-mono text-[10px] text-ink-faint">
+                    <span data-range-n={idx}>n = {item.n} matches</span>
+                    {tierLabel ? (
+                      <span
+                        className={`rounded-sm border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                          TONE[tier ?? ""]
+                        }`}
+                      >
+                        {tierLabel}
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
 
                 <div className="mt-3.5 space-y-1.5 font-mono text-xs">
@@ -56,7 +154,9 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
                   </div>
                   <div className="flex justify-between text-ink-strong font-medium">
                     <span>Median (p50):</span>
-                    <span className="font-bold">{item.p50 >= 0 ? "+" : ""}{item.p50.toFixed(2)}%</span>
+                    <span data-range-p50={idx} className="font-bold">
+                      {item.p50 >= 0 ? "+" : ""}{item.p50.toFixed(2)}%
+                    </span>
                   </div>
                   <div className="flex justify-between text-mute-faint">
                     <span>p90 (Tail Up):</span>
@@ -76,6 +176,7 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
 
                     {/* p10 to p90 Spread band */}
                     <div
+                      data-range-band={idx}
                       className="absolute top-0 bottom-0 rounded-full bg-moss/30"
                       style={{
                         left: `${leftPct}%`,
@@ -85,6 +186,7 @@ export function UnsignedRanges({ ranges }: UnsignedRangesProps) {
 
                     {/* Median p50 tick */}
                     <div
+                      data-range-tick={idx}
                       className="absolute top-[-2px] bottom-[-2px] w-1 rounded-sm bg-moss-deep"
                       style={{ left: `${medianPct}%` }}
                       title={`Median: ${item.p50.toFixed(2)}%`}

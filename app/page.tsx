@@ -111,6 +111,22 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tourToken, setTourToken] = useState(0);
+  const [runId, setRunId] = useState(0);
+  const [demoToken, setDemoToken] = useState(0);
+  const [isDemoRun, setIsDemoRun] = useState(false);
+
+  const hasAnimatedIntakeRef = useRef(false);
+  const animatedRunIdRef = useRef(0);
+
+  useEffect(() => {
+    hasAnimatedIntakeRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (view === "results" && briefing && animatedRunIdRef.current !== runId) {
+      animatedRunIdRef.current = runId;
+    }
+  }, [view, briefing, runId]);
 
   const skipInitialDecisionNoteSave = useRef(true);
   useEffect(() => {
@@ -185,6 +201,10 @@ export default function Home() {
     if (namedInstrument && !demo && namedInstrument.native !== symbol) {
       setSymbol(namedInstrument.native);
     }
+    const runStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const minHoldMs = demo ? 1650 : 1200;
+    setRunId((n) => n + 1);
+    setIsDemoRun(demo);
     setBusy(true);
     setError("");
     setBriefing(null);
@@ -209,9 +229,24 @@ export default function Home() {
     });
 
     let receivedBriefing = false;
+    let pendingBriefing: Briefing | null = null;
     let collectedPillars: Partial<PillarBundle> = {};
     let collectedMeta: { native: string; name: string; regime: string } | null = null;
     let collectedStatuses: PillarState = { ...EMPTY_PILLARS };
+
+    const waitMinPipelineHold = async () => {
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        return;
+      }
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const remaining = Math.max(0, minHoldMs - (now - runStartedAt));
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+    };
 
     const handleEvent = (ev: ResearchEvent) => {
       if (ev.type === "meta") {
@@ -243,20 +278,20 @@ export default function Home() {
         }
       } else if (ev.type === "briefing") {
         receivedBriefing = true;
-        setStage("complete");
-        setBriefing(ev.briefing);
-        setView("results");
+        pendingBriefing = ev.briefing;
+        setStage("synthesis");
       } else if (ev.type === "error") {
         setError(ev.message);
       }
     };
 
-    const recoverWithFallback = (errorMessage?: string) => {
+    const recoverWithFallback = async (errorMessage?: string) => {
       if (receivedBriefing) return;
       const hasCompletedPillars = Object.values(collectedStatuses).some(
         (s) => s === "ready" || s === "degraded",
       );
       if (hasCompletedPillars || Object.keys(collectedPillars).length > 0) {
+        await waitMinPipelineHold();
         const fallbackName =
           findNameBySymbol(activeSymbol ?? "") ??
           findNameOrDefault(`${activeSymbol ?? ""} ${activeQuestion}`);
@@ -289,6 +324,9 @@ export default function Home() {
         setBriefing(fallbackBriefing);
         setError("");
         setView("results");
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0 });
+        }
       } else {
         setError(errorMessage || "The research run could not complete. Please try again.");
       }
@@ -324,8 +362,16 @@ export default function Home() {
           }
         }
       }
-      if (!receivedBriefing) {
-        recoverWithFallback();
+      if (receivedBriefing && pendingBriefing) {
+        await waitMinPipelineHold();
+        setStage("complete");
+        setBriefing(pendingBriefing);
+        setView("results");
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0 });
+        }
+      } else if (!receivedBriefing) {
+        await recoverWithFallback();
       }
     } catch (err) {
       setStatuses((current) =>
@@ -333,9 +379,10 @@ export default function Home() {
           Object.entries(current).map(([key, value]) => [key, value === "ready" ? value : "degraded"]),
         ) as PillarState,
       );
-      recoverWithFallback(err instanceof Error ? err.message : "Research failed.");
+      await recoverWithFallback(err instanceof Error ? err.message : "Research failed.");
     } finally {
       setBusy(false);
+      setIsDemoRun(false);
     }
   }
 
@@ -369,11 +416,15 @@ export default function Home() {
     setStage("idle");
     setPillarMessages({});
     setView("intake");
+    setDemoToken((n) => n + 1);
   }
 
   function runDemo() {
     if (busy) return;
     loadDemo();
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     void runResearch(undefined, { demo: true });
   }
 
@@ -385,6 +436,9 @@ export default function Home() {
         onLoadDemo={runDemo}
         onStartTour={() => setTourToken((n) => n + 1)}
         universeMeta={universeMeta}
+        animateEntrance={!hasAnimatedIntakeRef.current}
+        busy={busy}
+        isDemoRunning={isDemoRun && busy}
       />
       <ProductTour view={view} requestToken={tourToken} />
 
@@ -408,6 +462,11 @@ export default function Home() {
             onViewPreviousResults={() => setView("results")}
             stage={stage}
             pillarMessages={pillarMessages}
+            animateEntrance={!hasAnimatedIntakeRef.current}
+            onLoadDemo={runDemo}
+            onFillDemo={loadDemo}
+            demoToken={demoToken}
+            isDemoRunning={isDemoRun && busy}
           />
         ) : briefing ? (
           <ResultsView
@@ -422,6 +481,8 @@ export default function Home() {
             symbol={symbol}
             meta={meta}
             statuses={statuses}
+            runId={runId}
+            animateResult={animatedRunIdRef.current !== runId}
           />
         ) : (
           <IntakeView
@@ -442,6 +503,11 @@ export default function Home() {
             onViewPreviousResults={() => {}}
             stage={stage}
             pillarMessages={pillarMessages}
+            animateEntrance={!hasAnimatedIntakeRef.current}
+            onLoadDemo={runDemo}
+            onFillDemo={loadDemo}
+            demoToken={demoToken}
+            isDemoRunning={isDemoRun && busy}
           />
         )}
       </main>

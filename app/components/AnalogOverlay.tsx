@@ -1,9 +1,15 @@
 "use client";
 
+import { animate, createDrawable, stagger, utils } from "animejs";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import type { OverlaySeries } from "@/lib/types";
 
 interface AnalogOverlayProps {
   overlays: OverlaySeries[];
+  runId?: number;
+  animateResult?: boolean;
+  skipAnimation?: boolean;
 }
 
 function smoothPath(points: { x: number; y: number }[]) {
@@ -20,7 +26,53 @@ function smoothPath(points: { x: number; y: number }[]) {
   return path;
 }
 
-export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
+export function AnalogOverlay({
+  overlays,
+  runId = 0,
+  animateResult = false,
+  skipAnimation = false,
+}: AnalogOverlayProps) {
+  const { rootRef } = useAnimeScope<HTMLDivElement>(
+    ({ root }) => {
+      if (!animateResult || skipAnimation) return;
+
+      const analogPaths = root.querySelectorAll<SVGGeometryElement>("[data-anim='analog-path']");
+      const currentPath = root.querySelectorAll<SVGGeometryElement>("[data-anim='current-path']");
+      const currentDot = root.querySelector<SVGGElement>("[data-anim='current-dot']");
+
+      if (analogPaths.length > 0) {
+        const drawableAnalogs = createDrawable(analogPaths, 0, 0);
+        animate(drawableAnalogs, {
+          draw: "0 1",
+          duration: 380,
+          delay: stagger(45, { start: 120 }),
+          ease: MOTION_EASE.expo,
+        });
+      }
+
+      if (currentPath.length > 0) {
+        const drawableCurrent = createDrawable(currentPath, 0, 0);
+        animate(drawableCurrent, {
+          draw: "0 1",
+          duration: 400,
+          delay: 240,
+          ease: MOTION_EASE.expo,
+        });
+      }
+
+      if (currentDot) {
+        utils.set(currentDot, { opacity: 0 });
+        animate(currentDot, {
+          opacity: [0, 1],
+          duration: 220,
+          delay: 540,
+          ease: MOTION_EASE.default,
+        });
+      }
+    },
+    [runId],
+  );
+
   const width = 800;
   const height = 280;
   const padLeft = 45;
@@ -73,7 +125,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   }
 
   return (
-    <div className="mt-6 sm:mt-8 rounded-sm border border-shell/20 bg-paper p-4 sm:p-6 shadow-md">
+    <div ref={rootRef} className="mt-6 sm:mt-8 rounded-sm border border-shell/20 bg-paper p-4 sm:p-6 shadow-md">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-shell/10 pb-3">
         <div>
           <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-moss">
@@ -214,6 +266,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             return (
               <path
                 key={overlay.id}
+                data-anim="analog-path"
                 d={smoothPath(points)}
                 fill="none"
                 stroke="var(--c-ink-faint)"
@@ -230,6 +283,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
           {currentSeries && (
             <g>
               <path
+                data-anim="current-path"
                 d={smoothPath(currentSeries.points
                   .map((point, pointIndex) => {
                     if (point.value === null) return null;
@@ -247,7 +301,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
 
               {/* Pulse Terminal Dot on Current Series */}
               {currentLastPoint && (
-                <g>
+                <g data-anim="current-dot">
                   <circle
                     cx={currentLastPoint.x}
                     cy={currentLastPoint.y}

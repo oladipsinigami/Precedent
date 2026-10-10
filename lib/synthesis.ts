@@ -408,13 +408,13 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
           followed: item.whatHappened,
         })),
         baseRates: historicalStressTest.results.map((item, index) => {
-          const band = analogs?.ranges?.[index];
+          const band = analogs?.ranges?.[index] as (typeof analogs.ranges)[number] & { tier?: string; effectiveN?: number } | undefined;
           const basis = band?.basis === "raw" ? "the stock's own return" : "return above a date-matched liquid-stock baseline";
           return {
             horizon: item.period,
             range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
             n: historicalStressTest.sampleSize,
-            note: `This counts ${basis}. This is only what happened in the past. It is not a prediction.`,
+            note: `This counts ${basis}, from a ${band?.tier ?? "ungraded"} sample (${band?.effectiveN ?? historicalStressTest.sampleSize} independent windows). This is only what happened in the past. It is not a prediction.`,
           };
         }),
         caveat: historicalStressTest.importantNote,

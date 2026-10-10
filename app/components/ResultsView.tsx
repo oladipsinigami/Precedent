@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { animate, stagger, utils } from "animejs";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import { ResearchMemo } from "./ResearchMemo";
 import { PipelineSummary } from "./PipelineSidebar";
 import { STYLES } from "@/lib/style-profiles";
@@ -18,11 +21,12 @@ interface ResultsViewProps {
   symbol: string;
   meta: { native: string; name: string; regime: string } | null;
   statuses: PillarState;
+  runId?: number;
+  animateResult?: boolean;
 }
 
 export function ResultsView({
   briefing,
-  error,
   style,
   onStyleChange,
   pillarData,
@@ -32,9 +36,32 @@ export function ResultsView({
   symbol,
   meta,
   statuses,
+  runId = 0,
+  animateResult = false,
 }: ResultsViewProps) {
   const [downloadMode, setDownloadMode] = useState<"executive" | "full" | null>(null);
   const bitgetTapeAvailable = Boolean(pillarData?.technicals?.rToken);
+
+  const { rootRef } = useAnimeScope<HTMLDivElement>(
+    ({ root, revealAllStatic }) => {
+      if (!animateResult) {
+        revealAllStatic();
+        return;
+      }
+      const handoffNodes = root.querySelectorAll<HTMLElement>("[data-anim='results-handoff']");
+      if (handoffNodes.length > 0) {
+        utils.set(handoffNodes, { opacity: 0, translateY: 6 });
+        animate(handoffNodes, {
+          opacity: [0, 1],
+          translateY: [6, 0],
+          duration: 250,
+          delay: stagger(45),
+          ease: MOTION_EASE.default,
+        });
+      }
+    },
+    [runId],
+  );
 
   async function handleDownload(mode: "executive" | "full") {
     if (downloadMode) return;
@@ -58,7 +85,7 @@ export function ResultsView({
   }
 
   return (
-    <div className="mx-auto max-w-[1360px] py-4 sm:py-10">
+    <div ref={rootRef} className="mx-auto max-w-[1360px] py-4 sm:py-10">
       {briefing.isSample ? (
         <div
           role="status"
@@ -83,7 +110,10 @@ export function ResultsView({
       ) : null}
 
       {/* Top Action & Navigation Strip */}
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 border-b border-white/[0.08] pb-5">
+      <div
+        data-anim="results-handoff"
+        className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 border-b border-white/[0.08] pb-5"
+      >
         {/* Left: Return to Intake Button */}
         <button
           type="button"
@@ -200,7 +230,11 @@ export function ResultsView({
       </div>
 
 
-      <div data-tour="tour-reweight" className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-ink/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
+      <div
+        data-tour="tour-reweight"
+        data-anim="results-handoff"
+        className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-ink/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
           <div>
             <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-text">
@@ -246,6 +280,8 @@ export function ResultsView({
         pillarData={pillarData}
         decisionNote={decisionNote}
         onDecisionNoteChange={onDecisionNoteChange}
+        runId={runId}
+        animateResult={animateResult}
       />
       </div>
 

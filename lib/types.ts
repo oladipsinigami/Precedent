@@ -208,6 +208,8 @@ export type SocialPost = {
   engagementScore: number;
 };
 
+export type AnalogTier = "insufficient" | "weak" | "moderate" | "strong";
+
 export type AnalogsPillar = {
   ok: boolean;
   error?: string;
@@ -217,6 +219,10 @@ export type AnalogsPillar = {
   tape?: Record<string, unknown>;
   closest: AnalogFollowThrough[];
   ranges: AnalogRange[];
+  // How much independent evidence backs those bands. Raw n counts overlapping
+  // windows; effectiveN counts only candidates a full window apart.
+  effectiveN?: number;
+  tier?: AnalogTier;
   informative?: {
     verdict?: string;
     ratioToBase?: number;

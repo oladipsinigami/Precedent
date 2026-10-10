@@ -53,6 +53,58 @@ export function rankAnalogCandidates<T extends RankableCandidate>(
   });
 }
 
+// A tier on how much independent evidence backs a band. Tunable thresholds:
+// chosen so "insufficient" means the band should not be shown at all, "weak"
+// means "shown but labelled as thin", and "moderate"/"strong" only describe
+// sample depth, never accuracy.
+export type AnalogTier = "insufficient" | "weak" | "moderate" | "strong";
+
+export const ANALOG_TIER_MIN_EFFECTIVE_N = {
+  insufficientBelow: 10,
+  weakBelow: 30,
+  moderateBelow: 100,
+} as const;
+
+export function tierForEffectiveN(effectiveN: number): AnalogTier {
+  if (effectiveN < ANALOG_TIER_MIN_EFFECTIVE_N.insufficientBelow) return "insufficient";
+  if (effectiveN < ANALOG_TIER_MIN_EFFECTIVE_N.weakBelow) return "weak";
+  if (effectiveN < ANALOG_TIER_MIN_EFFECTIVE_N.moderateBelow) return "moderate";
+  return "strong";
+}
+
+// Candidates closer than the median of the kept pool are dropped. Tunable: the
+// median is chosen because needing at least half the pool to clear it keeps a
+// usable sample on ordinary series while removing the tail of near-duplicates
+// that inflate n without adding information.
+export const DISTANCE_CUTOFF_QUANTILE = 0.5;
+
+// Candidates must sit at least one full window apart to count as independent.
+// Two windows five bars apart overlap almost entirely.
+export const MIN_CANDIDATE_GAP_BARS = 1;
+
+export type EffectiveSample = { effectiveN: number; kept: number };
+
+export function effectiveSampleCount(indices: readonly number[], windowSize: number): number {
+  let last = Number.NEGATIVE_INFINITY;
+  let count = 0;
+  for (const idx of [...indices].sort((a, b) => a - b)) {
+    if (idx - last >= windowSize) {
+      count += 1;
+      last = idx;
+    }
+  }
+  return count;
+}
+
+export function quantileValue(sorted: readonly number[], q: number): number {
+  if (!sorted.length) return 0;
+  const pos = (sorted.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  const upper = sorted[base + 1];
+  return upper === undefined ? sorted[base] : sorted[base] + rest * (upper - sorted[base]);
+}
+
 function overlayFromBars(
   id: string,
   label: string,
@@ -151,22 +203,22 @@ function findSameTickerAnalogs(
   );
 }
 
-function computeEmpiricalRanges(
+export function computeEmpiricalRangesForTest(
   bars: Bar[],
   windowSize = 20,
-): { ranges: AnalogsPillar["ranges"]; sampleN: number } {
+): { ranges: AnalogsPillar["ranges"]; sampleN: number; effectiveN: number; tier: AnalogTier } {
   if (!bars || bars.length < windowSize * 2 + 30) {
-    return { ranges: [], sampleN: 0 };
+    return { ranges: [], sampleN: 0, effectiveN: 0, tier: "insufficient" };
   }
 
   const currentIdx = bars.length - 1;
   const currentOrigin = bars[currentIdx]?.c;
-  if (!currentOrigin || currentOrigin <= 0) return { ranges: [], sampleN: 0 };
+  if (!currentOrigin || currentOrigin <= 0) return { ranges: [], sampleN: 0, effectiveN: 0, tier: "insufficient" };
 
   const currentShape: number[] = [];
   for (let t = -windowSize; t <= 0; t++) {
     const b = bars[currentIdx + t];
-    if (!b || b.c <= 0) return { ranges: [], sampleN: 0 };
+    if (!b || b.c <= 0) return { ranges: [], sampleN: 0, effectiveN: 0, tier: "insufficient" };
     currentShape.push(b.c / currentOrigin);
   }
 
@@ -196,15 +248,34 @@ function computeEmpiricalRanges(
 
   candidates.sort((a, b) => a.dist - b.dist);
 
+  // Step 1: keep the closest pool, then drop candidates beyond the median
+  // distance of that pool. Without this, a run of near-duplicate windows in one
+  // volatile stretch supplies most of the sample and inflates n.
+  const closestPool = candidates.slice(0, 100);
+  if (!closestPool.length) return { ranges: [], sampleN: 0, effectiveN: 0, tier: "insufficient" as const };
+
+  const cutoff = quantileValue(
+    closestPool.map((c) => c.dist),
+    DISTANCE_CUTOFF_QUANTILE,
+  );
+  const afterCutoff = closestPool.filter((c) => c.dist <= cutoff);
+
+  // Step 2: require candidates at least a full window apart so the sample
+  // counts independent episodes rather than overlapping slices of one.
   const distinct: Candidate[] = [];
-  for (const c of candidates) {
-    if (!distinct.some((d) => Math.abs(d.idx - c.idx) < 5)) {
+  for (const c of afterCutoff) {
+    if (!distinct.some((d) => Math.abs(d.idx - c.idx) < windowSize * MIN_CANDIDATE_GAP_BARS)) {
       distinct.push(c);
       if (distinct.length >= 100) break;
     }
   }
 
-  if (distinct.length < 10) return { ranges: [], sampleN: 0 };
+  const effectiveN = effectiveSampleCount(distinct.map((d) => d.idx), windowSize);
+  const tier = tierForEffectiveN(effectiveN);
+
+  // An insufficient tier returns no bands at all: a band that carries no
+  // independent evidence should not be shown as though it did.
+  if (tier === "insufficient") return { ranges: [], sampleN: distinct.length, effectiveN, tier };
 
   function quantile(sorted: number[], q: number): number {
     if (!sorted.length) return 0;
@@ -246,6 +317,8 @@ function computeEmpiricalRanges(
       { horizon: "10d", ...getPercentiles(ret10d) },
     ],
     sampleN: distinct.length,
+    effectiveN,
+    tier,
   };
 }
 
@@ -415,7 +488,7 @@ export async function runAnalogs(
 
   // Fallback / Self-contained empirical distribution from native Yahoo bars
   if (selfBars.length >= 70) {
-    const empirical = computeEmpiricalRanges(selfBars);
+    const empirical = computeEmpiricalRangesForTest(selfBars);
     if (empirical.sampleN > 0 && empirical.ranges.length > 0) {
       const overlay: OverlaySeries[] = [];
       overlay.push(
@@ -470,6 +543,8 @@ export async function runAnalogs(
         },
         overlay,
         sample: { n: empirical.sampleN, symbols: 1, sessions: empirical.sampleN },
+        effectiveN: empirical.effectiveN,
+        tier: empirical.tier,
         caveats: [
           `Sample: ${empirical.sampleN} historical chart-shape precedents identified from 10 years of daily trading history for ${name.native}.`,
           "Follow-through percentages reflect actual cash-session close-to-close returns.",
@@ -489,6 +564,8 @@ export async function runAnalogs(
     ranges: [],
     overlay: [],
     sample: { n: 0, symbols: 0, sessions: 0 },
+    effectiveN: 0,
+    tier: "insufficient",
     caveats: ["Historical pattern comparison unavailable this run: sufficient chart data could not be retrieved."],
     sources: [{ label: "Chart Library" }, { label: "Yahoo Finance" }],
   };

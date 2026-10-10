@@ -1,10 +1,14 @@
 "use client";
 
+import { animateCountUp } from "@/lib/motion/count-up";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import { LossPathChart } from "./LossPathChart";
 import type { RiskPillar } from "@/lib/risk/risk-pillar";
 
 interface RiskSectionProps {
   risk?: RiskPillar;
+  runId?: number;
+  animateResult?: boolean;
 }
 
 const VERDICT_STYLE: Record<RiskPillar["verdict"], { chip: string; label: string }> = {
@@ -29,7 +33,42 @@ function shareInside(value: number | null | undefined): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
-export function RiskSection({ risk }: RiskSectionProps) {
+export function RiskSection({ risk, runId = 0, animateResult = false }: RiskSectionProps) {
+  const canAnimateCosts = Boolean(
+    animateResult &&
+      risk &&
+      risk.verdict !== "UNAVAILABLE" &&
+      risk.costs.ok &&
+      risk.unverified.length === 0,
+  );
+
+  const { rootRef } = useAnimeScope<HTMLDivElement>(
+    ({ root }) => {
+      if (!canAnimateCosts || !risk) return;
+
+      const rtNode = root.querySelector<HTMLElement>("[data-anim-count='round-trip-bps']");
+      animateCountUp(rtNode, {
+        from: 0,
+        to: risk.costs.roundTrip.costBps,
+        decimals: 1,
+        suffix: " bps",
+        delay: 120,
+      });
+
+      if (risk.costs.spreadBps !== undefined && risk.costs.spreadBps !== null) {
+        const spreadNode = root.querySelector<HTMLElement>("[data-anim-count='book-spread-bps']");
+        animateCountUp(spreadNode, {
+          from: 0,
+          to: risk.costs.spreadBps,
+          decimals: 2,
+          suffix: " bps",
+          delay: 150,
+        });
+      }
+    },
+    [runId],
+  );
+
   if (!risk || risk.verdict === "UNAVAILABLE") {
     return (
       <div className="rounded-sm border border-amber/35 bg-paper-alt px-4 py-5 sm:px-5" data-tour="tour-risk-unavailable">
@@ -64,7 +103,7 @@ export function RiskSection({ risk }: RiskSectionProps) {
   const costs = risk.costs;
 
   return (
-    <div className="rounded-sm border border-shell/12 bg-paper shadow-sm">
+    <div ref={rootRef} className="rounded-sm border border-shell/12 bg-paper shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-shell/10 px-4 py-3.5 sm:px-5">
         <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-moss-deep">
           ✦ Does this size survive the hold?
@@ -107,9 +146,14 @@ export function RiskSection({ risk }: RiskSectionProps) {
               : `±${risk.ordinary.boundaryPct.toFixed(2)}% · ${shareInside(risk.ordinary.shareInside)} held out of sample against an 80% target (${risk.ordinary.status === "HOLDS" ? "on target" : "below target"})`}
           </Row>
           <Row label="Round-trip cost">
-            {costs.ok
-              ? `${costs.roundTrip.costBps.toFixed(1)} bps (${money(costs.roundTrip.costUsd, 2)}) on ${money(costs.notionalUsd)} notional`
-              : "order book unavailable — cost excluded rather than assumed"}
+            {costs.ok ? (
+              <>
+                <span data-anim-count="round-trip-bps">{costs.roundTrip.costBps.toFixed(1)} bps</span>{" "}
+                {`(${money(costs.roundTrip.costUsd, 2)}) on ${money(costs.notionalUsd)} notional`}
+              </>
+            ) : (
+              "order book unavailable — cost excluded rather than assumed"
+            )}
           </Row>
         </dl>
 
@@ -176,8 +220,9 @@ export function RiskSection({ risk }: RiskSectionProps) {
 
         {costs.ok && costs.top10DepthUsd && (
           <p className="border-t border-shell/10 pt-3 text-[11px] leading-relaxed text-ink-mute">
-            Walked the live {costs.venue} book at {money(costs.notionalUsd)}: spread {(costs.spreadBps ?? 0).toFixed(2)} bps,
-            top ten levels holding {money(costs.top10DepthUsd.ask)} on the ask side, fee{" "}
+            Walked the live {costs.venue} book at {money(costs.notionalUsd)}: spread{" "}
+            <span data-anim-count="book-spread-bps">{(costs.spreadBps ?? 0).toFixed(2)} bps</span>, top ten levels
+            holding {money(costs.top10DepthUsd.ask)} on the ask side, fee{" "}
             {costs.feeSchedule ? `${costs.feeSchedule.takerBps} bps taker` : "applied per venue tier"}. Book stamped{" "}
             {costs.bookAsOf}.
           </p>
