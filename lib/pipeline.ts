@@ -383,7 +383,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
     catalystDensity: "moderate",
     balanceSheet: ["Sample balance-sheet snapshot (illustrative)."],
     regimeAlignment: "aligned",
-    communityStability: "stable",
+    communityData: "available",
     cleanedCorrRankPct: 82,
     analogQuality: { n: 84, clustered: true },
   };

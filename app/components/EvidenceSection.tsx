@@ -98,8 +98,8 @@ export function FlagsCard({ flags }: { flags: StructureFlags }) {
 
         <div className="flex items-center justify-between gap-3 border-b border-shell/[0.06] pb-2">
           <span className="text-mute-dim">Community Stability</span>
-          <span className={`font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded ${getBadgeColor(flags.communityStability)}`}>
-            {flags.communityStability}
+          <span className={`font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded ${getBadgeColor(flags.communityData)}`}>
+            community data {flags.communityData}
           </span>
         </div>
 

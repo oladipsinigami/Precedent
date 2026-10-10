@@ -891,7 +891,7 @@ function validFlags(f: unknown): f is NonNullable<Briefing["flags"]> {
     (v.catalystDensity === "high" || v.catalystDensity === "moderate" || v.catalystDensity === "low") &&
     Array.isArray(v.balanceSheet) &&
     (v.regimeAlignment === "aligned" || v.regimeAlignment === "misaligned") &&
-    (v.communityStability === "stable" || v.communityStability === "unstable") &&
+    (v.communityData === "available" || v.communityData === "unavailable") &&
     typeof v.analogQuality === "object" &&
     v.analogQuality !== null &&
     typeof (v.analogQuality as Record<string, unknown>).n === "number" &&

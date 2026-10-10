@@ -42,7 +42,7 @@ function baseBriefing(title: string, whatWeDid: string): Briefing {
       catalystDensity: "moderate",
       balanceSheet: [],
       regimeAlignment: "aligned",
-      communityStability: "stable",
+      communityData: "available",
       analogQuality: { n: 300, clustered: true },
     },
     unverified: [],

@@ -265,7 +265,7 @@ export type StructureFlags = {
   catalystDensity: "high" | "moderate" | "low";
   balanceSheet: string[];
   regimeAlignment: "aligned" | "misaligned";
-  communityStability: "stable" | "unstable";
+  communityData: "available" | "unavailable";
   cleanedCorrRankPct?: number;
   analogQuality: { n: number; clustered: boolean };
 };

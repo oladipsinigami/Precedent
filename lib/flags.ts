@@ -52,22 +52,31 @@ export async function computeFlags(
           : "aligned"
       : "misaligned";
 
-  const communityStability = pillars.marketStructure.ok ? "stable" : "unstable";
+  // Availability, not stability. Whether the community map is drifting is not
+  // measured anywhere, so this only records that the snapshot was readable.
+  const communityData = pillars.marketStructure.ok
+    ? "available"
+    : "unavailable";
 
   const cleanedCorrRankPct = await cleanedCorrRank(pillars.marketStructure.communityMembers, native);
 
   const ranges = pillars.analogs.ranges;
   const medians = ranges.map((r) => r.p50);
+  // Tunable: a band reads as "tight" when its p10-to-p90 span is under this many
+  // percentage points. 8 was chosen because it is roughly the width of a
+  // normal large-cap daily-to-decile range at the horizons shown. Widen it if
+  // the product starts showing longer horizons.
+  const TIGHT_BAND_SPAN_PCT = 8;
   const clustered =
     ranges.length > 0 &&
     medians.every((m) => Math.sign(m) === Math.sign(medians[0]) || m === 0) &&
-    Math.max(...ranges.map((r) => r.p90 - r.p10)) < 8;
+    Math.max(...ranges.map((r) => r.p90 - r.p10)) < TIGHT_BAND_SPAN_PCT;
 
   return {
     catalystDensity,
     balanceSheet,
     regimeAlignment,
-    communityStability,
+    communityData,
     cleanedCorrRankPct,
     analogQuality: { n: pillars.analogs.sample.n, clustered },
   };

@@ -118,7 +118,7 @@ export function deterministicBriefing(opts: {
   }
   if (flags) {
     evidence.push({
-      claim: `Flags (separate facts, not a score): catalyst density ${flags.catalystDensity}; regime alignment ${flags.regimeAlignment}; community stability ${flags.communityStability}; analog base n=${flags.analogQuality.n} (${flags.analogQuality.clustered ? "clustered" : "scattered"} outcomes)${flags.cleanedCorrRankPct !== undefined ? `; cleaned-correlation rank p${flags.cleanedCorrRankPct} in community` : ""}.`,
+      claim: `Flags (separate facts, not a score): catalyst density ${flags.catalystDensity}; regime alignment ${flags.regimeAlignment}; community data ${flags.communityData}; analog base n=${flags.analogQuality.n} (${flags.analogQuality.clustered ? "clustered" : "scattered"} outcomes)${flags.cleanedCorrRankPct !== undefined ? `; cleaned-correlation rank p${flags.cleanedCorrRankPct} in community` : ""}.`,
       source: "Structure & Fundamentals flags",
       pillar: "marketStructure" as const,
     });
@@ -172,9 +172,9 @@ export function deterministicBriefing(opts: {
   if (rsi !== undefined && rsi >= 60 && pillars?.news?.headlines?.some((h) => h.lean === "cautious")) {
     tension.push({
       left: `RSI-14 indicates elevated short-term momentum at ${rsi.toFixed(1)}.`,
-      right: "Verified headline flow reflects cautious or risk-sensitive editorial coverage.",
+      right: `Verified headline flow leans risk-sensitive across ${pillars.news.headlines.filter((h) => h.lean === "cautious").length} of the ${pillars.news.headlines.length} headlines returned.`,
       whyItMatters:
-        "Price momentum and cautious headline flow diverge; treat the clash as analytical friction rather than directional signal.",
+        "Measured momentum and the editorial lean of the returned headlines differ; treat the clash as a difference in what each stream observed rather than a directional signal.",
     });
   }
 

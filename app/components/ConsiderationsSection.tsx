@@ -13,10 +13,9 @@ interface ConsiderationsSectionProps {
 
 export function ConsiderationsSection({ considerations, scores, coverage, analogs, analogQuality }: ConsiderationsSectionProps) {
   const available = Object.values(scores).filter((score) => score.value !== null);
-  const labels = available.map((score) => score.label);
-  const agreement = labels.length > 1 && labels.every((label) => label === labels[0])
-    ? `The available pillars are broadly ${labels[0]}.`
-    : "The available pillars do not fully agree, so the setup remains mixed across evidence types.";
+  // No aggregate verdict here. The pillars describe how much evidence each
+  // stream returned; combining them into one adjective ("broadly constructive")
+  // read as a directional call the data does not support.
   const trajectory = analogs?.ranges.length
     ? `Analog bands remain available across ${analogs.ranges.length} horizon${analogs.ranges.length === 1 ? "" : "s"} and are ${analogQuality?.clustered ? "clustered" : "scattered"} in the available sample; ${analogs.informative?.note ?? "dispersion should be read as historical context rather than a forecast."}`
     : "Analog trajectory context was unavailable for this run.";
@@ -28,7 +27,7 @@ export function ConsiderationsSection({ considerations, scores, coverage, analog
           <span className="font-mono text-lg font-semibold text-ink-strong">{coverage.available} / {coverage.total} streams <span className="text-[10px] uppercase text-ink-faint">· {coverage.label}</span></span>
         </div>
         <p className="mt-2 text-[11px] leading-relaxed text-mute-dim">{coverage.basis}</p>
-        <p className="mt-2 text-xs leading-relaxed text-ink-body"><span className="font-semibold text-moss">✦ Synthesis Commentary:</span> {agreement} {trajectory} The unresolved questions below define what evidence would change the thesis.</p>
+        <p className="mt-2 text-xs leading-relaxed text-ink-body"><span className="font-semibold text-moss">✦ Synthesis Commentary:</span> {trajectory} The unresolved questions below define what evidence would change the thesis.</p>
       </div>
       <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
       {/* Column 1: Operating Frame Considerations */}
