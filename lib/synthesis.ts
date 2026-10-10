@@ -207,6 +207,7 @@ ${SCHEMA}`;
   const tech = opts.pillars.technicals?.ok ? opts.pillars.technicals : undefined;
   const fund = opts.pillars.fundamentals?.ok ? opts.pillars.fundamentals : undefined;
   const news = opts.pillars.news?.ok ? opts.pillars.news : undefined;
+  const analogs = opts.pillars.analogs;
 
   const stressResultsSummary = stress.sampleSize > 0 && stress.results.length > 0
     ? stress.results
@@ -406,12 +407,16 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
           similarity: "Past chart with a similar shape",
           followed: item.whatHappened,
         })),
-        baseRates: historicalStressTest.results.map((item) => ({
-          horizon: item.period,
-          range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
-          n: historicalStressTest.sampleSize,
-          note: "This is only what happened in the past. It is not a prediction.",
-        })),
+        baseRates: historicalStressTest.results.map((item, index) => {
+          const band = analogs?.ranges?.[index];
+          const basis = band?.basis === "raw" ? "the stock's own return" : "return above a date-matched liquid-stock baseline";
+          return {
+            horizon: item.period,
+            range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
+            n: historicalStressTest.sampleSize,
+            note: `This counts ${basis}. This is only what happened in the past. It is not a prediction.`,
+          };
+        }),
         caveat: historicalStressTest.importantNote,
       },
       considerations: {

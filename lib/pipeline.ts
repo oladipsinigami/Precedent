@@ -319,9 +319,9 @@ function buildDemoBundle(style: TradingStyle, question: string) {
         },
       ],
       ranges: [
-        { horizon: "1d", n: 84, p10: -1.2, p50: 0.45, p90: 1.8, pUp: 0.62 },
-        { horizon: "5d", n: 84, p10: -2.1, p50: 1.65, p90: 4.2, pUp: 0.65 },
-        { horizon: "10d", n: 84, p10: -2.8, p50: 2.9, p90: 6.4, pUp: 0.68 },
+        { horizon: "1d", n: 84, p10: -1.2, p50: 0.45, p90: 1.8, pUp: 0.62, basis: "excess" },
+        { horizon: "5d", n: 84, p10: -2.1, p50: 1.65, p90: 4.2, pUp: 0.65, basis: "excess" },
+        { horizon: "10d", n: 84, p10: -2.8, p50: 2.9, p90: 6.4, pUp: 0.68, basis: "excess" },
       ],
       overlay: [
         {

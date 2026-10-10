@@ -165,6 +165,21 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
   return out;
 }
 
+// An excess-return base rate counts how often the stock beat a liquid-stock
+// baseline, not how often the price rose. "Went up" would invert the meaning,
+// so the phrasing is corrected wherever it appears in memo prose.
+function banAmbiguousUpCount(text: string): string {
+  return text
+    .replace(
+      /(?<=[^A-Za-z0-9])went up\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+times?\s+out\s+of\s+(\d+)(?![A-Za-z0-9])/gi,
+      (_m, a, b) => `beat the baseline ${a} times out of ${b}`,
+    )
+    .replace(
+      /(?<=[^A-Za-z0-9])(band|range|base rate)s?\s+went up(?![A-Za-z0-9])/gi,
+      (_m, a) => `${a}s beat the baseline`,
+    );
+}
+
 function banSoftDirectional(text: string): string {
   // Protect discourse-attributed sentiment reports ("aggregate X sentiment was
   // bearish across posts") before the blanket "(bullish|bearish) sentiment"
@@ -349,6 +364,7 @@ function rewrite(
     .replace(FINAL_RECOMMENDATION, "this desk does not take a side")
     .replace(VERDICT_LINE, "this desk does not take a side");
   out = banHypeAndCoaching(out);
+  out = banAmbiguousUpCount(out);
   out = banSoftDirectional(out);
   out = out.replace(VERDICT, (m) => {
     const lower = m.toLowerCase();

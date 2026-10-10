@@ -218,14 +218,14 @@ function computeEmpiricalRanges(
   }
 
   function getPercentiles(returns: number[]) {
-    if (!returns.length) return { n: 0, p10: 0, p50: 0, p90: 0, pUp: 0 };
+    if (!returns.length) return { n: 0, p10: 0, p50: 0, p90: 0, pUp: 0, basis: "raw" as const };
     returns.sort((a, b) => a - b);
     const n = returns.length;
     const p10 = Number(quantile(returns, 0.10).toFixed(2));
     const p50 = Number(quantile(returns, 0.50).toFixed(2));
     const p90 = Number(quantile(returns, 0.90).toFixed(2));
     const upCount = returns.filter((r) => r > 0).length;
-    return { n, p10, p50, p90, pUp: upCount / n };
+    return { n, p10, p50, p90, pUp: upCount / n, basis: "raw" as const };
   }
 
   const ret1d: number[] = [];
@@ -378,6 +378,7 @@ export async function runAnalogs(
         p50: row.p50,
         p90: row.p90,
         pUp: row.p_up,
+        basis: "excess" as const,
       }))
       .sort((a, b) => {
         const ai = horizonOrder.indexOf(a.horizon);

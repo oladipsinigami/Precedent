@@ -38,6 +38,8 @@ export type AnalogFollowThrough = {
   note?: string;
 };
 
+export type AnalogBasis = "excess" | "raw";
+
 export type AnalogRange = {
   horizon: string;
   n: number;
@@ -45,6 +47,11 @@ export type AnalogRange = {
   p50: number;
   p90: number;
   pUp: number;
+  // "excess" means pUp and the quantiles are returns above a date-matched
+  // liquid-stock baseline (the Chart Library path). "raw" means they are the
+  // stock's own returns (the native fallback). One field, two meanings: always
+  // rendered from this flag so the wording cannot drift from the maths.
+  basis: AnalogBasis;
 };
 
 export type OverlayPoint = {

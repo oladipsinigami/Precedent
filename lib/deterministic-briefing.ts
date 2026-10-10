@@ -365,7 +365,10 @@ export function deterministicBriefing(opts: {
           if (!r || r.n === 0) return null;
           return {
             period,
-            wentUp: `Went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
+            wentUp:
+              r.basis === "excess"
+                ? `Beat the baseline ${Math.round(r.pUp * r.n)} of ${r.n}`
+                : `Rose ${Math.round(r.pUp * r.n)} of ${r.n}`,
             typicalMove: `Typical move: usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
             median: fmtPct(r.p50),
           };
