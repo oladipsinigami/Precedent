@@ -311,3 +311,5 @@ estimating.
 
 - [**PRODUCT-OVERVIEW.md**](PRODUCT-OVERVIEW.md) — In-depth product specification, Clerk of Evidence philosophy, and architectural rules.
 - [**Research-Workbench-Design.md**](Research-Workbench-Design.md) — Visual design system and research desk UX specifications.
+- [**docs/analog-validation.md**](docs/analog-validation.md) — Walk-forward coverage of the analog bands, as measured. Current observed coverage is 66.5% against a band labelled p10–p90.
+- [**docs/user-test-protocol.md**](docs/user-test-protocol.md) — The five-session user-test script. No results are recorded because no sessions have been run.
