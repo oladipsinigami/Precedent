@@ -10,7 +10,7 @@ Built for the [Bitget AI Base Camp S2 Hackathon](https://dorahacks.io/) · Track
 
 ---
 
-**Live demo:** [precedent-liard-eight.vercel.app](https://precedent-liard-eight.vercel.app/) · **Fast path:** Click *"Load recommended demo"* in the header
+**Live demo:** [precedent-liard-eight.vercel.app](https://precedent-liard-eight.vercel.app/) · **Fast path:** Click *"Load recommended demo"* in the header (serves **fixed sample data** — labelled in a banner on the results view; see [Demo Script](#demo-script) for running live)
 
 ---
 
@@ -267,11 +267,30 @@ npx eslint .
 
 ## Demo Script
 
-### Fastest Path
+### Fastest Path (sample data)
 Click **"Load recommended demo"** in the top navigation bar. It instantly loads:
 - **Style:** Swing trader (5–10 session horizon)
 - **Asset:** AAPL (rAAPL on Bitget)
 - **Question:** *"I'm a swing trader. Stress-test the current AAPL rToken setup into next week — especially the 7×24 window versus the cash session. What did historically similar charts do next, and where do the pillars disagree?"*
+
+> **This path is sample data.** It serves a fixed, hand-written bundle (analog n=84, fixed correlations) from
+> `buildDemoBundle` in `lib/pipeline.ts` so the memo renders instantly with no network calls. Every figure in it is
+> illustrative. The results view marks it with a persistent "Sample data — not live" banner. Use it to see the layout;
+> use the path below when you want measured numbers.
+
+### Running live on the deployed app
+1. Open the deployed demo and ignore "Load recommended demo".
+2. The landing screen is pre-filled with a real trade — `hold $20,000 of NVDA for 5 trading days and can lose at most
+   $600`. Edit it or type your own.
+3. Press **Check this trade**. Precedent reads the scheduled events inside the hold, measures how far NVDA has moved on
+   each, prices the round trip against the live Bitget order book, and solves the largest size that fits your limit.
+4. To also produce the full research memo, expand **"Optional: What to research alongside the size check"**, add a
+   question, and press **Synthesize Research Memo**. Both paths run against live providers; expect roughly 30–120 s
+   depending on which synthesis model answers.
+
+A live run reaches Bitget (rToken universe, order books, tickers), Yahoo (price history), SEC EDGAR (filings), the
+Nasdaq earnings calendar and federalreserve.gov. When a provider is unreachable the result says so instead of
+estimating.
 
 ### Manual Step-by-Step Flow
 1. Select your **Trading Style** (Day, Swing, Event-driven, or Position).

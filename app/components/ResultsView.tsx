@@ -59,6 +59,29 @@ export function ResultsView({
 
   return (
     <div className="mx-auto max-w-[1360px] py-4 sm:py-10">
+      {briefing.isSample ? (
+        <div
+          role="status"
+          data-tour="tour-sample-banner"
+          className="mb-5 flex items-start gap-3 rounded-sm border border-alert-deep/40 bg-alert-deep/[0.08] px-4 py-3.5 text-alert-wash shadow-[0_0_28px_rgba(185,28,28,0.12)]"
+        >
+          <span aria-hidden="true" className="mt-0.5 font-mono text-sm text-alert">
+            ▲
+          </span>
+          <div className="min-w-0 text-xs leading-relaxed">
+            <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-alert">
+              Sample data — not live
+            </span>
+            <p className="mt-1 text-slate-pale">
+              This memo was served from the built-in illustrative bundle so it renders instantly. Every figure in it,
+              including the analog sample sizes and correlations, is fixed sample data. Run any question of your own —
+              or pick an instrument and press <span className="font-mono text-lime">Synthesize Research Memo</span> —
+              to compute against live data.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Top Action & Navigation Strip */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4 border-b border-white/[0.08] pb-5">
         {/* Left: Return to Intake Button */}
