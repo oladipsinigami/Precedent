@@ -439,7 +439,10 @@ export function deterministicBriefing(opts: {
         note: "Excess versus a date-matched liquid-stock baseline, not raw return, and not a forecast.",
       })),
       caveat:
-        pillars?.analogs?.caveats?.join(" ") ||
+        // Scope notes carry the standing limits of this evidence; caveats carry
+        // what went wrong on this run. Both belong here so the memo never
+        // silently drops the provenance the sidebar shows.
+        [...(pillars?.analogs?.scopeNotes ?? []), ...(pillars?.analogs?.caveats ?? [])].join(" ") ||
         "Analogs are a historical sample. They do not assign a side to the current name.",
     },
     considerations: {

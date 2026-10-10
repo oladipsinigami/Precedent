@@ -474,7 +474,8 @@ export async function runAnalogs(
       },
       overlay,
       sample: { n: analogs.n, symbols: analogs.symbols, sessions: analogs.sessions },
-      caveats: [
+      caveats: [],
+      scopeNotes: [
         packet.meta?.note ?? "Chart Library bands describe historical excess versus a liquid-stock baseline.",
         `Sample: ${analogs.n} analogs across ${analogs.symbols} names and ${analogs.sessions} sessions.`,
         "Follow-through percentages on the five closest names are cash-session closes from Yahoo, not rToken marks.",
@@ -545,7 +546,8 @@ export async function runAnalogs(
         sample: { n: empirical.sampleN, symbols: 1, sessions: empirical.sampleN },
         effectiveN: empirical.effectiveN,
         tier: empirical.tier,
-        caveats: [
+        caveats: [],
+        scopeNotes: [
           `Sample: ${empirical.sampleN} historical chart-shape precedents identified from 10 years of daily trading history for ${name.native}.`,
           "Follow-through percentages reflect actual cash-session close-to-close returns.",
         ],

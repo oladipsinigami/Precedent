@@ -223,6 +223,10 @@ export type AnalogsPillar = {
   // windows; effectiveN counts only candidates a full window apart.
   effectiveN?: number;
   tier?: AnalogTier;
+  // Permanent limits of this evidence: true on every run, healthy or not. Kept
+  // apart from `caveats`, which describe what went wrong this time, so a reader
+  // is not asked to scan five lines to find the one that matters now.
+  scopeNotes?: string[];
   informative?: {
     verdict?: string;
     ratioToBase?: number;

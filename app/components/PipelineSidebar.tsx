@@ -688,6 +688,11 @@ export function PipelineSummary({
     }
   }
 
+  // Permanent limits of the evidence itself. These are printed on healthy runs
+  // too, so they are kept out of the caveat count: a run with nothing wrong
+  // should not look like it is hiding five problems.
+  const scopeNotes: string[] = pillarData?.analogs?.scopeNotes ?? [];
+
   return (
     <div className="relative">
       <button
@@ -753,7 +758,7 @@ export function PipelineSummary({
           {caveats.length > 0 ? (
             <div className="mt-3.5 rounded border border-amber/25 bg-amber/[0.05] p-3">
               <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-amber">
-                Degradation Caveats ({caveats.length})
+                This run&apos;s gaps ({caveats.length})
               </div>
               <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-amber">
                 {caveats.map((c, i) => (
@@ -766,8 +771,26 @@ export function PipelineSummary({
             </div>
           ) : (
             <div className="mt-3 border-t border-white/[0.06] pt-2 text-[11px] text-slate-line">
-              All five evidence streams converged with full source verification and zero degradation caveats.
+              All five evidence streams converged with full source verification and zero
+              gaps on this run.
             </div>
+          )}
+
+          {scopeNotes.length > 0 && (
+            <details className="mt-3 border-t border-white/[0.06] pt-2.5 group">
+              <summary className="cursor-pointer list-none flex items-center gap-1.5 text-[11px] text-slate-line hover:text-slate transition-colors">
+                <span className="text-slate transition-transform group-open:rotate-90">&#9656;</span>
+                What this evidence cannot cover ({scopeNotes.length})
+              </summary>
+              <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-slate-line pl-3.5">
+                {scopeNotes.map((n, i) => (
+                  <li key={i}>{n}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[10px] leading-relaxed text-slate-text">
+                These limits apply to every run. They are not signs of a failed check.
+              </p>
+            </details>
           )}
         </div>
       )}
