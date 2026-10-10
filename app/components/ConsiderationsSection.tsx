@@ -1,17 +1,16 @@
 "use client";
 
 import type { AnalogsPillar, Briefing, StructureFlags } from "@/lib/types";
-import type { PillarCoverage, PillarScore } from "@/lib/pillar-scores";
+import type { PillarScore } from "@/lib/pillar-scores";
 
 interface ConsiderationsSectionProps {
   considerations: Briefing["considerations"];
   scores: { sentiment: PillarScore; fundamentals: PillarScore; technicals: PillarScore };
-  coverage: PillarCoverage;
   analogs?: AnalogsPillar;
   analogQuality?: StructureFlags["analogQuality"];
 }
 
-export function ConsiderationsSection({ considerations, scores, coverage, analogs, analogQuality }: ConsiderationsSectionProps) {
+export function ConsiderationsSection({ considerations, scores, analogs, analogQuality }: ConsiderationsSectionProps) {
   const available = Object.values(scores).filter((score) => score.value !== null);
   // No aggregate verdict here. The pillars describe how much evidence each
   // stream returned; combining them into one adjective ("broadly constructive")
@@ -21,14 +20,6 @@ export function ConsiderationsSection({ considerations, scores, coverage, analog
     : "Analog trajectory context was unavailable for this run.";
   return (
     <div className="space-y-5">
-      <div className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h4 className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-moss">✦ Evidence Coverage Synthesis</h4>
-          <span className="font-mono text-lg font-semibold text-ink-strong">{coverage.available} / {coverage.total} streams <span className="text-[10px] uppercase text-ink-faint">· {coverage.label}</span></span>
-        </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-mute-dim">{coverage.basis}</p>
-        <p className="mt-2 text-xs leading-relaxed text-ink-body"><span className="font-semibold text-moss">✦ Synthesis Commentary:</span> {trajectory} The unresolved questions below define what evidence would change the thesis.</p>
-      </div>
       <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
       {/* Column 1: Operating Frame Considerations */}
       <div className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm">

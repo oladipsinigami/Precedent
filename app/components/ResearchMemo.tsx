@@ -7,13 +7,14 @@ import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import { STYLES } from "@/lib/style-profiles";
 import { MemoSection } from "./MemoSection";
 import { EvidenceSection } from "./EvidenceSection";
+import { buildStreamHealth } from "@/lib/stream-health";
 import { RiskSection } from "./RiskSection";
 import { TensionSection } from "./TensionSection";
 import { AnalogOverlay } from "./AnalogOverlay";
 import { UnsignedRanges } from "./UnsignedRanges";
 import { ConsiderationsSection } from "./ConsiderationsSection";
 import { DecisionRecord } from "./DecisionRecord";
-import { fundamentalsScore, sentimentScore, summarizePillarCoverage, technicalsScore } from "@/lib/pillar-scores";
+import { fundamentalsScore, sentimentScore, technicalsScore } from "@/lib/pillar-scores";
 import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 
 interface ResearchMemoProps {
@@ -122,14 +123,8 @@ export function ResearchMemo({
     fundamentals: fundamentalsScore(pillarData?.fundamentals),
     technicals: technicalsScore(pillarData?.technicals),
   };
-  const coverage = summarizePillarCoverage([
-    scores.sentiment.value !== null,
-    scores.fundamentals.value !== null,
-    scores.technicals.value !== null,
-    Boolean(pillarData?.analogs?.ok),
-    Boolean(pillarData?.marketStructure?.ok && !pillarData.marketStructure.stale),
-  ]);
   const unverifiedCaveats = getUnverifiedCaveats(briefing, pillarData);
+  const streamHealth = buildStreamHealth(pillarData);
 
   const sampleSize = briefing.historicalStressTest.sampleSize ?? 0;
   const analogsVerified = Boolean(
@@ -371,6 +366,53 @@ export function ResearchMemo({
         </section>
       )}
 
+      {/* Data health sits above the memo so a degraded stream is visible before
+          any conclusion is read. */}
+      {streamHealth.showBanner ? (
+        <details className="border-b border-shell/15 bg-paper px-4 py-4 sm:px-10 sm:py-5">
+          <summary className="cursor-pointer list-none">
+            <div className="flex items-start gap-3">
+              <span aria-hidden="true" className="mt-0.5 font-mono text-sm text-amber-deep">
+                ▲
+              </span>
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-deep">
+                  Data health — {streamHealth.usable} of {streamHealth.total} streams usable
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-ink-body">{streamHealth.headline}</p>
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+                  Select to read each reason
+                </p>
+              </div>
+            </div>
+          </summary>
+          <ul className="mt-3 space-y-2 border-t border-shell/10 pt-3">
+            {streamHealth.streams.map((stream) => (
+              <li key={stream.name} className="text-[11px] leading-relaxed">
+                <span
+                  className={
+                    stream.status === "ok"
+                      ? "font-mono text-[10px] font-bold uppercase tracking-wider text-moss-deep"
+                      : "font-mono text-[10px] font-bold uppercase tracking-wider text-warn"
+                  }
+                >
+                  {stream.label}
+                </span>
+                {stream.reasons.length ? (
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-ink-mute">
+                    {stream.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="ml-2 text-ink-mute">returned usable data</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
       {/* TOP SECTION: Executive Research Summary & Takeaways */}
       <section className="border-b border-shell/15 bg-paper px-4 py-6 sm:px-10 sm:py-8">
         {/* Dedicated "What we could not fully verify" block — deliberately static per Rule #2 */}
@@ -601,7 +643,6 @@ export function ResearchMemo({
           <ConsiderationsSection
             considerations={briefing.considerations}
             scores={scores}
-            coverage={coverage}
             analogs={pillarData?.analogs}
             analogQuality={briefing.flags?.analogQuality}
           />

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
+import { buildStreamHealth } from "./stream-health";
 import { computeFlags } from "./flags";
 import { guardBriefing, cleanHistoricalSummary } from "./language-guard";
 import { openRouterFreeModels } from "./providers/openrouter-models";
@@ -197,6 +198,8 @@ READER ORIENTATION CONTRACT (Deliver these 6 dimensions directly across the sche
 5. "whereThingsDoNotAgree": PUSH TENSION FIRST. Identify where the 4 independent witnesses clash (e.g. tape vs filings, headline vs social, momentum vs historical dispersion) and why it matters.
 6. "questionsOnlyYouCanAnswer": Frame the pre-mortem: what can go wrong next week (catalyst drift, volatility holes, specific invalidation levels).
 
+DATA HEALTH: If any evidence stream was degraded this run, open "whatWeDid" with one sentence naming it (e.g. "Market structure unavailable for this run; the remaining streams reflect live data."). Never present a partial run as complete.
+
 PROHIBITIONS: Strictly prohibit directional calls, hype, or soft bias: NEVER use "buy", "sell", "long", "short", "rip", "send it", "moon", "squeeze", "slight edge", "favoring patience", "constructive", "cautious lean", "tempts traders", or patronizing phrases ("for beginners", "FOMO"). Forward-looking inquiry is permitted ONLY within "questionsOnlyYouCanAnswer".
 ${UNTRUSTED_DATA_RULE}
 
@@ -387,7 +390,11 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
     return {
       ...fallback,
       title: resolvedTitle,
-      whatWeDid: parsed.whatWeDid || fallback.whatWeDid,
+      whatWeDid: (() => {
+      const health = buildStreamHealth(opts.pillars);
+      if (!health.showBanner || parsed.whatWeDid) return parsed.whatWeDid || fallback.whatWeDid;
+      return `${parsed.whatWeDid || fallback.whatWeDid} ${health.headline}`;
+    })(),
       historicalStressTest,
       otherThingsWeChecked,
       whereThingsDoNotAgree,
