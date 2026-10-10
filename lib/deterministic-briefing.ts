@@ -229,7 +229,9 @@ export function deterministicBriefing(opts: {
         pillars?.technicals?.rTokenGap
           ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${inline(pillars.technicals.rTokenGap)}.`
           : "Tape & Venue Basis: Bitget trades 24/7 on crypto rails, while the primary US equity market closes overnight.",
-        "Liquidity & Spread: Off-hours rToken trading operates with thinner order depth, exposing positions to opening basis gap risk.",
+        pillars?.risk?.costs?.ok
+          ? `Live Round-Trip Cost: ${pillars.risk.costs.roundTrip.costBps.toFixed(1)} bps of the ${pillars.risk.costs.notionalUsd.toLocaleString("en-US")} dollar notional at the size asked, from the ${pillars.risk.costs.venue} order book stamped ${pillars.risk.costs.bookAsOf}.`
+          : "Live Round-Trip Cost: order book unavailable at request time, so cost is reported as unavailable rather than estimated.",
         pillars?.fundamentals?.eps
           ? `SEC EDGAR Filing Tape: Diluted EPS ${pillars.fundamentals.eps.value} for period ending ${pillars.fundamentals.eps.periodEnd} (${pillars.fundamentals.eps.form} filed ${pillars.fundamentals.eps.filed}).`
           : pillars?.fundamentals?.latestFilings?.[0]
@@ -307,6 +309,42 @@ export function deterministicBriefing(opts: {
     unverified.push("Historical analog matches unavailable — 0 past cases found.");
   } else if (analogSampleSize < 30) {
     unverified.push(`Historical analog sample is limited (${analogSampleSize} cases).`);
+  }
+
+  const risk = pillars?.risk;
+  if (risk) {
+    if (risk.verdict === "UNAVAILABLE") {
+      unverified.push(
+        risk.unavailableReason ?? "Risk sizing unavailable in this run, so no size could be checked.",
+      );
+    }
+    risk.unverified.forEach((item) => unverified.push(`Risk & sizing — ${item}`));
+    if (risk.maxLossUsd === null) {
+      unverified.push(
+        "No loss limit was stated, so the position size was never checked against a budget. Give the most you can lose to get a fitted size.",
+      );
+    }
+    if (!risk.costs.ok) {
+      unverified.push(
+        "Live round-trip cost unavailable — the sizing solve omitted trading costs rather than assuming a fee.",
+      );
+    }
+    if (risk.ordinary.status === "NO_DATA") {
+      unverified.push(
+        `Not enough clean ${risk.holdSessions}-session history to grade a hold range for ${risk.asset}; the adverse move is event-driven only.`,
+      );
+    } else if (risk.ordinary.status === "SHORT_OF_TARGET") {
+      unverified.push(
+        `The ${risk.holdSessions}-session hold range contained only ${Math.round((risk.ordinary.shareInside ?? 0) * 100)}% of held-out sessions against an 80% target; it is reported as measured and not widened to hide the miss.`,
+      );
+    }
+    risk.severities
+      .filter((severity) => severity.coverage.status === "SHORT_OF_TARGET")
+      .forEach((severity) => {
+        unverified.push(
+          `${severity.label} range contained only ${Math.round((severity.coverage.shareInside ?? 0) * 100)}% of held-out sessions against an 80% target.`,
+        );
+      });
   }
 
   const result: Briefing = {

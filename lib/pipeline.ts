@@ -3,12 +3,39 @@ import { runFundamentals } from "./pillars/fundamentals";
 import { isMarketStructureSnapshotStale, runMarketStructure } from "./pillars/market-structure";
 import { runNews } from "./pillars/sentiment";
 import { runTechnicals } from "./pillars/technicals";
+import { secHistoricalEarningsDates } from "./providers/sec";
+import { yahooChart } from "./providers/yahoo";
 import { bitgetRTokenMarkets, bitgetRwaContracts, type BitgetRTokenMarket, type BitgetRwaContract } from "./providers/bitget";
 import { detectRegime } from "./regime";
 import { DEMO_TASK, normalizeQuestion } from "./style-profiles";
 import { deterministicBriefing, synthesize } from "./synthesis";
+import { applyLossLimit, parseTradeIntent, type TradeIntent } from "./risk/parse-trade";
+import { historicalFomcDates } from "./risk/events";
+import { buildRiskPillar, emptyRiskPillar, type RiskPillar } from "./risk/risk-pillar";
 import type { Briefing, PillarBundle, PillarId, ResearchEvent, StructureFlags, TradingStyle } from "./types";
 import { findName, findNameBySymbol, nameFromBitgetContract, nameFromBitgetRTokenMarket, type NameCard } from "./universe";
+
+async function runRisk(name: NameCard, intent: TradeIntent): Promise<RiskPillar> {
+  const chart = await yahooChart(name.native, "5y", "1d").catch(() => null);
+  const fomc = await historicalFomcDates().catch(() => null);
+  const earnings = name.cik
+    ? await secHistoricalEarningsDates(name.cik).catch(() => null)
+    : null;
+
+  const pillar = await buildRiskPillar({
+    name,
+    direction: intent.side,
+    side: intent.side === "LONG" ? "BUY" : "SELL",
+    notionalUsd: intent.notionalUsd ?? 0,
+    holdSessions: intent.holdSessions ?? 5,
+    maxLossUsd: intent.maxLossUsd ?? null,
+    bars: chart?.bars ?? [],
+    historical: { earnings: earnings?.dates ?? [], fomc: fomc?.dates ?? [] },
+  });
+
+  if (earnings?.caveat) pillar.unverified.push(earnings.caveat);
+  return pillar;
+}
 
 // Time budget defaults. Callers (the API route) normally pass an explicit deadline
 // derived from the serverless maxDuration; these apply when none is provided.
@@ -345,6 +372,11 @@ function buildDemoBundle(style: TradingStyle, question: string) {
       caveats: ["RMT correlation matrix applies Marchenko-Pastur filtering to isolate true sector co-movement."],
       sources: [{ label: `RMT market-structure values · ${SAMPLE_LABEL}` }],
     },
+    risk: emptyRiskPillar(
+      "Sample bundle carries no fabricated size. Risk sizing runs on live data.",
+      demoName.native,
+      demoName.rToken,
+    ),
   };
 
   const demoFlags: StructureFlags = {
@@ -367,7 +399,7 @@ function buildDemoBundle(style: TradingStyle, question: string) {
   demoBriefing.model = "Precedent Quantitative Desk (sample data)";
   demoBriefing.isSample = true;
 
-  return { name: demoName, pillars: demoPillars, briefing: demoBriefing, regime: "normal" as const };
+  return { name: demoName, pillars: demoPillars, flags: demoFlags, regime: "normal" as const };
 }
 
 export async function* runResearch(input: {
@@ -404,6 +436,7 @@ export async function* runResearch(input: {
       news: "Loading sample headlines…",
       analogs: "Loading sample analogs…",
       marketStructure: "Loading sample market structure…",
+      risk: "Reading the calendar and pricing the round trip…",
     };
     const order: PillarId[] = ["fundamentals", "technicals", "news", "analogs", "marketStructure"];
     for (const id of order) {
@@ -419,8 +452,41 @@ export async function* runResearch(input: {
       };
     }
 
+    yield { type: "pillar", id: "risk", status: "running", message: initialMessages.risk };
+
+    // Risk sizing is computed live even on the demo path. The rest of the demo
+    // is an explicitly labelled sample, but a fitted size must never be faked.
+    let demoRisk: RiskPillar;
+    try {
+      demoRisk = await runRisk(bundle.name, applyLossLimit(parseTradeIntent(input.question)));
+    } catch (err) {
+      demoRisk = emptyRiskPillar(
+        `Risk sizing unavailable in this run: ${String(err)}`,
+        bundle.name.native,
+        bundle.name.rToken,
+      );
+    }
+
+    const demoPillars: PillarBundle = { ...bundle.pillars, risk: demoRisk };
+    yield {
+      type: "pillar",
+      id: "risk",
+      status: demoRisk.ok ? "ready" : "degraded",
+      message: demoRisk.ok ? undefined : demoRisk.unavailableReason,
+      data: demoRisk,
+    };
+
     yield { type: "status", stage: "synthesis", message: "Building sample research memo…" };
-    yield { type: "briefing", briefing: bundle.briefing };
+    const demoBriefing = deterministicBriefing({
+      style: input.style,
+      question: input.question,
+      name: bundle.name,
+      regime: bundle.regime,
+      pillars: demoPillars,
+      flags: bundle.flags,
+    });
+    demoBriefing.isSample = true;
+    yield { type: "briefing", briefing: demoBriefing };
     yield { type: "done" };
     return;
   }
@@ -480,16 +546,18 @@ export async function* runResearch(input: {
     news: "Scanning news & macro headlines…",
     analogs: "Matching historical charts…",
     marketStructure: "Resolving market structure…",
+    risk: "Reading the calendar and pricing the round trip…",
   };
-  const order: PillarId[] = ["fundamentals", "technicals", "news", "analogs", "marketStructure"];
+  const order: PillarId[] = ["fundamentals", "technicals", "news", "analogs", "marketStructure", "risk"];
   for (const id of order) {
     yield { type: "pillar", id, status: "running", message: initialMessages[id] };
   }
 
   // Market structure resolves first so its community can condition analogs;
-  // the remaining four pillars still run in parallel with each other.
+  // the remaining pillars still run in parallel with each other.
   const marketStructure = await runMarketStructure(name);
-  const [analogs, technicals, fundamentals, news] = await Promise.all([
+  const intent = applyLossLimit(parseTradeIntent(input.question));
+  const [analogs, technicals, fundamentals, news, risk] = await Promise.all([
     runAnalogs(name, {
       regime,
       communityId: marketStructure.communityId,
@@ -498,9 +566,10 @@ export async function* runResearch(input: {
     runTechnicals(name),
     runFundamentals(name),
     runNews(name),
+    runRisk(name, intent),
   ]);
 
-  const pillars: PillarBundle = { analogs, technicals, fundamentals, news, marketStructure };
+  const pillars: PillarBundle = { analogs, technicals, fundamentals, news, marketStructure, risk };
   const pack: Record<PillarId, PillarBundle[PillarId]> = pillars;
 
   for (const id of order) {

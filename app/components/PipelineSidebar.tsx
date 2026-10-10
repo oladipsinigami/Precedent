@@ -60,8 +60,8 @@ function StatusIndicator({
   switch (status) {
     case "ready":
       return (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#d4ff3f]">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#d4ff3f]/15 text-[10px]">
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-lime">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-lime/15 text-[10px]">
             ✓
           </span>
           <span>Ready</span>
@@ -69,8 +69,8 @@ function StatusIndicator({
       );
     case "degraded":
       return (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#f59e0b]">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f59e0b]/15 text-[10px]">
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-amber">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber/15 text-[10px]">
             ▲
           </span>
           <span>Degraded</span>
@@ -78,8 +78,8 @@ function StatusIndicator({
       );
     case "failed":
       return (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[#f07867]">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#f07867]/15 text-[10px]">
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-alert">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-alert/15 text-[10px]">
             ✕
           </span>
           <span>Failed</span>
@@ -87,10 +87,10 @@ function StatusIndicator({
       );
     case "running":
       return (
-        <span className="inline-flex items-center gap-2 font-mono text-[11px] text-[#75b8ff]">
+        <span className="inline-flex items-center gap-2 font-mono text-[11px] text-sky">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#75b8ff] opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#75b8ff]" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky opacity-75" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-sky" />
           </span>
           <span className="truncate max-w-[220px] sm:max-w-[280px]">{runningText}</span>
         </span>
@@ -98,8 +98,8 @@ function StatusIndicator({
     case "pending":
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#556472]">
-          <span className="h-2 w-2 rounded-full border border-[#556472]/60" />
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-slate">
+          <span className="h-2 w-2 rounded-full border border-slate/60" />
           <span>Pending</span>
         </span>
       );
@@ -129,12 +129,12 @@ export function PipelineChecklist({
 
   if (isMinimized) {
     return (
-      <div className="mt-6 rounded-sm border border-[#75b8ff]/30 bg-[#0a1017]/90 px-4 py-3 shadow-lg backdrop-blur-xl transition-all">
+      <div className="mt-6 rounded-sm border border-sky/30 bg-ink/90 px-4 py-3 shadow-lg backdrop-blur-xl transition-all">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#75b8ff] opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#75b8ff]" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky" />
             </span>
             <span className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-white">
               Evidence Streams Verified ({readyCount}/{PILLARS.length} Ready) · Synthesizing Research Memo…
@@ -143,7 +143,7 @@ export function PipelineChecklist({
           <button
             type="button"
             onClick={() => setManualExpanded(true)}
-            className="font-mono text-[10px] uppercase tracking-wider text-[#75b8ff] hover:text-white transition text-left sm:text-right"
+            className="font-mono text-[10px] uppercase tracking-wider text-sky hover:text-white transition text-left sm:text-right"
           >
             ▼ Show Checklist
           </button>
@@ -153,20 +153,20 @@ export function PipelineChecklist({
   }
 
   return (
-    <div className="mt-6 rounded-sm border border-[#75b8ff]/25 bg-[#0a1017]/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl transition-all">
+    <div className="mt-6 rounded-sm border border-sky/25 bg-ink/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl transition-all">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-b border-white/[0.08] pb-3">
         <div className="flex items-center gap-2.5">
           <span
             className={`h-2 w-2 rounded-full ${
               isSynthesis
-                ? "bg-[#75b8ff] animate-pulse"
+                ? "bg-sky animate-pulse"
                 : busy || runningCount > 0
-                ? "bg-[#75b8ff] animate-pulse"
+                ? "bg-sky animate-pulse"
                 : readyCount === PILLARS.length
-                ? "bg-[#d4ff3f]"
+                ? "bg-lime"
                 : degradedCount > 0
-                ? "bg-[#f59e0b]"
-                : "bg-[#556472]"
+                ? "bg-amber"
+                : "bg-slate"
             }`}
           />
           <span className="font-mono text-xs font-semibold uppercase tracking-[0.16em] text-white">
@@ -177,14 +177,14 @@ export function PipelineChecklist({
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[10px] text-[#718090]">
+          <span className="font-mono text-[10px] text-slate-line">
             {isSynthesis ? "Synthesizing..." : busy ? "Polling parallel feeds" : "Ready"}
           </span>
           {isSynthesis && (
             <button
               type="button"
               onClick={() => setManualExpanded(false)}
-              className="font-mono text-[10px] uppercase text-[#75b8ff] hover:text-white transition"
+              className="font-mono text-[10px] uppercase text-sky hover:text-white transition"
             >
               ▲ Minimize
             </button>
@@ -207,11 +207,11 @@ export function PipelineChecklist({
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-[10px] text-[#556472]">0{idx + 1}</span>
-                <span className="text-xs font-medium text-[#d3dce4] truncate">
+                <span className="font-mono text-[10px] text-slate">0{idx + 1}</span>
+                <span className="text-xs font-medium text-slate-mid truncate">
                   {pillar.label}
                 </span>
-                <span className="hidden md:inline text-[10px] text-[#617180] truncate">
+                <span className="hidden md:inline text-[10px] text-slate-line truncate">
                   · {pillar.short}
                 </span>
               </div>
@@ -288,16 +288,16 @@ export function PipelineSummary({
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-between sm:justify-start gap-2 rounded-sm border border-white/[0.1] bg-white/[0.03] px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-[#a0b0be] transition hover:border-white/20 hover:text-white"
+        className="flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-between sm:justify-start gap-2 rounded-sm border border-white/[0.1] bg-white/[0.03] px-3.5 py-2 font-mono text-[11px] uppercase tracking-wider text-slate-text transition hover:border-white/20 hover:text-white"
       >
         <div className="flex items-center gap-2">
           <span
             className={`h-1.5 w-1.5 rounded-full ${
               failedCount > 0
-                ? "bg-[#f07867]"
+                ? "bg-alert"
                 : degradedCount > 0
-                ? "bg-[#f59e0b]"
-                : "bg-[#d4ff3f]"
+                ? "bg-amber"
+                : "bg-lime"
             }`}
           />
           <span>
@@ -306,16 +306,16 @@ export function PipelineSummary({
             {failedCount > 0 ? ` (${failedCount} Failed)` : ""}
           </span>
         </div>
-        <span className="text-xs text-[#718090]">{expanded ? "▲ Hide" : "▼ Audit"}</span>
+        <span className="text-xs text-slate-line">{expanded ? "▲ Hide" : "▼ Audit"}</span>
       </button>
 
       {expanded && (
-        <div className="mt-3 rounded-sm border border-white/[0.08] bg-[#0c1015]/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl">
+        <div className="mt-3 rounded-sm border border-white/[0.08] bg-ink/95 p-4 sm:p-5 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
-            <div className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-[#a0b0be]">
+            <div className="font-mono text-xs font-semibold uppercase tracking-[0.14em] text-slate-text">
               Pipeline Verification Summary
             </div>
-            <span className="font-mono text-[10px] text-[#617180]">Five Evidence Streams</span>
+            <span className="font-mono text-[10px] text-slate-line">Five Evidence Streams</span>
           </div>
 
           <div className="mt-3 divide-y divide-white/[0.04]">
@@ -324,18 +324,18 @@ export function PipelineSummary({
               return (
                 <div key={p.id} className="flex items-center justify-between py-2 text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-[#556472]">0{idx + 1}</span>
-                    <span className="font-medium text-[#c8d4e0]">{p.label}</span>
+                    <span className="font-mono text-[10px] text-slate">0{idx + 1}</span>
+                    <span className="font-medium text-slate-mid">{p.label}</span>
                   </div>
                   <span
                     className={`font-mono text-[10px] uppercase font-semibold px-2 py-0.5 rounded ${
                       st === "ready"
-                        ? "bg-[#d4ff3f]/10 text-[#d4ff3f]"
+                        ? "bg-lime/10 text-lime"
                         : st === "degraded"
-                        ? "bg-[#f59e0b]/10 text-[#f59e0b]"
+                        ? "bg-amber/10 text-amber"
                         : st === "failed"
-                        ? "bg-[#f07867]/10 text-[#f07867]"
-                        : "text-[#556472]"
+                        ? "bg-alert/10 text-alert"
+                        : "text-slate"
                     }`}
                   >
                     {st}
@@ -346,21 +346,21 @@ export function PipelineSummary({
           </div>
 
           {caveats.length > 0 ? (
-            <div className="mt-3.5 rounded border border-[#f59e0b]/25 bg-[#f59e0b]/[0.05] p-3">
-              <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#f59e0b]">
+            <div className="mt-3.5 rounded border border-amber/25 bg-amber/[0.05] p-3">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-amber">
                 Degradation Caveats ({caveats.length})
               </div>
-              <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-[#d97706]">
+              <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-amber">
                 {caveats.map((c, i) => (
                   <li key={i} className="flex items-start gap-1.5">
-                    <span className="font-semibold text-[#f59e0b] shrink-0">[{c.pillar}]:</span>
+                    <span className="font-semibold text-amber shrink-0">[{c.pillar}]:</span>
                     <span>{c.text}</span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : (
-            <div className="mt-3 border-t border-white/[0.06] pt-2 text-[11px] text-[#637382]">
+            <div className="mt-3 border-t border-white/[0.06] pt-2 text-[11px] text-slate-line">
               All five evidence streams converged with full source verification and zero degradation caveats.
             </div>
           )}

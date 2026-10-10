@@ -34,7 +34,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
 
   if (!series.length) {
     return (
-      <div className="mt-6 rounded border border-[#141918]/10 bg-[#141918]/[0.02] p-4 text-xs text-[#637265]">
+      <div className="mt-6 rounded border border-shell/10 bg-shell/[0.02] p-4 text-xs text-mute-dim">
         Normalized analog paths unavailable for this run.
       </div>
     );
@@ -73,36 +73,36 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
   }
 
   return (
-    <div className="mt-6 sm:mt-8 rounded-sm border border-[#141918]/20 bg-[#fbf8f2] p-4 sm:p-6 shadow-md">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#141918]/10 pb-3">
+    <div className="mt-6 sm:mt-8 rounded-sm border border-shell/20 bg-paper p-4 sm:p-6 shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-shell/10 pb-3">
         <div>
-          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-[#486326]">
+          <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] sm:tracking-[0.16em] text-moss">
             ✦ Normalized Historical Analog Paths · Empirical Trajectory Overlay
           </div>
-          <div className="mt-0.5 text-xs text-[#637265]">
+          <div className="mt-0.5 text-xs text-mute-dim">
             Rebased to 100.0 at trigger state (T₀). Trajectories depict actual historical post-setup paths.
           </div>
         </div>
 
         {/* Chart Legend */}
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 font-mono text-[10px] uppercase text-[#637265]">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 font-mono text-[10px] uppercase text-mute-dim">
           <div className="flex items-center gap-1.5">
-            <span className="h-1 w-4 rounded-full bg-[#3d5c22]" />
-            <span className="font-semibold text-[#253816]">Current</span>
+            <span className="h-1 w-4 rounded-full bg-moss" />
+            <span className="font-semibold text-ink-body">Current</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-0.5 w-4 rounded-full bg-[#839487]" />
+            <span className="h-0.5 w-4 rounded-full bg-mute" />
             <span>Historical analogs ({analogSeries.length})</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="h-px w-3 border-b border-dashed border-[#a15530]" />
-            <span className="text-[#a15530]">100.0 Rebase</span>
+            <span className="h-px w-3 border-b border-dashed border-alert-alt" />
+            <span className="text-alert-alt">100.0 Rebase</span>
           </div>
         </div>
       </div>
 
       {/* SVG Chart Container */}
-      <div className="relative mt-4 overflow-hidden rounded bg-[#f5f1e8] p-1 border border-[#141918]/[0.08]">
+      <div className="relative mt-4 overflow-hidden rounded bg-paper-alt p-1 border border-shell/[0.08]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="h-auto w-full select-none"
@@ -115,7 +115,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             y1={padTop}
             x2={width - padRight}
             y2={padTop}
-            stroke="#141918"
+            stroke="var(--c-shell)"
             strokeOpacity="0.08"
             strokeDasharray="2 4"
           />
@@ -125,7 +125,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             textAnchor="end"
             fontSize="9"
             fontFamily="monospace"
-            fill="#738275"
+            fill="var(--c-ink-faint)"
           >
             {max.toFixed(0)}
           </text>
@@ -135,7 +135,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             y1={padTop + plotHeight}
             x2={width - padRight}
             y2={padTop + plotHeight}
-            stroke="#141918"
+            stroke="var(--c-shell)"
             strokeOpacity="0.08"
             strokeDasharray="2 4"
           />
@@ -145,7 +145,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             textAnchor="end"
             fontSize="9"
             fontFamily="monospace"
-            fill="#738275"
+            fill="var(--c-ink-faint)"
           >
             {min.toFixed(0)}
           </text>
@@ -158,7 +158,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                 y1={baselineY}
                 x2={width - padRight}
                 y2={baselineY}
-                stroke="#a15530"
+                stroke="var(--c-alert-alt)"
                 strokeWidth="1.2"
                 strokeDasharray="4 4"
                 strokeOpacity="0.75"
@@ -169,7 +169,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                 fontSize="9"
                 fontFamily="monospace"
                 fontWeight="bold"
-                fill="#a15530"
+                fill="var(--c-alert-alt)"
               >
                 100.0 (T₀)
               </text>
@@ -182,11 +182,11 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
             y1={padTop + plotHeight}
             x2={width - padRight}
             y2={padTop + plotHeight}
-            stroke="#141918"
+            stroke="var(--c-shell)"
             strokeOpacity="0.2"
           />
 
-          <g fontFamily="monospace" fontSize="9" fill="#738275">
+          <g fontFamily="monospace" fontSize="9" fill="var(--c-ink-faint)">
             <text x={padLeft} y={height - 12} textAnchor="start">
               -20 Sessions
             </text>
@@ -216,12 +216,12 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                 key={overlay.id}
                 d={smoothPath(points)}
                 fill="none"
-                stroke="#6b7c70"
+                stroke="var(--c-ink-faint)"
                 strokeWidth={1.8}
                 strokeOpacity={opacity}
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className="transition-all hover:stroke-[#1d2720] hover:stroke-width-2"
+                className="transition-all hover:stroke-ink-strong hover:stroke-width-2"
               />
             );
           })}
@@ -239,7 +239,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                   })
                   .filter((p): p is { x: number; y: number } => p !== null))}
                 fill="none"
-                stroke="#38541e"
+                stroke="var(--c-moss-deep)"
                 strokeWidth={3.2}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -252,14 +252,14 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                     cx={currentLastPoint.x}
                     cy={currentLastPoint.y}
                     r={5}
-                    fill="#38541e"
+                    fill="var(--c-moss-deep)"
                     className="animate-pulse"
                   />
                   <circle
                     cx={currentLastPoint.x}
                     cy={currentLastPoint.y}
                     r={2.5}
-                    fill="#ffffff"
+                    fill="var(--c-paper)"
                   />
                   <text
                     x={currentLastPoint.x + 8}
@@ -267,7 +267,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
                     fontFamily="monospace"
                     fontSize="9"
                     fontWeight="bold"
-                    fill="#273d13"
+                    fill="var(--c-ink-body)"
                   >
                     {currentLastPoint.val.toFixed(1)}
                   </text>
@@ -278,7 +278,7 @@ export function AnalogOverlay({ overlays }: AnalogOverlayProps) {
         </svg>
       </div>
 
-      <div className="mt-3 text-[11px] leading-relaxed text-[#637265]">
+      <div className="mt-3 text-[11px] leading-relaxed text-mute-dim">
         ✦ Empirical Trajectory Context: The prominent solid green line traces the current asset. Muted trajectories trace matched historical analogs aligned at their respective trigger points. Path dispersion reflects empirical market range rather than a deterministic forecast.
       </div>
     </div>

@@ -66,9 +66,9 @@ export function ResultsView({
           type="button"
           onClick={onBackToIntake}
           data-tour="tour-back"
-          className="group flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center sm:justify-start gap-2.5 rounded-sm border border-white/[0.14] bg-[#0c1015] px-4 py-2 text-xs font-semibold text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
+          className="group flex w-full sm:w-auto min-h-[44px] sm:min-h-0 items-center justify-center sm:justify-start gap-2.5 rounded-sm border border-white/[0.14] bg-ink px-4 py-2 text-xs font-semibold text-slate-mid transition hover:border-lime hover:bg-lime/[0.05] hover:text-white shadow-sm"
         >
-          <span className="font-mono text-sm transition-transform duration-200 group-hover:-translate-x-1 text-[#d4ff3f]">
+          <span className="font-mono text-sm transition-transform duration-200 group-hover:-translate-x-1 text-lime">
             ←
           </span>
           <span className="font-mono uppercase tracking-wider text-[11px]">
@@ -78,22 +78,22 @@ export function ResultsView({
 
         {/* Center: Target Instrument & Venue context */}
         <div className="flex flex-wrap items-center justify-between sm:justify-start gap-2 sm:gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-2 rounded-sm border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-xs text-[#a0b0bf] max-w-full">
+          <div className="flex items-center gap-2 rounded-sm border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-xs text-slate-text max-w-full">
             <span className="font-bold text-white shrink-0">{meta?.native ?? symbol}</span>
-            <span className="text-[#556472]">·</span>
+            <span className="text-slate">·</span>
             <span className="truncate max-w-[120px] sm:max-w-[180px]">{meta?.name ?? "Asset"}</span>
-            <span className="text-[#556472]">·</span>
+            <span className="text-slate">·</span>
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0 ${
               bitgetTapeAvailable
-                ? "bg-[#d4ff3f]/10 text-[#d4ff3f]"
-                : "bg-[#f59e0b]/10 text-[#f59e0b]"
+                ? "bg-lime/10 text-lime"
+                : "bg-amber/10 text-amber"
             }`}>
               {bitgetTapeAvailable ? "Bitget 24/7 Tape" : "Bitget Tape Partial"}
             </span>
           </div>
 
-          <div className="flex items-center gap-2 rounded-sm border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-xs text-[#a0b0bf]">
-            <span className="text-[#718190]">Regime:</span>
+          <div className="flex items-center gap-2 rounded-sm border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 font-mono text-xs text-slate-text">
+            <span className="text-slate-line">Regime:</span>
             <span className="font-semibold text-white">{meta?.regime ?? briefing.regime ?? "Normal"}</span>
           </div>
         </div>
@@ -106,10 +106,10 @@ export function ResultsView({
               document.getElementById("decision-record")?.scrollIntoView({ behavior: "smooth", block: "start" })
             }
             data-tour="tour-journal-jump"
-            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-sm border border-white/[0.14] bg-[#0c1015] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#c8d4df] transition hover:border-[#d4ff3f] hover:bg-[#d4ff3f]/[0.05] hover:text-white shadow-sm"
+            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-1.5 rounded-sm border border-white/[0.14] bg-ink px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-mid transition hover:border-lime hover:bg-lime/[0.05] hover:text-white shadow-sm"
             title="Jump to the Trader Decision Record at the end of the memo"
           >
-            <span className="text-[#d4ff3f] transition-transform duration-200 group-hover:translate-y-0.5">↓</span>
+            <span className="text-lime transition-transform duration-200 group-hover:translate-y-0.5">↓</span>
             <span>Journal</span>
           </button>
 
@@ -119,7 +119,7 @@ export function ResultsView({
             type="button"
             onClick={() => handleDownload("executive")}
             disabled={downloadMode !== null}
-            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2 rounded-sm border border-[#d4ff3f]/60 bg-[#d4ff3f]/[0.10] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#d4ff3f] transition hover:bg-[#d4ff3f] hover:text-[#080b0e] hover:shadow-[0_0_15px_rgba(212,255,63,0.3)] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2 rounded-sm border border-lime/60 bg-lime/[0.10] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-lime transition hover:bg-lime hover:text-blot hover:shadow-[0_0_15px_rgba(212,255,63,0.3)] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             title="Download concise 4-slide Executive Briefing (.pptx) with key takeaways and plan considerations"
           >
             {downloadMode === "executive" ? (
@@ -146,7 +146,7 @@ export function ResultsView({
             type="button"
             onClick={() => handleDownload("full")}
             disabled={downloadMode !== null}
-            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2 rounded-sm border border-white/[0.18] bg-[#0c1015] px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-[#c8d4df] transition hover:border-[#d4ff3f] hover:text-[#d4ff3f] disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
+            className="group flex min-h-[40px] sm:min-h-0 flex-1 sm:flex-none items-center justify-center gap-2 rounded-sm border border-white/[0.18] bg-ink px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-wider text-slate-mid transition hover:border-lime hover:text-lime disabled:cursor-not-allowed disabled:opacity-50 shadow-sm"
             title="Download complete institutional Quantitative Dossier (.pptx) with all trajectory charts and deep telemetry"
           >
             {downloadMode === "full" ? (
@@ -177,13 +177,13 @@ export function ResultsView({
       </div>
 
 
-      <div data-tour="tour-reweight" className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-[#0c1016]/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
+      <div data-tour="tour-reweight" className="mb-6 sm:mb-8 rounded-sm border border-white/[0.08] bg-ink/85 p-3.5 sm:p-4 shadow-sm backdrop-blur-md">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
           <div>
-            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9eb0bf]">
+            <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-text">
               ✦ Adaptive Perspective Re-weighting
             </div>
-            <div className="text-xs text-[#718191] mt-0.5">
+            <div className="text-xs text-slate-line mt-0.5">
               Switching your operational style recalibrates the analytical lens, analog horizons, and invalidation rules instantly.
             </div>
           </div>
@@ -198,12 +198,12 @@ export function ResultsView({
                   onClick={() => onStyleChange(st)}
                   className={`flex min-h-[40px] sm:min-h-0 items-center justify-center rounded-sm border px-3 py-2 sm:px-3.5 sm:py-1.5 font-mono text-xs font-medium transition ${
                     isSelected
-                      ? "border-[#d4ff3f] bg-[#d4ff3f]/10 text-white shadow-[0_0_14px_rgba(212,255,63,0.18)] font-semibold"
-                      : "border-white/[0.08] bg-[#080b0f] text-[#8e9da9] hover:border-white/20 hover:text-white"
+                      ? "border-lime bg-lime/10 text-white shadow-[0_0_14px_rgba(212,255,63,0.18)] font-semibold"
+                      : "border-white/[0.08] bg-blot text-slate-text hover:border-white/20 hover:text-white"
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className={isSelected ? "text-[#d4ff3f]" : "text-[#556472]"}>
+                    <span className={isSelected ? "text-lime" : "text-slate"}>
                       {isSelected ? "●" : "○"}
                     </span>
                     <span>{STYLES[st].label}</span>
@@ -231,13 +231,13 @@ export function ResultsView({
         <button
           type="button"
           onClick={onBackToIntake}
-          className="group flex min-h-[44px] sm:min-h-0 items-center gap-2 font-mono text-xs uppercase tracking-wider text-[#d4ff3f] transition hover:text-white"
+          className="group flex min-h-[44px] sm:min-h-0 items-center gap-2 font-mono text-xs uppercase tracking-wider text-lime transition hover:text-white"
         >
           <span className="transition-transform group-hover:-translate-x-1">←</span>
           <span>Formulate Another Research Question</span>
         </button>
 
-        <div className="text-left sm:text-right text-[11px] text-[#637382]">
+        <div className="text-left sm:text-right text-[11px] text-slate-line">
           Precedent Quantitative Desk · Factual evidence streams & non-directional historical distributions
         </div>
       </div>

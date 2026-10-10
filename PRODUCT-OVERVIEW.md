@@ -140,7 +140,7 @@ Precedent acts as a **Clerk of Evidence**, not a trade advisor, coach, or signal
 After one quick pass over a Precedent memo, the reader must know:
 
 1. **The setup in one sentence**: Target horizon, underlying asset, and venue basis (e.g. 24/7 Bitget pricing vs. NY cash close).
-2. **What the tape is doing now vs cash hours**: Venue basis gap, depth, session liquidity, and key structural levels.
+2. **What the tape is doing now vs cash hours**: Venue basis gap and key structural levels always; measured spread, top-10 book depth and round-trip cost in bps when the live order book responds, and an explicit `unavailable` when it does not.
 3. **What history rhymes with — and where the rhyme breaks**: Historical analog sample size ($n$), follow-through frequency, quantile dispersion ($p_{10}$ to $p_{90}$), and regime clashes.
 4. **What social and fundamentals add or contradict**: Corroboration or friction from SEC filings, earnings disclosures, and headline sentiment.
 5. **What can go wrong next week (Pre-Mortem)**: Catalyst drift, unexpected filings, macro volatility, liquidity vacuums, and predetermined invalidation boundaries.

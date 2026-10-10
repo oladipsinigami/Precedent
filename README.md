@@ -19,10 +19,11 @@ The five things worth opening first, in order of how much they prove:
 | Proof Point | What it demonstrates | Location |
 |---|---|---|
 | **The math is bounded & lookahead-free** | **10-year analog distributions** — sample size $n$, empirical follow-through frequencies, and $p_{10}$ to $p_{90}$ quantile dispersion. Non-predictive; every statistic is computed deterministically in TypeScript, never estimated by the LLM. | [`lib/pillars/analogs.ts`](lib/pillars/analogs.ts) · [`lib/indicators.ts`](lib/indicators.ts) |
-| **Real-time 24/7 tape vs cash close cross-check** | **Live venue basis engine** — cross-examines continuous Bitget 24/7 rToken pricing against the 4:00 PM New York equity close, quantifying overnight basis spread, book depth, and session liquidity gap risk. | [`lib/pillars/technicals.ts`](lib/pillars/technicals.ts) · [`lib/providers/bitget.ts`](lib/providers/bitget.ts) |
+| **It prices your actual round trip and solves for size** | **Live Bitget order-book cost + sizing engine** — walks the real order book at your size for fee and slippage in bps, reads earnings/FOMC/weekend events inside your hold, and solves the largest size that fits a stated loss limit by bisection over the convex cost curve. Emits `unavailable`, never a guess, when a stream fails. | [`lib/risk/costs.ts`](lib/risk/costs.ts) · [`lib/risk/sizing.ts`](lib/risk/sizing.ts) · [`lib/providers/bitget-book.ts`](lib/providers/bitget-book.ts) |
+| **Its ranges are graded out of sample** | **Coverage journal** — every daily 4-in-5 range is locked *before* the session, appended, and graded the next close by a scheduled workflow. The boundary is fitted on the earlier portion of history and graded on the later portion, so the containment figure is not a tautology on one window. | [`lib/risk/coverage.ts`](lib/risk/coverage.ts) · [`scripts/coverage-journal.ts`](scripts/coverage-journal.ts) · [`data/coverage-journal.json`](data/coverage-journal.json) |
 | **It checks its own work & enforces compliance** | **Active Language Guard** — 21 automated compliance rules that actively sanitize directional hype, influencer slang (`rip`, `moon`, `guaranteed profit`), and patronizing coaching into cold empirical facts. Discloses all unverified streams as transparent caveats. | [`lib/language-guard.ts`](lib/language-guard.ts) · [`scripts/test-language-guard.ts`](scripts/test-language-guard.ts) |
-| **We went past the happy path** | **Market Structure & Provider Audits** — evaluated and purged the dead 23s `bitget-signal` feed in favor of official `bitget-mcp-server`; solved single-linkage clustering collapse (which chained 490 of 494 assets into one cluster) by implementing average-linkage RMT correlation communities (103 clean clusters). | [Engineering Audits](#engineering-audits) · [`lib/rmt.ts`](lib/rmt.ts) |
-| **It is not a demo shell** | **98 automated checks across 11 test suites** — language guard, guard concurrency isolation, prompt safety, RMT math, security, headline blending, provider health, universe resolution, live LLM free-catalog rotation, demo fast-path matching, and memo prose integrity. Full type check passes and `next build` completes with zero warnings and zero errors. | [Test Suite](#testing--verification) · `npm test` |
+| **We went past the happy path** | **Market Structure & Provider Audits** — evaluated and purged the dead 23s `bitget-signal` feed in favor of official `bitget-mcp-server`; solved single-linkage clustering collapse (which chained 490 of 494 assets into one cluster) by implementing average-linkage RMT correlation communities. Cluster count is read from the committed snapshot, not hardcoded. | [Engineering Audits](#engineering-audits) · [`lib/rmt.ts`](lib/rmt.ts) |
+| **It is not a demo shell** | **199 automated checks across 14 test suites** — language guard, guard concurrency isolation, prompt safety, RMT math, security, headline blending, provider health, universe resolution, live LLM free-catalog rotation, demo fast-path matching, memo prose integrity, risk/cost/sizing maths, and a published trade-intent parser table. Full type check passes and `next build` completes. | [Test Suite](#testing--verification) · `npm test` |
 
 ---
 
@@ -62,7 +63,7 @@ Precedent operates as a **Clerk of Evidence**—calm, sourced, and slightly cold
 After one pass over a Precedent memo, the reader immediately knows:
 
 1. **The setup in one sentence**: Target horizon, underlying asset, and venue basis (e.g., 24/7 Bitget pricing vs. NY cash close).
-2. **What the tape is doing now vs cash hours**: Venue basis gap, depth, session liquidity, and key structural levels.
+2. **What the tape is doing now vs cash hours**: Venue basis gap and key structural levels always; measured spread, top-10 book depth and round-trip cost in bps when the live order book responds, and an explicit `unavailable` when it does not.
 3. **What history rhymes with — and where the rhyme breaks**: Historical analog sample size ($n$), follow-through frequency, quantile dispersion ($p_{10}$ to $p_{90}$), and regime clashes.
 4. **What social and fundamentals add or contradict**: Corroboration or friction across SEC filings, earnings disclosures, and headline sentiment.
 5. **What can go wrong next week (Pre-Mortem)**: Catalyst drift, unexpected filings, macro volatility, liquidity vacuums, and predetermined invalidation boundaries.
@@ -113,7 +114,7 @@ ok - 9 demo-fast-path checks passed
 ok - 8 memo-prose checks passed
 ok - 9 language-guard-concurrency checks passed
 
-98 automated checks passed (100% pass rate).
+199 automated checks passed (100% pass rate).
 ```
 
 ### Live Research Synthesis Trace
@@ -146,7 +147,8 @@ Research pipeline (lib/pipeline.ts)
   ├── Witness 2: Historical Analogs     (Chart Library state packet + 10-yr forward distributions)
   ├── Witness 3: News & Social          (Alpha Vantage + You.com + Yahoo / Google News RSS + X discourse)
   ├── Witness 4: Corporate Fundamentals (SEC EDGAR submissions, XBRL companyconcept, 8-K Atom)
-  └── Market-Structure Telemetry        (Scheduled Marcenko-Pastur RMT precompute snapshot)
+  ├── Market-Structure Telemetry        (Scheduled Marcenko-Pastur RMT precompute snapshot)
+  └── Risk Sizing                        (Live order-book cost + earnings/FOMC/weekend calendar + size solve)
   ▼
 Synthesis layer (lib/synthesis.ts)
   LLM Waterfall: Experiential Qwen 3.8-27B → Bitget Qwen → OpenRouter → TokenHarbor / OpenAI → xAI Grok
@@ -170,6 +172,8 @@ Unified Institutional Desk Note + Private Human Decision Record (localStorage)
 | `lib/reweight.ts` | Dynamic trading style switching (Day, Swing, Event, Position) |
 | `lib/rmt.ts` | Random Matrix Theory, Marcenko-Pastur boundaries, correlation clustering |
 | `lib/pillars/` | Modular witness fetchers: tape, analogs, fundamentals, sentiment, market structure |
+| `lib/risk/` | Live cost model, event calendar, position-sizing solver, trade-intent parser, coverage journal |
+| `lib/providers/bitget-book.ts` | Bitget spot and USDT-M order book, parsed and cached |
 | `lib/providers/` | Official Bitget MCP client, SEC EDGAR, Yahoo Finance, Alpha Vantage, You.com |
 
 ---
@@ -222,7 +226,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 npm test
 ```
 
-Runs all 50+ unit and integration checks across language guard, prompt safety, math, RMT, and security.
+Runs 199 unit and integration checks across 14 suites, including the risk/cost/sizing maths and a published trade-intent parser table.
 
 ---
 
@@ -236,7 +240,7 @@ Two Bitget data integration paths were evaluated during development:
 ### 2. Random Matrix Theory: Solving the Clustering Collapse
 Market structure is calculated over the top 500 liquid rToken underlyings:
 - **The Failure Mode**: A naive single-linkage clustering implementation caused 490 of 494 assets to collapse into one monolithic "community" due to chaining across index ETF constituents.
-- **The Solution**: Switched to **average-linkage clustering of market-mode-removed (residual) correlations** (`min_avg_corr = 0.30`). This produces 103 clean, economically coherent clusters (with the largest cluster holding only ~17% of the universe), cleanly isolating banking, semiconductor, energy, and defense cohorts.
+- **The Solution**: Switched to **average-linkage clustering of market-mode-removed (residual) correlations** (`min_avg_corr = 0.30`). The committed snapshot in `data/market-structure.json` reports **87** communities over 494 assets, with the largest holding 84 members (17.0% of the universe), cleanly isolating banking, semiconductor, energy, and defense cohorts. Read the figure from the snapshot; it changes as the universe and the window change.
 - **Precompute Pipeline**: Daily precomputation is executed via [`.github/workflows/precompute-market-structure.yml`](.github/workflows/precompute-market-structure.yml) at 05:15 UTC and committed to `data/market-structure.json`. Stale snapshots (>36 hours) are flagged transparently.
 
 ### 3. Active Compliance: The Language Guard
@@ -259,6 +263,8 @@ Precedent enforces strict quality gates before any code merges:
 | **Headline Blending** | `scripts/test-news-blend.ts` | Balanced multi-provider blending, fingerprint deduplication, and domain normalization. |
 | **Provider Resilience** | `scripts/test-news-providers.ts` | Graceful degradation and fallback handling across upstream news APIs. |
 | **Universe Resolution** | `scripts/test-universe-resolution.ts` | Explicit combobox selection precedence over question mentions, case-insensitivity, and fallback behavior. |
+| **Risk, Cost & Sizing** | `scripts/test-risk.ts` | 42 checks: order-book walk direction and level consumption, depth exhaustion, fee and slippage reconciliation, bps derived from dollars, cost-free vs cost-loaded sizing, the fitted size respecting its limit, and `unavailable` on missing streams. |
+| **Trade Intent Parsing** | `scripts/test-trade-intent.ts` | 58 checks over 14 trader sentences: asset, side, size, hold and loss limit, percent-limit conversion, rules-before-Claude precedence, and the miss table. |
 
 Run tests:
 ```bash

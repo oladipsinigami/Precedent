@@ -1,6 +1,10 @@
 export type TradingStyle = "day" | "swing" | "event" | "position";
 
-export type PillarId = "fundamentals" | "technicals" | "news" | "analogs" | "marketStructure";
+import type { RiskPillar } from "./risk/risk-pillar";
+
+export type { RiskPillar };
+
+export type PillarId = "fundamentals" | "technicals" | "news" | "analogs" | "marketStructure" | "risk";
 
 // Neutral structural labels only: they describe the shape of the tape
 // (trend direction, systemic-risk intensity), never a call on what happens next.
@@ -223,6 +227,7 @@ export type PillarBundle = {
   news: NewsPillar;
   analogs: AnalogsPillar;
   marketStructure: MarketStructurePillar;
+  risk: RiskPillar;
 };
 
 export type MarketStructurePillar = {

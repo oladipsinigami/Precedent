@@ -393,6 +393,28 @@ async function main() {
   };
 
   await mkdir(path.dirname(OUT_PATH), { recursive: true });
+
+  // A precompute that silently falls back to the built-in universe is worse than
+  // one that fails. Live rToken discovery is what makes this a map of the real
+  // Bitget marketplace; when it is unreachable the run produces a handful of
+  // clusters that look authoritative and quietly replace good data. Refuse the
+  // write unless the caller explicitly opted into a small universe.
+  const forcedSmall = process.env.MARKET_STRUCTURE_ALLOW_SMALL_UNIVERSE === "1";
+  let existingUniverse = 0;
+  try {
+    const existing = JSON.parse(await readFile(OUT_PATH, "utf8")) as { universeSize?: number };
+    existingUniverse = Number(existing.universeSize ?? 0);
+  } catch {
+    existingUniverse = 0;
+  }
+  if (!forcedSmall && kept.length < 50 && existingUniverse > kept.length * 2) {
+    throw new Error(
+      `refusing to write: discovered ${kept.length} assets but the committed snapshot covers ${existingUniverse}. ` +
+        `Live rToken discovery probably failed. Re-run when Bitget is reachable, or set ` +
+        `MARKET_STRUCTURE_ALLOW_SMALL_UNIVERSE=1 to accept the smaller universe deliberately.`,
+    );
+  }
+
   await writeFile(OUT_PATH, JSON.stringify(payload, null, 2));
 
   // Judge-checkable validation number, also reported per §18 of the v2 spec.
