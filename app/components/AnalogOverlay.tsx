@@ -1,6 +1,7 @@
 "use client";
 
-import { animate, createDrawable, stagger, utils } from "animejs";
+import { useState } from "react";
+import { animate, createDrawable, onScroll, stagger, utils } from "animejs";
 import { MOTION_EASE } from "@/lib/motion/tokens";
 import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import type { OverlaySeries } from "@/lib/types";
@@ -32,45 +33,66 @@ export function AnalogOverlay({
   animateResult = false,
   skipAnimation = false,
 }: AnalogOverlayProps) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [replayCount, setReplayCount] = useState(0);
+
   const { rootRef } = useAnimeScope<HTMLDivElement>(
     ({ root }) => {
-      if (!animateResult || skipAnimation) return;
+      if ((!animateResult && replayCount === 0) || skipAnimation) return;
 
       const analogPaths = root.querySelectorAll<SVGGeometryElement>("[data-anim='analog-path']");
       const currentPath = root.querySelectorAll<SVGGeometryElement>("[data-anim='current-path']");
       const currentDot = root.querySelector<SVGGElement>("[data-anim='current-dot']");
 
-      if (analogPaths.length > 0) {
-        const drawableAnalogs = createDrawable(analogPaths, 0, 0);
-        animate(drawableAnalogs, {
-          draw: "0 1",
-          duration: 380,
-          delay: stagger(45, { start: 120 }),
-          ease: MOTION_EASE.expo,
-        });
+      let hasPlayed = false;
+      const playTrajectoryDraw = () => {
+        if (hasPlayed) return;
+        hasPlayed = true;
+
+        if (analogPaths.length > 0) {
+          const drawableAnalogs = createDrawable(analogPaths, 0, 0);
+          animate(drawableAnalogs, {
+            draw: "0 1",
+            duration: 400,
+            delay: stagger(45, { start: 80 }),
+            ease: MOTION_EASE.expo,
+          });
+        }
+
+        if (currentPath.length > 0) {
+          const drawableCurrent = createDrawable(currentPath, 0, 0);
+          animate(drawableCurrent, {
+            draw: "0 1",
+            duration: 420,
+            delay: 180,
+            ease: MOTION_EASE.expo,
+          });
+        }
+
+        if (currentDot) {
+          utils.set(currentDot, { opacity: 0 });
+          animate(currentDot, {
+            opacity: [0, 1],
+            duration: 220,
+            delay: 480,
+            ease: MOTION_EASE.default,
+          });
+        }
+      };
+
+      if (replayCount > 0) {
+        playTrajectoryDraw();
+        return;
       }
 
-      if (currentPath.length > 0) {
-        const drawableCurrent = createDrawable(currentPath, 0, 0);
-        animate(drawableCurrent, {
-          draw: "0 1",
-          duration: 400,
-          delay: 240,
-          ease: MOTION_EASE.expo,
-        });
-      }
-
-      if (currentDot) {
-        utils.set(currentDot, { opacity: 0 });
-        animate(currentDot, {
-          opacity: [0, 1],
-          duration: 220,
-          delay: 540,
-          ease: MOTION_EASE.default,
-        });
-      }
+      onScroll({
+        target: root,
+        onEnterForward: () => {
+          playTrajectoryDraw();
+        },
+      });
     },
-    [runId],
+    [runId, replayCount, skipAnimation],
   );
 
   const width = 800;
@@ -97,7 +119,7 @@ export function AnalogOverlay({
   );
   const rawMin = Math.min(...values);
   const rawMax = Math.max(...values);
-  // Add slight 5% padding around min/max
+  // Add slight 8% padding around min/max
   const padding = (rawMax - rawMin) * 0.08 || 2;
   const min = rawMin - padding;
   const max = rawMax + padding;
@@ -109,6 +131,7 @@ export function AnalogOverlay({
   // Separate current series and analog series
   const currentSeries = series.find((s) => s.kind === "current");
   const analogSeries = series.filter((s) => s.kind !== "current");
+  const maxPoints = Math.max(...series.map((s) => s.points.length), 1);
 
   // Find last point of current series for pulse dot
   let currentLastPoint: { x: number; y: number; val: number } | null = null;
@@ -124,6 +147,30 @@ export function AnalogOverlay({
     }
   }
 
+  const activeStepIdx = hoverIdx !== null ? Math.min(maxPoints - 1, Math.max(0, hoverIdx)) : null;
+  const activeX =
+    activeStepIdx !== null
+      ? padLeft + (activeStepIdx / Math.max(1, maxPoints - 1)) * plotWidth
+      : null;
+  const activeRelDay =
+    activeStepIdx !== null
+      ? (currentSeries?.points[activeStepIdx]?.t ??
+        analogSeries[0]?.points[activeStepIdx]?.t ??
+        activeStepIdx - Math.floor(maxPoints / 2))
+      : null;
+  const activeCurrentVal =
+    activeStepIdx !== null ? (currentSeries?.points[activeStepIdx]?.value ?? null) : null;
+  const activeAnalogVals =
+    activeStepIdx !== null
+      ? analogSeries
+          .map((s) => s.points[activeStepIdx]?.value ?? null)
+          .filter((v): v is number => v !== null)
+      : [];
+  const activeAnalogMean =
+    activeAnalogVals.length > 0
+      ? activeAnalogVals.reduce((acc, v) => acc + v, 0) / activeAnalogVals.length
+      : null;
+
   return (
     <div ref={rootRef} className="mt-6 sm:mt-8 rounded-sm border border-shell/20 bg-paper p-4 sm:p-6 shadow-md">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-shell/10 pb-3">
@@ -136,7 +183,7 @@ export function AnalogOverlay({
           </div>
         </div>
 
-        {/* Chart Legend */}
+        {/* Chart Legend & Replay Trigger */}
         <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 font-mono text-[10px] uppercase text-mute-dim">
           <div className="flex items-center gap-1.5">
             <span className="h-1 w-4 rounded-full bg-moss" />
@@ -150,16 +197,62 @@ export function AnalogOverlay({
             <span className="h-px w-3 border-b border-dashed border-alert-alt" />
             <span className="text-alert-alt">100.0 Rebase</span>
           </div>
+          {!skipAnimation && (
+            <button
+              type="button"
+              onClick={() => setReplayCount((c) => c + 1)}
+              className="rounded border border-moss/30 bg-moss/10 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-moss-deep transition hover:bg-moss/20"
+            >
+              ↻ Redraw Paths
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Interactive Crosshair Telemetry Readout Strip */}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-shell/10 bg-paper-deep px-3 py-1.5 font-mono text-[10px]">
+        <div className="flex items-center gap-2 text-mute-dim">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-moss" />
+          <span className="uppercase tracking-wider">
+            {activeRelDay !== null
+              ? `Session Probe: T${activeRelDay >= 0 ? `+${activeRelDay}` : activeRelDay}`
+              : "Hover chart to inspect session-by-session rebased dispersion"}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span>
+            <span className="text-ink-faint">Current: </span>
+            <span className="font-bold text-moss-deep">
+              {activeCurrentVal !== null
+                ? activeCurrentVal.toFixed(2)
+                : currentLastPoint
+                  ? currentLastPoint.val.toFixed(2)
+                  : "—"}
+            </span>
+          </span>
+          <span>
+            <span className="text-ink-faint">Analog Mean: </span>
+            <span className="font-bold text-shell">
+              {activeAnalogMean !== null ? activeAnalogMean.toFixed(2) : "100.00 (T₀)"}
+            </span>
+          </span>
         </div>
       </div>
 
       {/* SVG Chart Container */}
-      <div className="relative mt-4 overflow-hidden rounded bg-paper-alt p-1 border border-shell/[0.08]">
+      <div className="relative mt-2.5 overflow-hidden rounded bg-paper-alt p-1 border border-shell/[0.08]">
         <svg
           viewBox={`0 0 ${width} ${height}`}
-          className="h-auto w-full select-none"
+          className="h-auto w-full select-none cursor-crosshair"
           role="img"
           aria-label="Normalized historical analog paths chart"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const relX = ((e.clientX - rect.left) / Math.max(1, rect.width)) * width;
+            const ratio = Math.min(1, Math.max(0, (relX - padLeft) / Math.max(1, plotWidth)));
+            setHoverIdx(Math.round(ratio * Math.max(0, maxPoints - 1)));
+          }}
+          onMouseLeave={() => setHoverIdx(null)}
         >
           {/* Horizontal Grid lines */}
           <line
@@ -326,6 +419,32 @@ export function AnalogOverlay({
                     {currentLastPoint.val.toFixed(1)}
                   </text>
                 </g>
+              )}
+            </g>
+          )}
+
+          {/* Interactive Session Crosshair */}
+          {activeX !== null && (
+            <g>
+              <line
+                x1={activeX}
+                y1={padTop}
+                x2={activeX}
+                y2={padTop + plotHeight}
+                stroke="var(--c-moss-deep)"
+                strokeWidth="1"
+                strokeDasharray="3 3"
+                strokeOpacity="0.65"
+              />
+              {activeCurrentVal !== null && (
+                <circle
+                  cx={activeX}
+                  cy={getY(activeCurrentVal)}
+                  r={4}
+                  fill="var(--c-moss-deep)"
+                  stroke="var(--c-paper)"
+                  strokeWidth="1.5"
+                />
               )}
             </g>
           )}

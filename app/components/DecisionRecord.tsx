@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { animate, createDrawable, onScroll, stagger, utils } from "animejs";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 
 interface DecisionRecordProps {
   decisionNote: string;
@@ -28,6 +31,58 @@ const GUIDED_PROMPTS = [
 
 export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionRecordProps) {
   const hasInitializedRef = useRef(false);
+  const skipFirstSaveAnimRef = useRef(true);
+
+  const { rootRef } = useAnimeScope<HTMLElement>(({ root }) => {
+    let hasPlayed = false;
+
+    const playEntrance = () => {
+      if (hasPlayed) return;
+      hasPlayed = true;
+
+      const badge = root.querySelector<HTMLElement>("[data-anim='decision-save-badge']");
+      const checkPath = root.querySelectorAll<SVGGeometryElement>("[data-anim='decision-check']");
+      const promptBtns = root.querySelectorAll<HTMLElement>("[data-anim='decision-prompt']");
+
+      if (badge) {
+        utils.set(badge, { opacity: 0, translateY: -4 });
+        animate(badge, {
+          opacity: [0, 1],
+          translateY: [-4, 0],
+          duration: 240,
+          ease: MOTION_EASE.default,
+        });
+      }
+
+      if (checkPath.length > 0) {
+        const drawable = createDrawable(checkPath, 0, 0);
+        animate(drawable, {
+          draw: "0 1",
+          duration: 300,
+          delay: 120,
+          ease: MOTION_EASE.expo,
+        });
+      }
+
+      if (promptBtns.length > 0) {
+        utils.set(promptBtns, { opacity: 0, translateY: 5 });
+        animate(promptBtns, {
+          opacity: [0, 1],
+          translateY: [5, 0],
+          duration: 220,
+          delay: stagger(35, { start: 80 }),
+          ease: MOTION_EASE.default,
+        });
+      }
+    };
+
+    onScroll({
+      target: root,
+      onEnterForward: () => {
+        playEntrance();
+      },
+    });
+  }, []);
 
   // Pre-fill the 3-4 practical reflection prompts if the note is empty upon initial view
   useEffect(() => {
@@ -38,6 +93,40 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
       }
     }
   }, [decisionNote, onDecisionNoteChange]);
+
+  // F2: Drawn check & subtle confirmation pulse when the trader updates the journal
+  useEffect(() => {
+    if (skipFirstSaveAnimRef.current) {
+      skipFirstSaveAnimRef.current = false;
+      return;
+    }
+    const root = rootRef.current;
+    if (!root) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const badge = root.querySelector<HTMLElement>("[data-anim='decision-save-badge']");
+    const checkPath = root.querySelectorAll<SVGGeometryElement>("[data-anim='decision-check']");
+
+    if (badge) {
+      animate(badge, {
+        scale: [0.97, 1],
+        opacity: [0.72, 1],
+        duration: 220,
+        ease: MOTION_EASE.default,
+      });
+    }
+
+    if (checkPath.length > 0) {
+      const drawable = createDrawable(checkPath, 0, 0);
+      animate(drawable, {
+        draw: "0 1",
+        duration: 280,
+        ease: MOTION_EASE.expo,
+      });
+    }
+  }, [decisionNote, rootRef]);
 
   function addPrompt(prompt: string) {
     const formatted = `Prompt: ${prompt}\n- `;
@@ -55,6 +144,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
 
   return (
     <section
+      ref={rootRef}
       id="decision-record"
       data-tour="tour-decision"
       className="relative scroll-mt-6 border-t-2 border-moss bg-paper-deep px-4 py-6 shadow-[0_-18px_44px_-24px_rgba(18,22,20,0.45)] sm:px-10 sm:py-10"
@@ -76,8 +166,25 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
           </p>
         </div>
 
-        <div className="flex items-center gap-2 rounded border border-shell/15 bg-white/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-moss-deep shadow-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-moss" />
+        <div
+          data-anim="decision-save-badge"
+          className="flex items-center gap-2 rounded border border-shell/15 bg-white/60 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-moss-deep shadow-xs"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 12 12"
+            className="h-3 w-3 shrink-0 text-moss"
+            fill="none"
+          >
+            <path
+              data-anim="decision-check"
+              d="M2 6.2 L4.8 9 L10 3"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
           <span>Non-Execution · Auto-saved Locally</span>
         </div>
       </div>
@@ -127,6 +234,7 @@ export function DecisionRecord({ decisionNote, onDecisionNoteChange }: DecisionR
               <button
                 key={prompt}
                 type="button"
+                data-anim="decision-prompt"
                 onClick={() => addPrompt(prompt)}
                 className="rounded border border-shell/12 bg-white/50 px-3 py-2 text-left text-xs leading-relaxed text-moss-deep transition hover:border-moss/45 hover:bg-white active:scale-[0.99]"
               >

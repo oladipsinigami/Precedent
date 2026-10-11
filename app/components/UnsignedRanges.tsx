@@ -1,6 +1,6 @@
 "use client";
 
-import { animate, utils } from "animejs";
+import { animate, onScroll, utils } from "animejs";
 import { animateCountUp } from "@/lib/motion/count-up";
 import { MOTION_EASE } from "@/lib/motion/tokens";
 import { useAnimeScope } from "@/lib/motion/use-anime-scope";
@@ -42,56 +42,69 @@ export function UnsignedRanges({
     ({ root }) => {
       if (!animateResult || skipAnimation) return;
 
-      ranges.forEach((item, idx) => {
-        const nNode = root.querySelector<HTMLElement>(`[data-range-n="${idx}"]`);
-        const p50Node = root.querySelector<HTMLElement>(`[data-range-p50="${idx}"]`);
-        const bandNode = root.querySelector<HTMLElement>(`[data-range-band="${idx}"]`);
-        const tickNode = root.querySelector<HTMLElement>(`[data-range-tick="${idx}"]`);
-        const isSmallSample = skipAnimation || item.n < 30;
+      let hasPlayed = false;
+      const playRangeTelemetry = () => {
+        if (hasPlayed) return;
+        hasPlayed = true;
 
-        animateCountUp(nNode, {
-          from: 0,
-          to: item.n,
-          decimals: 0,
-          prefix: "n = ",
-          suffix: " matches",
-          delay: 140 + idx * 45,
-          skipAnimation: isSmallSample,
-        });
+        ranges.forEach((item, idx) => {
+          const nNode = root.querySelector<HTMLElement>(`[data-range-n="${idx}"]`);
+          const p50Node = root.querySelector<HTMLElement>(`[data-range-p50="${idx}"]`);
+          const bandNode = root.querySelector<HTMLElement>(`[data-range-band="${idx}"]`);
+          const tickNode = root.querySelector<HTMLElement>(`[data-range-tick="${idx}"]`);
+          const isSmallSample = skipAnimation || item.n < 30;
 
-        animateCountUp(p50Node, {
-          from: 0,
-          to: item.p50,
-          decimals: 2,
-          prefix: item.p50 >= 0 ? "+" : "",
-          suffix: "%",
-          delay: 160 + idx * 45,
-          skipAnimation: isSmallSample,
-        });
-
-        if (!isSmallSample && bandNode) {
-          utils.set(bandNode, { scaleX: 0, transformOrigin: "center center" });
-          animate(bandNode, {
-            scaleX: [0, 1],
-            duration: 340,
-            delay: 150 + idx * 55,
-            ease: MOTION_EASE.expo,
+          animateCountUp(nNode, {
+            from: 0,
+            to: item.n,
+            decimals: 0,
+            prefix: "n = ",
+            suffix: " matches",
+            delay: 80 + idx * 50,
+            skipAnimation: isSmallSample,
           });
-        }
 
-        if (!isSmallSample && tickNode) {
-          utils.set(tickNode, { scaleY: 0, opacity: 0, transformOrigin: "center center" });
-          animate(tickNode, {
-            scaleY: [0, 1],
-            opacity: [0, 1],
-            duration: 240,
-            delay: 320 + idx * 55,
-            ease: MOTION_EASE.default,
+          animateCountUp(p50Node, {
+            from: 0,
+            to: item.p50,
+            decimals: 2,
+            prefix: item.p50 >= 0 ? "+" : "",
+            suffix: "%",
+            delay: 100 + idx * 50,
+            skipAnimation: isSmallSample,
           });
-        }
+
+          if (!isSmallSample && bandNode) {
+            utils.set(bandNode, { scaleX: 0, transformOrigin: "center center" });
+            animate(bandNode, {
+              scaleX: [0, 1],
+              duration: 360,
+              delay: 110 + idx * 55,
+              ease: MOTION_EASE.expo,
+            });
+          }
+
+          if (!isSmallSample && tickNode) {
+            utils.set(tickNode, { scaleY: 0, opacity: 0, transformOrigin: "center center" });
+            animate(tickNode, {
+              scaleY: [0, 1],
+              opacity: [0, 1],
+              duration: 240,
+              delay: 280 + idx * 55,
+              ease: MOTION_EASE.default,
+            });
+          }
+        });
+      };
+
+      onScroll({
+        target: root,
+        onEnterForward: () => {
+          playRangeTelemetry();
+        },
       });
     },
-    [runId],
+    [runId, skipAnimation],
   );
 
   if (!ranges.length) {

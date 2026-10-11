@@ -1,10 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { animate, createDrawable, stagger } from "animejs";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import type { RiskPillar } from "@/lib/risk/risk-pillar";
 
 interface LossPathChartProps {
   risk: RiskPillar;
+  runId?: number;
+  recalibrationKey?: number;
 }
 
 const WIDTH = 720;
@@ -24,9 +29,36 @@ function money(value: number): string {
   return `${sign}${Math.abs(Math.round(value)).toLocaleString("en-US")}`;
 }
 
-export function LossPathChart({ risk }: LossPathChartProps) {
+export function LossPathChart({ risk, runId = 0, recalibrationKey = 0 }: LossPathChartProps) {
   const points = risk.path;
   const [hover, setHover] = useState<number | null>(null);
+
+  const { rootRef } = useAnimeScope<HTMLDivElement>(
+    ({ root }) => {
+      const limitLine = root.querySelectorAll<SVGGeometryElement>("[data-anim='loss-limit-line']");
+      const segs = root.querySelectorAll<SVGGeometryElement>("[data-anim='loss-segment']");
+
+      if (limitLine.length > 0) {
+        const drawableLimit = createDrawable(limitLine, 0, 0);
+        animate(drawableLimit, {
+          draw: "0 1",
+          duration: 360,
+          ease: MOTION_EASE.expo,
+        });
+      }
+
+      if (segs.length > 0) {
+        const drawableSegs = createDrawable(segs, 0, 0);
+        animate(drawableSegs, {
+          draw: "0 1",
+          duration: 280,
+          delay: stagger(45, { start: 80 }),
+          ease: MOTION_EASE.expo,
+        });
+      }
+    },
+    [runId, recalibrationKey, points.length],
+  );
 
   const limit = risk.maxLossUsd;
   const geometry = useMemo(() => {
@@ -80,7 +112,7 @@ export function LossPathChart({ risk }: LossPathChartProps) {
   const yTicks = geometry ? Array.from({ length: 5 }, (_, i) => (geometry.yMax * i) / 4) : [];
 
   return (
-    <div className="space-y-2">
+    <div ref={rootRef} className="space-y-2">
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full"
@@ -118,6 +150,7 @@ export function LossPathChart({ risk }: LossPathChartProps) {
         {limit !== null && limitY !== null && (
           <g>
             <line
+              data-anim="loss-limit-line"
               x1={PAD.left}
               x2={WIDTH - PAD.right}
               y1={limitY}
@@ -139,6 +172,7 @@ export function LossPathChart({ risk }: LossPathChartProps) {
         {segments.map((segment) => (
           <line
             key={`${segment.from}-${segment.to}`}
+            data-anim="loss-segment"
             x1={x(segment.from)}
             y1={y(Math.abs(points[segment.from]?.cumulativeLossUsd ?? 0))}
             x2={x(segment.to)}

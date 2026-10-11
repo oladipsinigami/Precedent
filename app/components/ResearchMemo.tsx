@@ -1,11 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { animate, stagger, utils } from "animejs";
 import { animateCountUp, animateEmbeddedNumber, animateWentUpPhrase } from "@/lib/motion/count-up";
 import { MOTION_EASE } from "@/lib/motion/tokens";
 import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import { STYLES } from "@/lib/style-profiles";
 import { MemoSection } from "./MemoSection";
+import { MemoSchematic } from "./MemoSchematic";
 import { EvidenceSection } from "./EvidenceSection";
 import { buildStreamHealth } from "@/lib/stream-health";
 import { RiskSection } from "./RiskSection";
@@ -20,11 +22,13 @@ import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 interface ResearchMemoProps {
   briefing: Briefing;
   style: TradingStyle;
+  onStyleChange?: (style: TradingStyle) => void;
   pillarData: PillarBundle | null;
   decisionNote: string;
   onDecisionNoteChange: (value: string) => void;
   runId?: number;
   animateResult?: boolean;
+  recalibrationKey?: number;
 }
 
 function getUnverifiedCaveats(briefing: Briefing, pillarData: PillarBundle | null): string[] {
@@ -112,11 +116,13 @@ function getUnverifiedCaveats(briefing: Briefing, pillarData: PillarBundle | nul
 export function ResearchMemo({
   briefing,
   style,
+  onStyleChange,
   pillarData,
   decisionNote,
   onDecisionNoteChange,
   runId = 0,
   animateResult = false,
+  recalibrationKey = 0,
 }: ResearchMemoProps) {
   const scores = {
     sentiment: sentimentScore(pillarData?.news),
@@ -243,6 +249,38 @@ export function ResearchMemo({
     [runId],
   );
 
+  // Recalibrate header & bullets when the trader switches style on the Results page
+  useEffect(() => {
+    if (recalibrationKey === 0) return;
+    const root = rootRef.current;
+    if (!root) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const targets = root.querySelectorAll<HTMLElement>("[data-anim='recalibrate-target']");
+    if (targets.length > 0) {
+      animate(targets, {
+        opacity: [0.35, 1],
+        translateY: [4, 0],
+        duration: 240,
+        delay: stagger(30),
+        ease: MOTION_EASE.default,
+      });
+    }
+
+    const bullets = root.querySelectorAll<HTMLElement>("[data-anim='memo-bullet']");
+    if (bullets.length > 0) {
+      animate(bullets, {
+        opacity: [0.4, 1],
+        translateY: [3, 0],
+        duration: 210,
+        delay: stagger(25, { start: 40 }),
+        ease: MOTION_EASE.default,
+      });
+    }
+  }, [recalibrationKey, rootRef]);
+
   const validExamples = (briefing.historicalStressTest.examples ?? [])
     .filter(
       (example) =>
@@ -306,18 +344,27 @@ export function ResearchMemo({
               </span>
             </div>
 
-            <h2 className="mt-3 sm:mt-4 font-display text-2xl font-medium leading-[1.16] tracking-[-0.03em] text-shell sm:text-4xl md:text-5xl">
+            <h2
+              data-anim="recalibrate-target"
+              className="mt-3 sm:mt-4 font-display text-2xl font-medium leading-[1.16] tracking-[-0.03em] text-shell sm:text-4xl md:text-5xl"
+            >
               {briefing.title}
             </h2>
 
             {briefing.styleNote && (
-              <p className="mt-2.5 sm:mt-3.5 text-xs leading-relaxed text-mute-faint font-medium max-w-2xl">
+              <p
+                data-anim="recalibrate-target"
+                className="mt-2.5 sm:mt-3.5 text-xs leading-relaxed text-mute-faint font-medium max-w-2xl"
+              >
                 {briefing.styleNote}
               </p>
             )}
           </div>
 
-          <div className="w-full sm:w-auto sm:min-w-[200px] rounded border border-shell/12 bg-paper p-3.5 sm:p-4 text-left sm:text-right shadow-sm shrink-0">
+          <div
+            data-anim="recalibrate-target"
+            className="w-full sm:w-auto sm:min-w-[200px] rounded border border-shell/12 bg-paper p-3.5 sm:p-4 text-left sm:text-right shadow-sm shrink-0"
+          >
             <div className="flex items-center justify-between sm:block">
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
@@ -352,17 +399,33 @@ export function ResearchMemo({
             )}
           </div>
         </div>
+
+        {/* Technical Blueprint Callout Schematic & Horizon Scrubber Ruler */}
+        <MemoSchematic
+          style={style}
+          pillarData={pillarData}
+          sampleSize={sampleSize}
+          basisSpread={basisSpread}
+          runId={runId}
+          recalibrationKey={recalibrationKey}
+          onSelectStyle={onStyleChange}
+        />
       </header>
 
       {/* The fit verdict is the first thing after the header: the one number the
           tool exists to produce, at the top of the first screen. (D1 step 2: Tape & Cost Fit) */}
       {pillarData?.risk && (
         <section
-          data-anim={pillarData.risk.verdict !== "UNAVAILABLE" && pillarData.risk.unverified.length === 0 ? "memo-section" : undefined}
+          data-anim={pillarData.risk.verdict !== "UNAVAILABLE" ? "memo-section" : undefined}
           className="border-b-2 border-lime/35 bg-paper px-4 py-6 sm:px-10 sm:py-8"
           data-tour="tour-risk-verdict"
         >
-          <RiskSection risk={pillarData.risk} runId={runId} animateResult={animateResult} />
+          <RiskSection
+            risk={pillarData.risk}
+            runId={runId}
+            animateResult={animateResult}
+            recalibrationKey={recalibrationKey}
+          />
         </section>
       )}
 
@@ -608,7 +671,7 @@ export function ResearchMemo({
       </section>
 
       {/* COLLAPSIBLE MIDDLE: Empirical Evidence & Cross-Pillar Signals */}
-      <details data-anim="memo-section" className="border-b border-shell/15 bg-paper-alt">
+      <details open data-anim="memo-section" className="border-b border-shell/15 bg-paper-alt">
         <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss-deep sm:px-10">
           <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-moss" viewBox="0 0 10 10" fill="currentColor">
             <path d="M5 0L10 5L5 10L0 5Z" />

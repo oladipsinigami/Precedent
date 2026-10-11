@@ -40,6 +40,7 @@ export function ResultsView({
   animateResult = false,
 }: ResultsViewProps) {
   const [downloadMode, setDownloadMode] = useState<"executive" | "full" | null>(null);
+  const [recalibrationKey, setRecalibrationKey] = useState(0);
   const bitgetTapeAvailable = Boolean(pillarData?.technicals?.rToken);
 
   const { rootRef } = useAnimeScope<HTMLDivElement>(
@@ -62,6 +63,23 @@ export function ResultsView({
     },
     [runId],
   );
+
+  function handleSelectStyle(nextStyle: TradingStyle) {
+    if (nextStyle === style) return;
+    setRecalibrationKey((prev) => prev + 1);
+    onStyleChange(nextStyle);
+    const root = rootRef.current;
+    if (root && typeof window !== "undefined" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const btn = root.querySelector<HTMLElement>(`[data-reweight-style="${nextStyle}"]`);
+      if (btn) {
+        animate(btn, {
+          scale: [0.97, 1.03, 1],
+          duration: 240,
+          ease: MOTION_EASE.default,
+        });
+      }
+    }
+  }
 
   async function handleDownload(mode: "executive" | "full") {
     if (downloadMode) return;
@@ -252,7 +270,8 @@ export function ResultsView({
                 <button
                   key={st}
                   type="button"
-                  onClick={() => onStyleChange(st)}
+                  data-reweight-style={st}
+                  onClick={() => handleSelectStyle(st)}
                   className={`flex min-h-[40px] sm:min-h-0 items-center justify-center rounded-sm border px-3 py-2 sm:px-3.5 sm:py-1.5 font-mono text-xs font-medium transition ${
                     isSelected
                       ? "border-lime bg-lime/10 text-white shadow-[0_0_14px_rgba(212,255,63,0.18)] font-semibold"
@@ -277,11 +296,13 @@ export function ResultsView({
       <ResearchMemo
         briefing={briefing}
         style={style}
+        onStyleChange={handleSelectStyle}
         pillarData={pillarData}
         decisionNote={decisionNote}
         onDecisionNoteChange={onDecisionNoteChange}
         runId={runId}
         animateResult={animateResult}
+        recalibrationKey={recalibrationKey}
       />
       </div>
 
