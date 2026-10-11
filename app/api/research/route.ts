@@ -3,6 +3,7 @@ import { runResearch } from "@/lib/pipeline";
 import { DEMO_TASK, normalizeQuestion } from "@/lib/style-profiles";
 import type { ResearchEvent, TradingStyle } from "@/lib/types";
 import { findName, findNameBySymbol, findNameOrDefault } from "@/lib/universe";
+import { emptyRiskPillar } from "@/lib/risk/risk-pillar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -237,6 +238,7 @@ export async function POST(req: Request) {
               news: { ok: false, headlines: [], macro: [], social: { x: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
               analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
               marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
+              risk: emptyRiskPillar("Risk sizing did not complete in this run.", fallbackName.native, fallbackName.rToken),
             };
             const fallbackBriefing = deterministicBriefing({
               style,

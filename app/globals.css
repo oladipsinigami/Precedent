@@ -9,12 +9,67 @@
   --font-display: "Newsreader", "Instrument Serif", Georgia, Cambria, "Times New Roman", Times, serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Surfaces. The product is a dark desk with paper cards laid on it. */
+  --c-blot: #080b0e;
+  --c-ink: #0c1015;
+  --c-shell: #141918;
+
+  /* Paper cards. */
+  --c-paper: #fcf9f2;
+  --c-paper-alt: #f5f0e6;
+  --c-paper-deep: #ece6dd;
+
+  /* Text on paper. */
+  --c-ink-strong: #1f2821;
+  --c-ink-body: #222b24;
+  --c-ink-mute: #4f5e51;
+  --c-ink-faint: #738375;
+
+  /* Text on dark. */
+  --c-mute: #859487;
+  --c-mute-dim: #637566;
+  --c-mute-faint: #556457;
+
+  /* Accent. */
+  --c-lime: #d4ff3f;
+  --c-lime-deep: #a3d924;
+  --c-lime-alt: #b2e612;
+  --c-lime-wash: #eef7d5;
+
+  /* Positive / holds / fits. */
+  --c-moss: #486326;
+  --c-moss-deep: #36521a;
+  --c-moss-alt: #3f5c48;
+
+  /* Negative / breaks. */
+  --c-warn: #8f3622;
+  --c-warn-deep: #7a3b3b;
+  --c-alert: #f07867;
+  --c-alert-alt: #a3442e;
+  --c-alert-deep: #b91c1c;
+  --c-alert-wash: #ffb1a6;
+
+  /* Caution. */
+  --c-amber: #f59e0b;
+  --c-amber-deep: #b45309;
+  --c-gold: #d8a75a;
+
+  /* Informational / divergence. */
+  --c-slate: #3d6075;
+  --c-slate-deep: #2f4d5f;
+  --c-sky: #75b8ff;
+  --c-slate-light: #e7ebef;
+  --c-slate-mid: #c8d4df;
+  --c-slate-text: #8e9fae;
+  --c-slate-pale: #c2cbd3;
+  --c-slate-line: #70808f;
 }
 
 html,
 body {
-  background-color: #06080b;
-  color: #e7ebef;
+  background-color: var(--c-blot);
+  color: var(--c-slate-light);
   min-height: 100%;
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
@@ -38,12 +93,12 @@ body {
 
 /* Institutional Cards */
 .deck-card {
-  background: #0d1117;
+  background: var(--c-ink);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .deck-card-elevated {
-  background: #11151d;
+  background: var(--c-shell);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 20px 48px -12px rgba(0, 0, 0, 0.7);
 }
@@ -54,14 +109,42 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #06080b;
+  background: var(--c-blot);
 }
 ::-webkit-scrollbar-thumb {
-  background: #252d38;
+  background: var(--c-slate-deep);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3c4858;
+  background: var(--c-slate);
+}
+
+/* Focus visibility is part of the interface, not an afterthought. */
+:focus-visible {
+  outline: 2px solid var(--c-lime);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-anim-cloak="true"] [data-anim] {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  [data-anim] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* Blackhole Accretion Disk & Gravitational Animations */

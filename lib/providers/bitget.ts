@@ -1,3 +1,5 @@
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { fetchJson } from "../http";
 import type { NameCard } from "../universe";
 
@@ -84,6 +86,35 @@ export async function bitgetRwaContracts(): Promise<BitgetRwaContract[]> {
   return rwaInFlight;
 }
 
+const UNIVERSE_CACHE_PATH = path.join(process.cwd(), "data", ".cache", "rToken-universe.json");
+const UNIVERSE_CACHE_MAX_AGE_MS = 24 * 60 * 60_000;
+
+type UniverseCache = { fetchedAt: string; markets: BitgetRTokenMarket[] };
+
+async function readUniverseCache(): Promise<UniverseCache | null> {
+  try {
+    const parsed = JSON.parse(await readFile(UNIVERSE_CACHE_PATH, "utf8")) as UniverseCache;
+    if (!Array.isArray(parsed.markets) || !parsed.fetchedAt) return null;
+    if (Date.now() - Date.parse(parsed.fetchedAt) > UNIVERSE_CACHE_MAX_AGE_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeUniverseCache(markets: BitgetRTokenMarket[]): Promise<void> {
+  try {
+    await mkdir(path.dirname(UNIVERSE_CACHE_PATH), { recursive: true });
+    await writeFile(
+      UNIVERSE_CACHE_PATH,
+      JSON.stringify({ fetchedAt: new Date().toISOString(), markets }, null, 0),
+      "utf8",
+    );
+  } catch {
+    // A read-only deployment should still serve the live universe from memory.
+  }
+}
+
 async function fetchRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
   const response = await fetchJson<SpotSymbolsResponse>(
     "https://api.bitget.com/api/v2/spot/public/symbols",
@@ -93,15 +124,36 @@ async function fetchRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
     (market) => /^r[A-Za-z0-9]+$/.test(market.baseCoin) && market.status === "online",
   );
   rTokenCache = { markets, expires: Date.now() + 5 * 60_000 };
+  void writeUniverseCache(markets);
   return markets;
 }
 
-export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
-  if (rTokenCache && rTokenCache.expires > Date.now()) return rTokenCache.markets;
+export type RTokenMarketsResult = {
+  markets: BitgetRTokenMarket[];
+  source: "live" | "cached";
+  fetchedAt: string | null;
+};
+
+export async function bitgetRTokenMarketsDetailed(): Promise<RTokenMarketsResult> {
+  if (rTokenCache && rTokenCache.expires > Date.now()) {
+    return { markets: rTokenCache.markets, source: "live", fetchedAt: null };
+  }
   rTokenInFlight ??= fetchRTokenMarkets().finally(() => {
     rTokenInFlight = null;
   });
-  return rTokenInFlight;
+  try {
+    return { markets: await rTokenInFlight, source: "live", fetchedAt: null };
+  } catch (err) {
+    // Discovery outage: the last successfully seen universe is still real
+    // evidence and is far better than silently shrinking to the built-in list.
+    const cached = await readUniverseCache();
+    if (cached) return { markets: cached.markets, source: "cached", fetchedAt: cached.fetchedAt };
+    throw err;
+  }
+}
+
+export async function bitgetRTokenMarkets(): Promise<BitgetRTokenMarket[]> {
+  return (await bitgetRTokenMarketsDetailed()).markets;
 }
 
 export async function bitgetSpotTickers(): Promise<BitgetSpotTicker[]> {

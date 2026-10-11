@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { deterministicBriefing, collectSources } from "./deterministic-briefing";
+import { buildStreamHealth } from "./stream-health";
 import { computeFlags } from "./flags";
 import { guardBriefing, cleanHistoricalSummary } from "./language-guard";
 import { openRouterFreeModels } from "./providers/openrouter-models";
@@ -197,6 +198,8 @@ READER ORIENTATION CONTRACT (Deliver these 6 dimensions directly across the sche
 5. "whereThingsDoNotAgree": PUSH TENSION FIRST. Identify where the 4 independent witnesses clash (e.g. tape vs filings, headline vs social, momentum vs historical dispersion) and why it matters.
 6. "questionsOnlyYouCanAnswer": Frame the pre-mortem: what can go wrong next week (catalyst drift, volatility holes, specific invalidation levels).
 
+DATA HEALTH: If any evidence stream was degraded this run, open "whatWeDid" with one sentence naming it (e.g. "Market structure unavailable for this run; the remaining streams reflect live data."). Never present a partial run as complete.
+
 PROHIBITIONS: Strictly prohibit directional calls, hype, or soft bias: NEVER use "buy", "sell", "long", "short", "rip", "send it", "moon", "squeeze", "slight edge", "favoring patience", "constructive", "cautious lean", "tempts traders", or patronizing phrases ("for beginners", "FOMO"). Forward-looking inquiry is permitted ONLY within "questionsOnlyYouCanAnswer".
 ${UNTRUSTED_DATA_RULE}
 
@@ -207,6 +210,7 @@ ${SCHEMA}`;
   const tech = opts.pillars.technicals?.ok ? opts.pillars.technicals : undefined;
   const fund = opts.pillars.fundamentals?.ok ? opts.pillars.fundamentals : undefined;
   const news = opts.pillars.news?.ok ? opts.pillars.news : undefined;
+  const analogs = opts.pillars.analogs;
 
   const stressResultsSummary = stress.sampleSize > 0 && stress.results.length > 0
     ? stress.results
@@ -386,7 +390,11 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
     return {
       ...fallback,
       title: resolvedTitle,
-      whatWeDid: parsed.whatWeDid || fallback.whatWeDid,
+      whatWeDid: (() => {
+      const health = buildStreamHealth(opts.pillars);
+      if (!health.showBanner || parsed.whatWeDid) return parsed.whatWeDid || fallback.whatWeDid;
+      return `${parsed.whatWeDid || fallback.whatWeDid} ${health.headline}`;
+    })(),
       historicalStressTest,
       otherThingsWeChecked,
       whereThingsDoNotAgree,
@@ -406,12 +414,16 @@ CRITICAL: Return the raw JSON desk memo now matching the schema.`;
           similarity: "Past chart with a similar shape",
           followed: item.whatHappened,
         })),
-        baseRates: historicalStressTest.results.map((item) => ({
-          horizon: item.period,
-          range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
-          n: historicalStressTest.sampleSize,
-          note: "This is only what happened in the past. It is not a prediction.",
-        })),
+        baseRates: historicalStressTest.results.map((item, index) => {
+          const band = analogs?.ranges?.[index] as (typeof analogs.ranges)[number] & { tier?: string; effectiveN?: number } | undefined;
+          const basis = band?.basis === "raw" ? "the stock's own return" : "return above a date-matched liquid-stock baseline";
+          return {
+            horizon: item.period,
+            range: `${item.wentUp}; ${item.typicalMove}; median ${item.median}`,
+            n: historicalStressTest.sampleSize,
+            note: `This counts ${basis}, from a ${band?.tier ?? "ungraded"} sample (${band?.effectiveN ?? historicalStressTest.sampleSize} independent windows). This is only what happened in the past. It is not a prediction.`,
+          };
+        }),
         caveat: historicalStressTest.importantNote,
       },
       considerations: {
@@ -886,7 +898,7 @@ function validFlags(f: unknown): f is NonNullable<Briefing["flags"]> {
     (v.catalystDensity === "high" || v.catalystDensity === "moderate" || v.catalystDensity === "low") &&
     Array.isArray(v.balanceSheet) &&
     (v.regimeAlignment === "aligned" || v.regimeAlignment === "misaligned") &&
-    (v.communityStability === "stable" || v.communityStability === "unstable") &&
+    (v.communityData === "available" || v.communityData === "unavailable") &&
     typeof v.analogQuality === "object" &&
     v.analogQuality !== null &&
     typeof (v.analogQuality as Record<string, unknown>).n === "number" &&

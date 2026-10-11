@@ -1,6 +1,10 @@
 export type TradingStyle = "day" | "swing" | "event" | "position";
 
-export type PillarId = "fundamentals" | "technicals" | "news" | "analogs" | "marketStructure";
+import type { RiskPillar } from "./risk/risk-pillar";
+
+export type { RiskPillar };
+
+export type PillarId = "fundamentals" | "technicals" | "news" | "analogs" | "marketStructure" | "risk";
 
 // Neutral structural labels only: they describe the shape of the tape
 // (trend direction, systemic-risk intensity), never a call on what happens next.
@@ -34,6 +38,8 @@ export type AnalogFollowThrough = {
   note?: string;
 };
 
+export type AnalogBasis = "excess" | "raw";
+
 export type AnalogRange = {
   horizon: string;
   n: number;
@@ -41,6 +47,11 @@ export type AnalogRange = {
   p50: number;
   p90: number;
   pUp: number;
+  // "excess" means pUp and the quantiles are returns above a date-matched
+  // liquid-stock baseline (the Chart Library path). "raw" means they are the
+  // stock's own returns (the native fallback). One field, two meanings: always
+  // rendered from this flag so the wording cannot drift from the maths.
+  basis: AnalogBasis;
 };
 
 export type OverlayPoint = {
@@ -197,6 +208,8 @@ export type SocialPost = {
   engagementScore: number;
 };
 
+export type AnalogTier = "insufficient" | "weak" | "moderate" | "strong";
+
 export type AnalogsPillar = {
   ok: boolean;
   error?: string;
@@ -206,6 +219,14 @@ export type AnalogsPillar = {
   tape?: Record<string, unknown>;
   closest: AnalogFollowThrough[];
   ranges: AnalogRange[];
+  // How much independent evidence backs those bands. Raw n counts overlapping
+  // windows; effectiveN counts only candidates a full window apart.
+  effectiveN?: number;
+  tier?: AnalogTier;
+  // Permanent limits of this evidence: true on every run, healthy or not. Kept
+  // apart from `caveats`, which describe what went wrong this time, so a reader
+  // is not asked to scan five lines to find the one that matters now.
+  scopeNotes?: string[];
   informative?: {
     verdict?: string;
     ratioToBase?: number;
@@ -223,6 +244,7 @@ export type PillarBundle = {
   news: NewsPillar;
   analogs: AnalogsPillar;
   marketStructure: MarketStructurePillar;
+  risk: RiskPillar;
 };
 
 export type MarketStructurePillar = {
@@ -247,7 +269,7 @@ export type StructureFlags = {
   catalystDensity: "high" | "moderate" | "low";
   balanceSheet: string[];
   regimeAlignment: "aligned" | "misaligned";
-  communityStability: "stable" | "unstable";
+  communityData: "available" | "unavailable";
   cleanedCorrRankPct?: number;
   analogQuality: { n: number; clustered: boolean };
 };

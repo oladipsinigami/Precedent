@@ -165,6 +165,21 @@ function demystifyJargon(text: string, seen: Set<string> = new Set()): string {
   return out;
 }
 
+// An excess-return base rate counts how often the stock beat a liquid-stock
+// baseline, not how often the price rose. "Went up" would invert the meaning,
+// so the phrasing is corrected wherever it appears in memo prose.
+function banAmbiguousUpCount(text: string): string {
+  return text
+    .replace(
+      /(?<=[^A-Za-z0-9])went up\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+times?\s+out\s+of\s+(\d+)(?![A-Za-z0-9])/gi,
+      (_m, a, b) => `beat the baseline ${a} times out of ${b}`,
+    )
+    .replace(
+      /(?<=[^A-Za-z0-9])(band|range|base rate)s?\s+went up(?![A-Za-z0-9])/gi,
+      (_m, a) => `${a}s beat the baseline`,
+    );
+}
+
 function banSoftDirectional(text: string): string {
   // Protect discourse-attributed sentiment reports ("aggregate X sentiment was
   // bearish across posts") before the blanket "(bullish|bearish) sentiment"
@@ -349,6 +364,7 @@ function rewrite(
     .replace(FINAL_RECOMMENDATION, "this desk does not take a side")
     .replace(VERDICT_LINE, "this desk does not take a side");
   out = banHypeAndCoaching(out);
+  out = banAmbiguousUpCount(out);
   out = banSoftDirectional(out);
   out = out.replace(VERDICT, (m) => {
     const lower = m.toLowerCase();
@@ -367,6 +383,36 @@ function rewrite(
     onRewrite(original, out);
   }
   return out;
+}
+
+/**
+ * Trim the three open-ended consideration lists so they stay scannable.
+ * Tunable: three items per list and twenty words per item, because these
+ * render as narrow columns and a longer line is not read. Every briefing
+ * already passes through here, so no other call site is needed.
+ */
+export const CONSIDERATIONS_MAX_ITEMS = 3;
+export const CONSIDERATIONS_MAX_WORDS = 20;
+
+const EVIDENCE_MARKER = /(\d|\d{4,}|\.\d|%)/;
+const NAMED_SOURCE = /(SEC|EDGAR|Bitget|Nasdaq|Fed|FOMC|rToken|analogs?|bands?|memos?|candles?|snapshot|filing|headline|RSS|X |community|tape|close|open|session)/i;
+
+function isAnchored(item: string): boolean {
+  return EVIDENCE_MARKER.test(item) || NAMED_SOURCE.test(item);
+}
+
+export function capConsiderations(items: string[] | undefined | null): string[] {
+  return (items ?? [])
+    .map((item) => (item ?? "").trim())
+    .filter(Boolean)
+    .map((item) => {
+      const words = item.split(/\s+/);
+      return words.length > CONSIDERATIONS_MAX_WORDS
+        ? words.slice(0, CONSIDERATIONS_MAX_WORDS).join(" ").replace(/[,;:]\s*\s*$/, "")
+        : item;
+    })
+    .filter(isAnchored)
+    .slice(0, CONSIDERATIONS_MAX_ITEMS);
 }
 
 function scrubList(
@@ -467,9 +513,9 @@ export function guardBriefing(
     caveat: rewrite(briefing.historicalAnalog?.caveat, seenGlossary, onRewrite),
   };
   const considerations = {
-    forStyle: scrubList(briefing.considerations?.forStyle, seenGlossary, onRewrite),
-    invalidation: scrubList(briefing.considerations?.invalidation, seenGlossary, onRewrite),
-    questions: scrubList(briefing.considerations?.questions, seenGlossary, onRewrite),
+    forStyle: capConsiderations(scrubList(briefing.considerations?.forStyle, seenGlossary, onRewrite)),
+    invalidation: capConsiderations(scrubList(briefing.considerations?.invalidation, seenGlossary, onRewrite)),
+    questions: capConsiderations(scrubList(briefing.considerations?.questions, seenGlossary, onRewrite)),
   };
 
   if (localRewriteCount > 0) {

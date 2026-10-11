@@ -216,11 +216,11 @@ export function BlackholeBackground({ variant = "intake" }: BlackholeBackgroundP
 
         {/* Schwarzschild Event Horizon / Central Black Hole Shadow */}
         <div
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#030406]"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blot"
           style={{
             width: isResults ? "84px" : "144px",
             height: isResults ? "84px" : "144px",
-            boxShadow: "0 0 35px #000000, 0 0 60px rgba(0,0,0,0.95), inset 0 0 25px #000000",
+            boxShadow: "0 0 35px var(--c-blot), 0 0 60px rgba(0,0,0,0.95), inset 0 0 25px var(--c-blot)",
           }}
         />
       </div>
@@ -232,11 +232,11 @@ export function BlackholeBackground({ variant = "intake" }: BlackholeBackgroundP
       <div
         className={`absolute inset-0 transition-opacity duration-1000 ${
           isResults
-            ? "bg-[radial-gradient(ellipse_at_50%_25%,transparent_5%,rgba(6,8,11,0.85)_50%,#06080b_85%)]"
-            : "bg-[radial-gradient(ellipse_at_50%_35%,transparent_20%,rgba(6,8,11,0.65)_55%,#06080b_90%)]"
+            ? "bg-[radial-gradient(ellipse_at_50%_25%,transparent_5%,rgba(6,8,11,0.85)_50%,var(--c-blot)_85%)]"
+            : "bg-[radial-gradient(ellipse_at_50%_35%,transparent_20%,rgba(6,8,11,0.65)_55%,var(--c-blot)_90%)]"
         }`}
       />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#06080b]/50 via-transparent to-[#05070a]/95" />
+      <div className="absolute inset-0 bg-gradient-to-b from-blot/50 via-transparent to-blot/95" />
     </div>
   );
 }

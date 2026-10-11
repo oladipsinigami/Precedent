@@ -1,22 +1,34 @@
 "use client";
 
+import { useEffect } from "react";
+import { animate, stagger, utils } from "animejs";
+import { animateCountUp, animateEmbeddedNumber, animateWentUpPhrase } from "@/lib/motion/count-up";
+import { MOTION_EASE } from "@/lib/motion/tokens";
+import { useAnimeScope } from "@/lib/motion/use-anime-scope";
 import { STYLES } from "@/lib/style-profiles";
 import { MemoSection } from "./MemoSection";
+import { MemoSchematic } from "./MemoSchematic";
 import { EvidenceSection } from "./EvidenceSection";
+import { buildStreamHealth } from "@/lib/stream-health";
+import { RiskSection } from "./RiskSection";
 import { TensionSection } from "./TensionSection";
 import { AnalogOverlay } from "./AnalogOverlay";
 import { UnsignedRanges } from "./UnsignedRanges";
 import { ConsiderationsSection } from "./ConsiderationsSection";
 import { DecisionRecord } from "./DecisionRecord";
-import { fundamentalsScore, sentimentScore, summarizePillarCoverage, technicalsScore, type PillarScore } from "@/lib/pillar-scores";
+import { fundamentalsScore, sentimentScore, technicalsScore } from "@/lib/pillar-scores";
 import type { Briefing, PillarBundle, TradingStyle } from "@/lib/types";
 
 interface ResearchMemoProps {
   briefing: Briefing;
   style: TradingStyle;
+  onStyleChange?: (style: TradingStyle) => void;
   pillarData: PillarBundle | null;
   decisionNote: string;
   onDecisionNoteChange: (value: string) => void;
+  runId?: number;
+  animateResult?: boolean;
+  recalibrationKey?: number;
 }
 
 function getUnverifiedCaveats(briefing: Briefing, pillarData: PillarBundle | null): string[] {
@@ -104,23 +116,170 @@ function getUnverifiedCaveats(briefing: Briefing, pillarData: PillarBundle | nul
 export function ResearchMemo({
   briefing,
   style,
+  onStyleChange,
   pillarData,
   decisionNote,
   onDecisionNoteChange,
+  runId = 0,
+  animateResult = false,
+  recalibrationKey = 0,
 }: ResearchMemoProps) {
   const scores = {
     sentiment: sentimentScore(pillarData?.news),
     fundamentals: fundamentalsScore(pillarData?.fundamentals),
     technicals: technicalsScore(pillarData?.technicals),
   };
-  const coverage = summarizePillarCoverage([
-    scores.sentiment.value !== null,
-    scores.fundamentals.value !== null,
-    scores.technicals.value !== null,
-    Boolean(pillarData?.analogs?.ok),
-    Boolean(pillarData?.marketStructure?.ok && !pillarData.marketStructure.stale),
-  ]);
   const unverifiedCaveats = getUnverifiedCaveats(briefing, pillarData);
+  const streamHealth = buildStreamHealth(pillarData);
+
+  const sampleSize = briefing.historicalStressTest.sampleSize ?? 0;
+  const analogsVerified = Boolean(
+    pillarData?.analogs?.ok && sampleSize >= 30 && !briefing.isFallback,
+  );
+  const basisSpread = pillarData?.technicals?.rToken?.premiumPct;
+  const basisVerified = Boolean(
+    pillarData?.technicals?.ok &&
+      basisSpread !== undefined &&
+      basisSpread !== null &&
+      !briefing.isFallback,
+  );
+
+  const { rootRef } = useAnimeScope<HTMLElement>(
+    ({ root, revealAllStatic }) => {
+      if (!animateResult) {
+        revealAllStatic();
+        return;
+      }
+
+      const sections = root.querySelectorAll<HTMLElement>("[data-anim='memo-section']");
+      if (sections.length > 0) {
+        utils.set(sections, { opacity: 0, translateY: 8 });
+        animate(sections, {
+          opacity: [0, 1],
+          translateY: [8, 0],
+          duration: 300,
+          delay: stagger(60),
+          ease: MOTION_EASE.default,
+        });
+      }
+
+      const bullets = root.querySelectorAll<HTMLElement>("[data-anim='memo-bullet']");
+      if (bullets.length > 0) {
+        utils.set(bullets, { opacity: 0, translateY: 5 });
+        animate(bullets, {
+          opacity: [0, 1],
+          translateY: [5, 0],
+          duration: 240,
+          delay: stagger(35, { start: 180 }),
+          ease: MOTION_EASE.default,
+        });
+      }
+
+      const analogRows = root.querySelectorAll<HTMLElement>("[data-anim='analog-row']");
+      if (analogRows.length > 0) {
+        utils.set(analogRows, { opacity: 0, translateY: 5 });
+        animate(analogRows, {
+          opacity: [0, 1],
+          translateY: [5, 0],
+          duration: 240,
+          delay: stagger(40, { start: 260 }),
+          ease: MOTION_EASE.default,
+        });
+      }
+
+      if (basisVerified && typeof basisSpread === "number") {
+        animateCountUp(root.querySelector<HTMLElement>("[data-anim-count='venue-basis']"), {
+          from: 0,
+          to: basisSpread,
+          decimals: 2,
+          prefix: basisSpread >= 0 ? "+" : "",
+          suffix: "%",
+          delay: 90,
+        });
+      }
+
+      if (analogsVerified) {
+        animateCountUp(root.querySelector<HTMLElement>("[data-anim-count='sample-size-top']"), {
+          from: 0,
+          to: sampleSize,
+          decimals: 0,
+          suffix: " historical cases matched",
+          delay: 140,
+        });
+
+        animateCountUp(root.querySelector<HTMLElement>("[data-anim-count='sample-size-bottom']"), {
+          from: 0,
+          to: sampleSize,
+          decimals: 0,
+          suffix: " historical precedents matched",
+          delay: 220,
+        });
+
+        briefing.historicalStressTest.results.forEach((result, idx) => {
+          const wentUpText = result.wentUp.replace(/^went up/i, "Went up");
+          const medianText = result.median.replace(/^middle result:\s*/i, "");
+
+          animateWentUpPhrase(
+            root.querySelector<HTMLElement>(`[data-anim-went-up="${idx}"]`),
+            wentUpText,
+            false,
+            180 + idx * 55,
+          );
+
+          animateEmbeddedNumber(
+            root.querySelector<HTMLElement>(`[data-anim-median="${idx}"]`),
+            `Middle result: ${medianText}`,
+            false,
+            200 + idx * 55,
+          );
+        });
+
+        briefing.historicalAnalog.baseRates?.forEach((item, idx) => {
+          animateCountUp(root.querySelector<HTMLElement>(`[data-anim-base-n="${idx}"]`), {
+            from: 0,
+            to: item.n,
+            decimals: 0,
+            prefix: `${item.horizon} · Sample n=`,
+            delay: 220 + idx * 45,
+            skipAnimation: item.n < 30,
+          });
+        });
+      }
+    },
+    [runId],
+  );
+
+  // Recalibrate header & bullets when the trader switches style on the Results page
+  useEffect(() => {
+    if (recalibrationKey === 0) return;
+    const root = rootRef.current;
+    if (!root) return;
+    if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+
+    const targets = root.querySelectorAll<HTMLElement>("[data-anim='recalibrate-target']");
+    if (targets.length > 0) {
+      animate(targets, {
+        opacity: [0.35, 1],
+        translateY: [4, 0],
+        duration: 240,
+        delay: stagger(30),
+        ease: MOTION_EASE.default,
+      });
+    }
+
+    const bullets = root.querySelectorAll<HTMLElement>("[data-anim='memo-bullet']");
+    if (bullets.length > 0) {
+      animate(bullets, {
+        opacity: [0.4, 1],
+        translateY: [3, 0],
+        duration: 210,
+        delay: stagger(25, { start: 40 }),
+        ease: MOTION_EASE.default,
+      });
+    }
+  }, [recalibrationKey, rootRef]);
 
   const validExamples = (briefing.historicalStressTest.examples ?? [])
     .filter(
@@ -139,34 +298,41 @@ export function ResearchMemo({
     .slice(0, 3);
 
   return (
-    <article className="mt-6 sm:mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-[#f5f0e6] text-[#141918] shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]">
-      {/* Editorial Document Header */}
-      <header className="border-b border-[#141918]/15 bg-[#ece6dd] px-4 py-6 sm:px-10 sm:py-10">
+    <article
+      ref={rootRef}
+      data-anim-cloak={animateResult ? "true" : undefined}
+      className="mt-6 sm:mt-12 overflow-hidden rounded-sm border border-white/[0.14] bg-paper-alt text-shell shadow-[0_30px_90px_-20px_rgba(0,0,0,0.75)]"
+    >
+      {/* Editorial Document Header (D1 step 1: Orientation) */}
+      <header
+        data-anim="memo-section"
+        className="border-b border-shell/15 bg-paper-deep px-4 py-6 sm:px-10 sm:py-10"
+      >
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {briefing.isSample ? (
                 <span
                   role="status"
-                  className="inline-flex items-center gap-1.5 rounded-sm border border-[#b91c1c]/40 bg-[#b91c1c]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#991b1b]"
+                  className="inline-flex items-center gap-1.5 rounded-sm border border-alert-deep/40 bg-alert-deep/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-warn"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#dc2626]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-alert-deep" />
                   Sample data · Not live market data
                 </span>
               ) : null}
               {briefing.isFallback ? (
-                <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#b45309]/30 bg-[#b45309]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#92400e]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#d97706]" />
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-amber-deep/30 bg-amber-deep/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-warn">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber" />
                   Quantitative Research Memo · Empirical Baseline
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-sm border border-[#486326]/30 bg-[#486326]/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-[#36521a]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#486326]" />
+                <span className="inline-flex items-center gap-1.5 rounded-sm border border-moss/30 bg-moss/10 px-2.5 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-moss-deep">
+                  <span className="h-1.5 w-1.5 rounded-full bg-moss" />
                   ✦ Institutional Desk Note · Clerk of Evidence
                 </span>
               )}
-              <span className="text-[#88998a]">·</span>
-              <span className="font-mono text-[10px] uppercase text-[#637566]">
+              <span className="text-mute">·</span>
+              <span className="font-mono text-[10px] uppercase text-mute-dim">
                 {(() => {
                   let displayModel = briefing.model || "Precedent Quantitative Desk";
                   displayModel = displayModel.replace(/\s*\(fell back.*?\)/i, "").trim();
@@ -178,62 +344,160 @@ export function ResearchMemo({
               </span>
             </div>
 
-            <h2 className="mt-3 sm:mt-4 font-display text-2xl font-medium leading-[1.16] tracking-[-0.03em] text-[#111513] sm:text-4xl md:text-5xl">
+            <h2
+              data-anim="recalibrate-target"
+              className="mt-3 sm:mt-4 font-display text-2xl font-medium leading-[1.16] tracking-[-0.03em] text-shell sm:text-4xl md:text-5xl"
+            >
               {briefing.title}
             </h2>
 
             {briefing.styleNote && (
-              <p className="mt-2.5 sm:mt-3.5 text-xs leading-relaxed text-[#566657] font-medium max-w-2xl">
+              <p
+                data-anim="recalibrate-target"
+                className="mt-2.5 sm:mt-3.5 text-xs leading-relaxed text-mute-faint font-medium max-w-2xl"
+              >
                 {briefing.styleNote}
               </p>
             )}
           </div>
 
-          <div className="w-full sm:w-auto sm:min-w-[200px] rounded border border-[#141918]/12 bg-[#f8f5ee] p-3.5 sm:p-4 text-left sm:text-right shadow-sm shrink-0">
+          <div
+            data-anim="recalibrate-target"
+            className="w-full sm:w-auto sm:min-w-[200px] rounded border border-shell/12 bg-paper p-3.5 sm:p-4 text-left sm:text-right shadow-sm shrink-0"
+          >
             <div className="flex items-center justify-between sm:block">
               <div>
-                <div className="font-mono text-[10px] uppercase tracking-wider text-[#738375]">
+                <div className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
                   Trading style
                 </div>
-                <div className="mt-0.5 sm:mt-1 font-semibold text-sm text-[#18201a]">
+                <div className="mt-0.5 sm:mt-1 font-semibold text-sm text-shell">
                   {STYLES[style].label}
                 </div>
               </div>
-              <div className="sm:mt-2 sm:border-t sm:border-[#141918]/[0.08] sm:pt-2 text-right">
-                <div className="font-mono text-[9px] uppercase tracking-wider text-[#738375]">
+              <div className="sm:mt-2 sm:border-t sm:border-shell/[0.08] sm:pt-2 text-right">
+                <div className="font-mono text-[9px] uppercase tracking-wider text-ink-faint">
                   Market context
                 </div>
-                <div className="font-mono text-xs font-semibold text-[#425828]">
+                <div className="font-mono text-xs font-semibold text-moss">
                   {briefing.regime ? "Shown for context only" : "Not available"}
                 </div>
               </div>
             </div>
+            {basisSpread !== undefined && basisSpread !== null && (
+              <div className="mt-2 border-t border-shell/[0.08] pt-2 text-left sm:text-right">
+                <div className="font-mono text-[9px] uppercase tracking-wider text-ink-faint">
+                  Venue vs NY close basis
+                </div>
+                <div
+                  data-anim-count="venue-basis"
+                  className="font-mono text-xs font-semibold text-shell"
+                >
+                  {basisSpread >= 0 ? "+" : ""}
+                  {basisSpread.toFixed(2)}%
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Technical Blueprint Callout Schematic & Horizon Scrubber Ruler */}
+        <MemoSchematic
+          style={style}
+          pillarData={pillarData}
+          sampleSize={sampleSize}
+          basisSpread={basisSpread}
+          runId={runId}
+          recalibrationKey={recalibrationKey}
+          onSelectStyle={onStyleChange}
+        />
       </header>
 
+      {/* The fit verdict is the first thing after the header: the one number the
+          tool exists to produce, at the top of the first screen. (D1 step 2: Tape & Cost Fit) */}
+      {pillarData?.risk && (
+        <section
+          data-anim={pillarData.risk.verdict !== "UNAVAILABLE" ? "memo-section" : undefined}
+          className="border-b-2 border-lime/35 bg-paper px-4 py-6 sm:px-10 sm:py-8"
+          data-tour="tour-risk-verdict"
+        >
+          <RiskSection
+            risk={pillarData.risk}
+            runId={runId}
+            animateResult={animateResult}
+            recalibrationKey={recalibrationKey}
+          />
+        </section>
+      )}
+
+      {/* Data health sits above the memo so a degraded stream is visible before
+          any conclusion is read. */}
+      {streamHealth.showBanner ? (
+        <details className="border-b border-shell/15 bg-paper px-4 py-4 sm:px-10 sm:py-5">
+          <summary className="cursor-pointer list-none">
+            <div className="flex items-start gap-3">
+              <span aria-hidden="true" className="mt-0.5 font-mono text-sm text-amber-deep">
+                ▲
+              </span>
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-deep">
+                  Data health — {streamHealth.usable} of {streamHealth.total} streams usable
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-ink-body">{streamHealth.headline}</p>
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-wider text-ink-faint">
+                  Select to read each reason
+                </p>
+              </div>
+            </div>
+          </summary>
+          <ul className="mt-3 space-y-2 border-t border-shell/10 pt-3">
+            {streamHealth.streams.map((stream) => (
+              <li key={stream.name} className="text-[11px] leading-relaxed">
+                <span
+                  className={
+                    stream.status === "ok"
+                      ? "font-mono text-[10px] font-bold uppercase tracking-wider text-moss-deep"
+                      : "font-mono text-[10px] font-bold uppercase tracking-wider text-warn"
+                  }
+                >
+                  {stream.label}
+                </span>
+                {stream.reasons.length ? (
+                  <ul className="mt-1 list-disc space-y-1 pl-4 text-ink-mute">
+                    {stream.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span className="ml-2 text-ink-mute">returned usable data</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
       {/* TOP SECTION: Executive Research Summary & Takeaways */}
-      <section className="border-b border-[#141918]/15 bg-[#f8f5ee] px-4 py-6 sm:px-10 sm:py-8">
-        {/* Dedicated "What we could not fully verify" block */}
+      <section className="border-b border-shell/15 bg-paper px-4 py-6 sm:px-10 sm:py-8">
+        {/* Dedicated "What we could not fully verify" block — deliberately static per Rule #2 */}
         {unverifiedCaveats.length > 0 && (
-          <div className="mb-6 rounded-sm border border-[#d97706]/40 bg-[#fffbeb] p-4 sm:p-5 shadow-sm">
+          <div className="mb-6 rounded-sm border border-amber/40 bg-paper p-4 sm:p-5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#d97706]/20 font-mono text-[10px] font-bold text-[#b45309]">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber/20 font-mono text-[10px] font-bold text-amber-deep">
                   !
                 </span>
-                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.15em] text-[#b45309]">
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.15em] text-amber-deep">
                   ✦ Data Availability & Verification Caveats
                 </h4>
               </div>
-              <span className="font-mono text-[10px] text-[#92400e]">
+              <span className="font-mono text-[10px] text-warn">
                 {unverifiedCaveats.length} caveat{unverifiedCaveats.length > 1 ? "s" : ""} on record
               </span>
             </div>
-            <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-[#78350f]">
+            <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-warn">
               {unverifiedCaveats.map((caveat, idx) => (
                 <li key={idx} className="flex items-start gap-2">
-                  <span className="text-[#b45309] font-bold select-none">•</span>
+                  <span className="text-amber-deep font-bold select-none">•</span>
                   <span>{caveat}</span>
                 </li>
               ))}
@@ -241,86 +505,94 @@ export function ResearchMemo({
           </div>
         )}
 
-        {/* Executive Summary Header */}
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#486326]">
-                ✦ Clerk of Evidence · Desk Briefing
+        {/* Executive Summary Header & Historical Analogs Snapshot (D1 step 3: Analogs) */}
+        <div data-anim="memo-section">
+          <div className="mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-moss">
+                  ✦ Clerk of Evidence · Desk Briefing
+                </div>
+                <h3 className="mt-2 font-display text-2xl font-medium text-shell sm:text-3xl">
+                  Evidence cross-examination & setup briefing
+                </h3>
               </div>
-              <h3 className="mt-2 font-display text-2xl font-medium text-[#111513] sm:text-3xl">
-                Evidence cross-examination & setup briefing
-              </h3>
+              <a
+                href="#advanced-precedents"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="inline-flex items-center gap-1.5 rounded-sm border border-moss/30 bg-moss/10 px-3.5 py-2 font-mono text-xs font-semibold text-moss-deep transition hover:bg-moss/20 self-start sm:self-auto shrink-0 shadow-sm"
+              >
+                <span>View Full Trajectory Charts & Deep Telemetry</span>
+                <span aria-hidden="true">↓</span>
+              </a>
             </div>
-            <a
-              href="#advanced-precedents"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-[#486326]/30 bg-[#486326]/10 px-3.5 py-2 font-mono text-xs font-semibold text-[#38521d] transition hover:bg-[#486326]/20 self-start sm:self-auto shrink-0 shadow-sm"
-            >
-              <span>View Full Trajectory Charts & Deep Telemetry</span>
-              <span aria-hidden="true">↓</span>
-            </a>
+            {briefing.whatWeDid && (
+              <p className="mt-3 max-w-3xl text-sm leading-relaxed text-moss-alt font-medium">
+                {briefing.whatWeDid}
+              </p>
+            )}
           </div>
-          {briefing.whatWeDid && (
-            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-[#3f4c41] font-medium">
-              {briefing.whatWeDid}
-            </p>
-          )}
-        </div>
 
-        {/* Precedent Quick Snapshot */}
-        <div className="mb-6 rounded-sm border border-[#486326]/25 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-[#486326]/20 font-mono text-[10px] font-bold text-[#38521d]">
-                ✦
+          {/* Precedent Quick Snapshot */}
+          <div className="mb-6 rounded-sm border border-moss/25 bg-paper p-4 sm:p-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-moss/20 font-mono text-[10px] font-bold text-moss-deep">
+                  ✦
+                </span>
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss">
+                  10-Year Historical Rhyme & Dispersion
+                </h4>
+              </div>
+              <span
+                data-anim-count="sample-size-top"
+                className="inline-flex items-center rounded bg-moss/10 px-2.5 py-1 font-mono text-xs font-semibold text-moss-deep"
+              >
+                {briefing.historicalStressTest.sampleSize > 0
+                  ? `${briefing.historicalStressTest.sampleSize} historical cases matched`
+                  : "0 past cases matched"}
               </span>
-              <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
-                10-Year Historical Rhyme & Dispersion
-              </h4>
             </div>
-            <span className="inline-flex items-center rounded bg-[#486326]/10 px-2.5 py-1 font-mono text-xs font-semibold text-[#38521d]">
-              {briefing.historicalStressTest.sampleSize > 0
-                ? `${briefing.historicalStressTest.sampleSize} historical cases matched`
-                : "0 past cases matched"}
-            </span>
-          </div>
-          <p className="mt-2.5 text-sm leading-relaxed text-[#232b25]">
-            {briefing.historicalStressTest.summary}
-          </p>
-          <div className="mt-3 flex items-center justify-between border-t border-[#141918]/[0.08] pt-3 text-xs text-[#556457]">
-            <span>Detailed trajectory overlays, quantile ranges, and matching episodes are organized at the bottom.</span>
-            <a
-              href="#advanced-precedents"
-              onClick={(e) => {
-                e.preventDefault();
-                document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="font-mono text-[11px] font-semibold text-[#486326] underline hover:text-[#38521d]"
-            >
-              Jump to charts ↓
-            </a>
+            <p className="mt-2.5 text-sm leading-relaxed text-ink-body">
+              {briefing.historicalStressTest.summary}
+            </p>
+            <div className="mt-3 flex items-center justify-between border-t border-shell/[0.08] pt-3 text-xs text-mute-faint">
+              <span>Detailed trajectory overlays, quantile ranges, and matching episodes are organized at the bottom.</span>
+              <a
+                href="#advanced-precedents"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById("advanced-precedents")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="font-mono text-[11px] font-semibold text-moss underline hover:text-moss-deep"
+              >
+                Jump to charts ↓
+              </a>
+            </div>
           </div>
         </div>
 
-        {/* 3-Column Core Takeaways Grid */}
+        {/* 3-Column Core Takeaways Grid (D1 steps: Takeaways, Tension, Pre-Mortem) */}
         <div className="grid gap-4 md:grid-cols-3">
           {/* Card 1: Core Verified Takeaways */}
-          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+          <div
+            data-anim="memo-section"
+            className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm flex flex-col justify-between"
+          >
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#486326]">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-moss">
                   ✦ Core Verified Takeaways
                 </h4>
-                <span className="font-mono text-[10px] text-[#738375]">01 / Takeaways</span>
+                <span className="font-mono text-[10px] text-ink-faint">01 / Takeaways</span>
               </div>
-              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-ink-body">
                 {briefing.simpleTakeAways.slice(0, 4).map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-[#486326] font-bold select-none">•</span>
+                  <li key={idx} data-anim="memo-bullet" className="flex items-start gap-2">
+                    <span className="text-moss font-bold select-none">•</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -329,28 +601,31 @@ export function ResearchMemo({
           </div>
 
           {/* Card 2: Witness Clashes & Divergences */}
-          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+          <div
+            data-anim="memo-section"
+            className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm flex flex-col justify-between"
+          >
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#b45309]">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-deep">
                   ✦ Witness Clashes & Divergences
                 </h4>
-                <span className="font-mono text-[10px] text-[#738375]">02 / Divergences</span>
+                <span className="font-mono text-[10px] text-ink-faint">02 / Divergences</span>
               </div>
               {briefing.whereThingsDoNotAgree.length > 0 ? (
-                <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+                <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-ink-body">
                   {briefing.whereThingsDoNotAgree.slice(0, 3).map((item, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <span className="text-[#b45309] font-bold select-none">•</span>
+                    <li key={idx} data-anim="memo-bullet" className="flex items-start gap-2">
+                      <span className="text-amber-deep font-bold select-none">•</span>
                       <div>
-                        <span className="font-semibold text-[#1a221c]">{item.conflict}: </span>
-                        <span className="text-[#4f5e51]">{item.whyItMatters}</span>
+                        <span className="font-semibold text-ink-strong">{item.conflict}: </span>
+                        <span className="text-ink-mute">{item.whyItMatters}</span>
                       </div>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-3 text-xs leading-relaxed text-[#637265]">
+                <p className="mt-3 text-xs leading-relaxed text-mute-dim">
                   No direct witness contradictions detected across tape, analog, filing, and discourse streams.
                 </p>
               )}
@@ -358,19 +633,22 @@ export function ResearchMemo({
           </div>
 
           {/* Card 3: Pre-Mortem & Invalidation Boundaries */}
-          <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm flex flex-col justify-between">
+          <div
+            data-anim="memo-section"
+            className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm flex flex-col justify-between"
+          >
             <div>
               <div className="flex items-center justify-between">
-                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-[#36521a]">
+                <h4 className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-moss-deep">
                   ✦ Pre-Mortem & Invalidation
                 </h4>
-                <span className="font-mono text-[10px] text-[#738375]">03 / Invalidation</span>
+                <span className="font-mono text-[10px] text-ink-faint">03 / Invalidation</span>
               </div>
-              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-[#2b362d]">
+              <ul className="mt-3 space-y-2.5 text-xs leading-relaxed text-ink-body">
                 {briefing.questionsOnlyYouCanAnswer.slice(0, 3).map((item, idx) => (
-                  <li key={idx} className="flex items-start gap-2">
-                    <span className="text-[#486326] font-bold select-none">?</span>
-                    <span className="font-medium text-[#1a221c]">{item}</span>
+                  <li key={idx} data-anim="memo-bullet" className="flex items-start gap-2">
+                    <span className="text-moss font-bold select-none">?</span>
+                    <span className="font-medium text-ink-strong">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -378,10 +656,13 @@ export function ResearchMemo({
           </div>
         </div>
 
-        {/* Cross-Pillar Checked Streams */}
+        {/* Cross-Pillar Checked Streams (D1 step: Unknowns & Cross-Pillar Scope) */}
         {briefing.otherThingsWeChecked?.length > 0 && (
-          <div className="mt-4 rounded-sm border border-[#141918]/10 bg-[#fcf9f2] p-3.5 text-xs text-[#4f5e51]">
-            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#637566] mr-2">
+          <div
+            data-anim="memo-section"
+            className="mt-4 rounded-sm border border-shell/10 bg-paper p-3.5 text-xs text-ink-mute"
+          >
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-mute-dim mr-2">
               Cross-Pillar Streams Checked:
             </span>
             {briefing.otherThingsWeChecked.join(" · ")}
@@ -390,14 +671,14 @@ export function ResearchMemo({
       </section>
 
       {/* COLLAPSIBLE MIDDLE: Empirical Evidence & Cross-Pillar Signals */}
-      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
-          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
+      <details open data-anim="memo-section" className="border-b border-shell/15 bg-paper-alt">
+        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss-deep sm:px-10">
+          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-moss" viewBox="0 0 10 10" fill="currentColor">
             <path d="M5 0L10 5L5 10L0 5Z" />
           </svg>
           Empirical Evidence & Cross-Pillar Signals
         </summary>
-        <div className="border-t border-[#141918]/10">
+        <div className="border-t border-shell/10">
           <MemoSection number="01" title="Verified Evidence & Source Attribution" badge="Primary Streams">
             <EvidenceSection
               evidence={briefing.evidence}
@@ -414,9 +695,9 @@ export function ResearchMemo({
       </details>
 
       {/* COLLAPSIBLE MIDDLE: Diagnostic Scores, Invalidation Triggers & Plan Questions */}
-      <details className="border-b border-[#141918]/15 bg-[#f5f0e6]">
-        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#3c5522] sm:px-10">
-          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-[#425828]" viewBox="0 0 10 10" fill="currentColor">
+      <details data-anim="memo-section" className="border-b border-shell/15 bg-paper-alt">
+        <summary className="flex cursor-pointer items-center gap-2.5 px-4 py-5 font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss-deep sm:px-10">
+          <svg aria-hidden="true" className="h-2 w-2 shrink-0 text-moss" viewBox="0 0 10 10" fill="currentColor">
             <path d="M5 0L10 5L5 10L0 5Z" />
           </svg>
           Diagnostic Scores, Invalidation Triggers & Plan Boundaries
@@ -425,7 +706,6 @@ export function ResearchMemo({
           <ConsiderationsSection
             considerations={briefing.considerations}
             scores={scores}
-            coverage={coverage}
             analogs={pillarData?.analogs}
             analogQuality={briefing.flags?.analogQuality}
           />
@@ -433,7 +713,7 @@ export function ResearchMemo({
       </details>
 
       {/* BOTTOM SECTION: Deep Quantitative Telemetry & Historical Precedents */}
-      <div id="advanced-precedents" className="scroll-mt-6 border-b border-[#141918]/15">
+      <div id="advanced-precedents" data-anim="memo-section" className="scroll-mt-6 border-b border-shell/15">
         <MemoSection
           number="04"
           title="Historical Analogs & Quantitative Telemetry"
@@ -441,11 +721,14 @@ export function ResearchMemo({
         >
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
-              <p className="max-w-3xl text-sm leading-relaxed text-[#232b25]">
+              <p className="max-w-3xl text-sm leading-relaxed text-ink-body">
                 {briefing.historicalAnalog.setup ||
                   "Normalized historical analog trajectory overlay (rebased to T₀), return dispersion ranges, and matching historical episodes."}
               </p>
-              <span className="inline-flex items-center rounded bg-[#486326]/10 px-2.5 py-1 font-mono text-xs font-semibold text-[#38521d] self-start sm:self-auto shrink-0">
+              <span
+                data-anim-count="sample-size-bottom"
+                className="inline-flex items-center rounded bg-moss/10 px-2.5 py-1 font-mono text-xs font-semibold text-moss-deep self-start sm:self-auto shrink-0"
+              >
                 {briefing.historicalStressTest.sampleSize > 0
                   ? `${briefing.historicalStressTest.sampleSize} historical precedents matched`
                   : "0 past cases matched"}
@@ -454,34 +737,45 @@ export function ResearchMemo({
 
             {/* Normalized SVG Trajectory Chart */}
             {(pillarData?.analogs?.overlay?.length ?? 0) > 0 && (
-              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
+              <div className="rounded-sm border border-moss/20 bg-paper p-4 sm:p-5 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
+                  <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss">
                     Normalized Historical Trajectory Overlay
                   </h4>
-                  <span className="font-mono text-[10px] text-[#637265]">
+                  <span className="font-mono text-[10px] text-mute-dim">
                     Rebased to 100.0 at trigger state (T₀)
                   </span>
                 </div>
-                <AnalogOverlay overlays={pillarData?.analogs.overlay ?? []} />
+                <AnalogOverlay
+                  overlays={pillarData?.analogs.overlay ?? []}
+                  runId={runId}
+                  animateResult={animateResult}
+                  skipAnimation={!analogsVerified}
+                />
               </div>
             )}
 
             {/* Quantile Distribution Range Bar */}
             {(pillarData?.analogs?.ranges?.length ?? 0) > 0 && (
-              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
-                <UnsignedRanges ranges={pillarData?.analogs.ranges ?? []} />
+              <div className="rounded-sm border border-moss/20 bg-paper p-4 sm:p-5 shadow-sm">
+                <UnsignedRanges
+                  ranges={pillarData?.analogs.ranges ?? []}
+                  tier={pillarData?.analogs?.tier}
+                  runId={runId}
+                  animateResult={animateResult}
+                  skipAnimation={!analogsVerified}
+                />
               </div>
             )}
 
             {/* Empirical Outcome Cards */}
             {briefing.historicalStressTest.results.length > 0 ? (
-              <div className="rounded-sm border border-[#486326]/20 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
-                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326] mb-3">
+              <div className="rounded-sm border border-moss/20 bg-paper p-4 sm:p-5 shadow-sm">
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss mb-3">
                   Historical Outcome Medians & Dispersion
                 </h4>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {briefing.historicalStressTest.results.map((result) => {
+                  {briefing.historicalStressTest.results.map((result, idx) => {
                     const wentUpText = result.wentUp.replace(/^went up/i, "Went up");
                     const typicalMoveText = result.typicalMove.startsWith("Typical move: ")
                       ? result.typicalMove
@@ -492,26 +786,34 @@ export function ResearchMemo({
                     return (
                       <div
                         key={result.period}
-                        className="rounded-sm border border-[#486326]/25 bg-white/70 p-3.5 shadow-sm sm:p-4"
+                        className="rounded-sm border border-moss/25 bg-white/70 p-3.5 shadow-sm sm:p-4"
                       >
-                        <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                        <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-moss">
                           {periodLabel}
                         </div>
-                        <p className="mt-2 text-base font-bold leading-snug text-[#1a221c]">{wentUpText}</p>
-                        <p className="mt-1 text-xs text-[#4f5e51]">{typicalMoveText}</p>
-                        <p className="mt-1 text-xs text-[#637265]">Middle result: {medianText}</p>
+                        <p
+                          data-anim-went-up={idx}
+                          className="mt-2 text-base font-bold leading-snug text-ink-strong"
+                        >
+                          {wentUpText}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-mute">{typicalMoveText}</p>
+                        <p data-anim-median={idx} className="mt-1 text-xs text-mute-dim">
+                          Middle result: {medianText}
+                        </p>
                       </div>
                     );
                   })}
                 </div>
-                <p className="mt-3 text-xs italic leading-relaxed text-[#637265]">
+                <p className="mt-3 text-xs italic leading-relaxed text-mute-dim">
                   Historical results are past occurrences only, not predictions.
                 </p>
               </div>
             ) : null}
 
+            {/* Caution banner deliberately static per Rule #2 */}
             {briefing.historicalStressTest.sampleSize > 0 && briefing.historicalStressTest.sampleSize < 30 && (
-              <div className="flex items-center gap-2 rounded border border-[#d97706]/30 bg-[#d97706]/10 px-3 py-2 text-xs text-[#92400e]">
+              <div className="flex items-center gap-2 rounded border border-amber/30 bg-amber/10 px-3 py-2 text-xs text-warn">
                 <span className="font-bold">Caution:</span>
                 <span>
                   Sample size is below 30 ({briefing.historicalStressTest.sampleSize} past cases matched). Historical patterns with fewer than 30 matches carry higher variance and lower statistical reliability.
@@ -521,18 +823,18 @@ export function ResearchMemo({
 
             {/* Past Examples */}
             {validExamples.length > 0 && (
-              <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-5 shadow-sm">
-                <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+              <div className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-5 shadow-sm">
+                <h5 className="font-mono text-[10px] font-semibold uppercase tracking-wider text-moss">
                   A few past verified occurrences
                 </h5>
-                <ul className="mt-2.5 space-y-2 text-xs leading-relaxed text-[#3f4c41]">
+                <ul className="mt-2.5 space-y-2 text-xs leading-relaxed text-moss-alt">
                   {validExamples.map((example) => {
                     const isCross = /cross[- ]ticker|similar chart|different stock/i.test(example.when);
                     return (
                       <li key={`${example.when}-${example.whatHappened}`}>
                         <span className="font-semibold">{example.when}:</span> {example.whatHappened}
                         {isCross && !example.when.includes("cross-ticker") && (
-                          <span className="ml-2 rounded bg-[#141918]/[0.06] px-1.5 py-0.5 font-mono text-[9px] uppercase text-[#637265]">
+                          <span className="ml-2 rounded bg-shell/[0.06] px-1.5 py-0.5 font-mono text-[9px] uppercase text-mute-dim">
                             cross-ticker
                           </span>
                         )}
@@ -544,17 +846,17 @@ export function ResearchMemo({
             )}
 
             {/* Historical Analogs Match Table */}
-            <div className="rounded-sm border border-[#141918]/12 bg-[#fcf9f2] p-4 sm:p-6 shadow-sm">
+            <div className="rounded-sm border border-shell/12 bg-paper p-4 sm:p-6 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-[#486326]">
+                <h4 className="font-mono text-xs font-bold uppercase tracking-[0.14em] text-moss">
                   Closest Historical Analog Matches
                 </h4>
-                <span className="font-mono text-[10px] text-[#637265]">Top verified historical chart matches</span>
+                <span className="font-mono text-[10px] text-mute-dim">Top verified historical chart matches</span>
               </div>
 
-              <div className="overflow-x-auto rounded border border-[#141918]/12 bg-white/70">
+              <div className="overflow-x-auto rounded border border-shell/12 bg-white/70">
                 <table className="w-full min-w-[680px] text-left text-xs">
-                  <thead className="border-b border-[#141918]/15 bg-[#141918]/[0.03] font-mono text-[10px] uppercase tracking-[0.14em] text-[#486326]">
+                  <thead className="border-b border-shell/15 bg-shell/[0.03] font-mono text-[10px] uppercase tracking-[0.14em] text-moss">
                     <tr>
                       <th className="py-3.5 pl-4 pr-3">Historical Setup</th>
                       <th className="py-3.5 px-3">Date / Episode</th>
@@ -562,15 +864,15 @@ export function ResearchMemo({
                       <th className="py-3.5 pr-4 pl-3">Follow-Through Return</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#141918]/[0.06]">
+                  <tbody className="divide-y divide-shell/[0.06]">
                     {briefing.historicalAnalog.analogs.slice(0, 5).map((item, index) => (
-                      <tr key={index} className="transition hover:bg-[#141918]/[0.02]">
-                        <td className="py-3.5 pl-4 pr-3 font-mono font-bold text-[#1a221c]">
+                      <tr key={index} data-anim="analog-row" className="transition hover:bg-shell/[0.02]">
+                        <td className="py-3.5 pl-4 pr-3 font-mono font-bold text-ink-strong">
                           {item.ticker}
                         </td>
-                        <td className="py-3.5 px-3 font-mono text-[#617063]">{item.date}</td>
-                        <td className="py-3.5 px-3 font-mono text-[#617063]">{item.similarity}</td>
-                        <td className="py-3.5 pr-4 pl-3 text-[#222b24] font-medium">{item.followed}</td>
+                        <td className="py-3.5 px-3 font-mono text-mute-dim">{item.date}</td>
+                        <td className="py-3.5 px-3 font-mono text-mute-dim">{item.similarity}</td>
+                        <td className="py-3.5 pr-4 pl-3 text-ink-body font-medium">{item.followed}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -580,23 +882,26 @@ export function ResearchMemo({
               {/* Base Rates Briefing Cards if present */}
               {briefing.historicalAnalog.baseRates?.length > 0 && (
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                  {briefing.historicalAnalog.baseRates.map((item) => (
+                  {briefing.historicalAnalog.baseRates.map((item, idx) => (
                     <div
                       key={item.horizon}
-                      className="rounded-sm border border-[#141918]/12 bg-white/70 p-3.5 sm:p-4 shadow-sm"
+                      className="rounded-sm border border-shell/12 bg-white/70 p-3.5 sm:p-4 shadow-sm"
                     >
-                      <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#486326]">
+                      <div
+                        data-anim-base-n={idx}
+                        className="font-mono text-[10px] font-semibold uppercase tracking-wider text-moss"
+                      >
                         {item.horizon} · Sample n={item.n}
                       </div>
-                      <p className="mt-2 text-xs font-semibold leading-snug text-[#1a221c]">{item.range}</p>
-                      <p className="mt-2 text-[11px] leading-relaxed text-[#637265]">{item.note}</p>
+                      <p className="mt-2 text-xs font-semibold leading-snug text-ink-strong">{item.range}</p>
+                      <p className="mt-2 text-[11px] leading-relaxed text-mute-dim">{item.note}</p>
                     </div>
                   ))}
                 </div>
               )}
 
               {briefing.historicalAnalog.caveat && (
-                <p className="mt-4 max-w-4xl text-xs leading-relaxed text-[#637265] italic">
+                <p className="mt-4 max-w-4xl text-xs leading-relaxed text-mute-dim italic">
                   {briefing.historicalAnalog.caveat}
                 </p>
               )}

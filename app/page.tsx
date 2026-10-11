@@ -7,6 +7,8 @@ import { reweightBriefing } from "@/lib/reweight";
 import { findNameBySymbol, findNameOrDefault, UNIVERSE } from "@/lib/universe";
 import { BlackholeBackground } from "./components/BlackholeBackground";
 import { Header } from "./components/Header";
+import { DEFAULT_TRADE_QUESTION } from "./components/TradeIntentBar";
+import { applyLossLimit, parseTradeIntent } from "@/lib/risk/parse-trade";
 import { IntakeView } from "./components/IntakeView";
 import { ProductTour } from "./components/ProductTour";
 import { ResultsView } from "./components/ResultsView";
@@ -25,6 +27,7 @@ type UniverseResponse =
   | Instrument[]
   | { universe?: Instrument[]; source?: "live" | "fallback"; asOf?: string };
 import type { PillarStatus, PillarState } from "./components/PipelineSidebar";
+import { emptyRiskPillar } from "@/lib/risk/risk-pillar";
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -80,6 +83,7 @@ const EMPTY_PILLARS: PillarState = {
   news: "pending",
   analogs: "pending",
   marketStructure: "pending",
+  risk: "pending",
 };
 
 const DECISION_NOTE_STORAGE_KEY = "precedent-decision-note";
@@ -88,7 +92,7 @@ export default function Home() {
   const [view, setView] = useState<"intake" | "results">("intake");
   const [style, setStyle] = useState<TradingStyle>("swing");
   const [symbol, setSymbol] = useState(DEMO_TASK.symbol);
-  const [question, setQuestion] = useState(DEMO_TASK.question);
+  const [question, setQuestion] = useState(DEFAULT_TRADE_QUESTION);
   const [instruments, setInstruments] = useState<Instrument[]>(
     UNIVERSE.map(({ native, rToken, name, sector }) => ({ native, rToken, name, sector })),
   );
@@ -107,6 +111,22 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [tourToken, setTourToken] = useState(0);
+  const [runId, setRunId] = useState(0);
+  const [demoToken, setDemoToken] = useState(0);
+  const [isDemoRun, setIsDemoRun] = useState(false);
+
+  const hasAnimatedIntakeRef = useRef(false);
+  const animatedRunIdRef = useRef(0);
+
+  useEffect(() => {
+    hasAnimatedIntakeRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (view === "results" && briefing && animatedRunIdRef.current !== runId) {
+      animatedRunIdRef.current = runId;
+    }
+  }, [view, briefing, runId]);
 
   const skipInitialDecisionNoteSave = useRef(true);
   useEffect(() => {
@@ -166,9 +186,25 @@ export default function Home() {
     event?.preventDefault();
     const demo = opts?.demo === true;
     const activeStyle = demo ? DEMO_TASK.style : style;
-    const activeSymbol = demo ? DEMO_TASK.symbol : symbol;
     const activeQuestion = (demo ? DEMO_TASK.question : question).trim();
     if (busy || activeQuestion.length < 8) return;
+
+    // The intent bar is now the primary input. When the sentence names an
+    // instrument, that instrument is what gets researched: the combobox keeps
+    // whatever the user last picked and must never silently override it.
+    const parsedIntent = applyLossLimit(parseTradeIntent(activeQuestion));
+    const namedInstrument = parsedIntent.asset
+      ? instruments.find((item) => item.native === parsedIntent.asset)
+      : undefined;
+    const activeSymbol = demo ? DEMO_TASK.symbol : namedInstrument?.native ?? symbol;
+
+    if (namedInstrument && !demo && namedInstrument.native !== symbol) {
+      setSymbol(namedInstrument.native);
+    }
+    const runStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const minHoldMs = demo ? 1650 : 1200;
+    setRunId((n) => n + 1);
+    setIsDemoRun(demo);
     setBusy(true);
     setError("");
     setBriefing(null);
@@ -181,6 +217,7 @@ export default function Home() {
       news: "Scanning news & macro headlines…",
       analogs: "Matching historical charts…",
       marketStructure: "Resolving RMT peer communities…",
+      risk: "Reading the calendar and pricing the round trip…",
     });
     setStatuses({
       fundamentals: "running",
@@ -188,12 +225,28 @@ export default function Home() {
       news: "running",
       analogs: "running",
       marketStructure: "running",
+      risk: "running",
     });
 
     let receivedBriefing = false;
+    let pendingBriefing: Briefing | null = null;
     let collectedPillars: Partial<PillarBundle> = {};
     let collectedMeta: { native: string; name: string; regime: string } | null = null;
     let collectedStatuses: PillarState = { ...EMPTY_PILLARS };
+
+    const waitMinPipelineHold = async () => {
+      if (
+        typeof window !== "undefined" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ) {
+        return;
+      }
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const remaining = Math.max(0, minHoldMs - (now - runStartedAt));
+      if (remaining > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remaining));
+      }
+    };
 
     const handleEvent = (ev: ResearchEvent) => {
       if (ev.type === "meta") {
@@ -225,20 +278,20 @@ export default function Home() {
         }
       } else if (ev.type === "briefing") {
         receivedBriefing = true;
-        setStage("complete");
-        setBriefing(ev.briefing);
-        setView("results");
+        pendingBriefing = ev.briefing;
+        setStage("synthesis");
       } else if (ev.type === "error") {
         setError(ev.message);
       }
     };
 
-    const recoverWithFallback = (errorMessage?: string) => {
+    const recoverWithFallback = async (errorMessage?: string) => {
       if (receivedBriefing) return;
       const hasCompletedPillars = Object.values(collectedStatuses).some(
         (s) => s === "ready" || s === "degraded",
       );
       if (hasCompletedPillars || Object.keys(collectedPillars).length > 0) {
+        await waitMinPipelineHold();
         const fallbackName =
           findNameBySymbol(activeSymbol ?? "") ??
           findNameOrDefault(`${activeSymbol ?? ""} ${activeQuestion}`);
@@ -248,6 +301,7 @@ export default function Home() {
           news: { ok: false, headlines: [], macro: [], social: { x: [] }, aggregateLean: "insufficient" as const, caveats: [], notes: [], sources: [] },
           analogs: { ok: false, closest: [], ranges: [], overlay: [], sample: { n: 0, symbols: 0, sessions: 0 }, caveats: [], sources: [] },
           marketStructure: { ok: false, universeSize: 0, caveats: [], sources: [] },
+          risk: emptyRiskPillar("Risk sizing did not complete in this run.", fallbackName.native, fallbackName.rToken),
         };
         const resolvedBundle: PillarBundle = {
           fundamentals: (collectedPillars.fundamentals as PillarBundle["fundamentals"]) ?? defaultEmptyPillars.fundamentals,
@@ -255,6 +309,7 @@ export default function Home() {
           news: (collectedPillars.news as PillarBundle["news"]) ?? defaultEmptyPillars.news,
           analogs: (collectedPillars.analogs as PillarBundle["analogs"]) ?? defaultEmptyPillars.analogs,
           marketStructure: (collectedPillars.marketStructure as PillarBundle["marketStructure"]) ?? defaultEmptyPillars.marketStructure,
+          risk: (collectedPillars.risk as PillarBundle["risk"]) ?? defaultEmptyPillars.risk,
         };
         const fallbackBriefing = deterministicBriefing({
           style: activeStyle,
@@ -269,6 +324,9 @@ export default function Home() {
         setBriefing(fallbackBriefing);
         setError("");
         setView("results");
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0 });
+        }
       } else {
         setError(errorMessage || "The research run could not complete. Please try again.");
       }
@@ -304,8 +362,16 @@ export default function Home() {
           }
         }
       }
-      if (!receivedBriefing) {
-        recoverWithFallback();
+      if (receivedBriefing && pendingBriefing) {
+        await waitMinPipelineHold();
+        setStage("complete");
+        setBriefing(pendingBriefing);
+        setView("results");
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0 });
+        }
+      } else if (!receivedBriefing) {
+        await recoverWithFallback();
       }
     } catch (err) {
       setStatuses((current) =>
@@ -313,9 +379,10 @@ export default function Home() {
           Object.entries(current).map(([key, value]) => [key, value === "ready" ? value : "degraded"]),
         ) as PillarState,
       );
-      recoverWithFallback(err instanceof Error ? err.message : "Research failed.");
+      await recoverWithFallback(err instanceof Error ? err.message : "Research failed.");
     } finally {
       setBusy(false);
+      setIsDemoRun(false);
     }
   }
 
@@ -349,22 +416,29 @@ export default function Home() {
     setStage("idle");
     setPillarMessages({});
     setView("intake");
+    setDemoToken((n) => n + 1);
   }
 
   function runDemo() {
     if (busy) return;
     loadDemo();
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     void runResearch(undefined, { demo: true });
   }
 
   return (
-    <div className="relative min-h-screen text-[#e7ebef]">
+    <div className="relative min-h-screen text-slate-light">
       <BlackholeBackground variant={view} />
 
       <Header
         onLoadDemo={runDemo}
         onStartTour={() => setTourToken((n) => n + 1)}
         universeMeta={universeMeta}
+        animateEntrance={!hasAnimatedIntakeRef.current}
+        busy={busy}
+        isDemoRunning={isDemoRun && busy}
       />
       <ProductTour view={view} requestToken={tourToken} />
 
@@ -388,6 +462,11 @@ export default function Home() {
             onViewPreviousResults={() => setView("results")}
             stage={stage}
             pillarMessages={pillarMessages}
+            animateEntrance={!hasAnimatedIntakeRef.current}
+            onLoadDemo={runDemo}
+            onFillDemo={loadDemo}
+            demoToken={demoToken}
+            isDemoRunning={isDemoRun && busy}
           />
         ) : briefing ? (
           <ResultsView
@@ -402,6 +481,8 @@ export default function Home() {
             symbol={symbol}
             meta={meta}
             statuses={statuses}
+            runId={runId}
+            animateResult={animatedRunIdRef.current !== runId}
           />
         ) : (
           <IntakeView
@@ -422,6 +503,11 @@ export default function Home() {
             onViewPreviousResults={() => {}}
             stage={stage}
             pillarMessages={pillarMessages}
+            animateEntrance={!hasAnimatedIntakeRef.current}
+            onLoadDemo={runDemo}
+            onFillDemo={loadDemo}
+            demoToken={demoToken}
+            isDemoRunning={isDemoRun && busy}
           />
         )}
       </main>

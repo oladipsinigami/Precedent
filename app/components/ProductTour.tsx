@@ -158,17 +158,10 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
     if (requestToken > 0) start();
   }, [requestToken, start]);
 
-  useEffect(() => {
-    try {
-      if (!localStorage.getItem(STORAGE_KEY)) {
-        const timer = window.setTimeout(() => start(), 700);
-        return () => window.clearTimeout(timer);
-      }
-    } catch {
-      /* ignore */
-    }
-    return undefined;
-  }, [start]);
+  // Deliberately no auto-open on first visit. The intake screen now leads with a
+  // single question and one primary action; a modal tour that covers that action
+  // after 700ms makes a first-time visitor dismiss the tour before they can
+  // answer. The tour stays available on demand from the header control.
 
   useEffect(() => {
     const measure = () => {
@@ -245,7 +238,7 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
       <div className="absolute inset-0 bg-black/70" onClick={close} />
       {highlight && (
         <div
-          className="pointer-events-none absolute rounded-sm ring-2 ring-[#d4ff3f] shadow-[0_0_0_9999px_rgba(0,0,0,0.72)]"
+          className="pointer-events-none absolute rounded-sm ring-2 ring-lime shadow-[0_0_0_9999px_rgba(0,0,0,0.72)]"
           style={{
             top: highlight.top,
             left: highlight.left,
@@ -255,32 +248,32 @@ export function ProductTour({ view, requestToken = 0 }: ProductTourProps) {
         />
       )}
       <div
-        className="absolute z-[81] rounded-sm border border-[#d4ff3f]/40 bg-[#0c1016] p-4 text-[#e7ebef] shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+        className="absolute z-[81] rounded-sm border border-lime/40 bg-ink p-4 text-slate-light shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
         style={tooltipStyle}
       >
         <div className="flex items-center justify-between gap-3">
-          <p id="tour-title" className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#d4ff3f]">
+          <p id="tour-title" className="font-mono text-[10px] uppercase tracking-[0.18em] text-lime">
             Quick tour · {index + 1} / {steps.length}
           </p>
-          <button type="button" onClick={close} className="font-mono text-[10px] uppercase text-[#8ea0b0] hover:text-white">
+          <button type="button" onClick={close} className="font-mono text-[10px] uppercase text-slate-text hover:text-white">
             Skip
           </button>
         </div>
         <h3 className="mt-2 text-base font-semibold tracking-tight text-white">{step.title}</h3>
-        <p className="mt-1.5 text-sm leading-relaxed text-[#b7c4cf]">{step.body}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-slate-pale">{step.body}</p>
         <div className="mt-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setIndex((i) => Math.max(i - 1, 0))}
             disabled={index === 0}
-            className="min-h-[40px] rounded border border-white/15 px-3 font-mono text-[11px] uppercase tracking-wider text-[#c8d4df] disabled:opacity-30"
+            className="min-h-[40px] rounded border border-white/15 px-3 font-mono text-[11px] uppercase tracking-wider text-slate-mid disabled:opacity-30"
           >
             Back
           </button>
           <button
             type="button"
             onClick={next}
-            className="min-h-[40px] rounded bg-[#d4ff3f] px-4 font-mono text-[11px] font-bold uppercase tracking-wider text-[#080a0d]"
+            className="min-h-[40px] rounded bg-lime px-4 font-mono text-[11px] font-bold uppercase tracking-wider text-blot"
           >
             {index >= steps.length - 1 ? "Done" : "Next"}
           </button>

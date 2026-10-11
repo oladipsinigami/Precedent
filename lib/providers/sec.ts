@@ -14,6 +14,7 @@ type Submissions = {
       form: string[];
       primaryDocument: string[];
       primaryDocDescription: string[];
+      items?: string[];
     };
   };
 };
@@ -115,4 +116,54 @@ export async function secAtomHeadlines(cik: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+export type HistoricalEarningsDates = {
+  dates: string[];
+  source: string;
+  basis: string;
+  caveat?: string;
+};
+
+const EARNINGS_ITEM_MARKER = /\b2\.02\b|result(?:s)? of operations|financial results|earnings/i;
+
+export async function secHistoricalEarningsDates(cik: string): Promise<HistoricalEarningsDates> {
+  const padded = padCik(cik);
+  const source = "SEC EDGAR 8-K filings";
+  const basis =
+    "8-K filings carrying Item 2.02 (results of operations), used as the dated proxy for when this company last reported.";
+
+  const sub = await fetchJson<Submissions>(`https://data.sec.gov/submissions/CIK${padded}.json`, {
+    headers: secHeaders(),
+    cacheTtlMs: 12 * 60 * 60_000,
+    timeoutMs: 15_000,
+  });
+
+  const recent = sub.filings.recent;
+  const dates: string[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < recent.form.length; i++) {
+    const form = recent.form[i] ?? "";
+    if (form !== "8-K" && form !== "8-K/A") continue;
+    const filed = recent.filingDate[i];
+    if (!filed || seen.has(filed)) continue;
+    const description = recent.primaryDocDescription[i] ?? "";
+    const item = recent.items?.[i] ?? "";
+    if (!EARNINGS_ITEM_MARKER.test(description) && !/\b2\.02\b/.test(item)) continue;
+    seen.add(filed);
+    dates.push(filed);
+  }
+
+  if (!dates.length) {
+    return {
+      dates,
+      source,
+      basis,
+      caveat:
+        "No 8-K carrying a results-of-operations item was found in the recent EDGAR submissions feed, so this company has no measured earnings-day sample in this run.",
+    };
+  }
+
+  return { dates: dates.sort(), source, basis };
 }

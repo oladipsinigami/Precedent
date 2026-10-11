@@ -118,7 +118,7 @@ export function deterministicBriefing(opts: {
   }
   if (flags) {
     evidence.push({
-      claim: `Flags (separate facts, not a score): catalyst density ${flags.catalystDensity}; regime alignment ${flags.regimeAlignment}; community stability ${flags.communityStability}; analog base n=${flags.analogQuality.n} (${flags.analogQuality.clustered ? "clustered" : "scattered"} outcomes)${flags.cleanedCorrRankPct !== undefined ? `; cleaned-correlation rank p${flags.cleanedCorrRankPct} in community` : ""}.`,
+      claim: `Flags (separate facts, not a score): catalyst density ${flags.catalystDensity}; regime alignment ${flags.regimeAlignment}; community data ${flags.communityData}; analog base n=${flags.analogQuality.n} (${flags.analogQuality.clustered ? "clustered" : "scattered"} outcomes)${flags.cleanedCorrRankPct !== undefined ? `; cleaned-correlation rank p${flags.cleanedCorrRankPct} in community` : ""}.`,
       source: "Structure & Fundamentals flags",
       pillar: "marketStructure" as const,
     });
@@ -172,9 +172,9 @@ export function deterministicBriefing(opts: {
   if (rsi !== undefined && rsi >= 60 && pillars?.news?.headlines?.some((h) => h.lean === "cautious")) {
     tension.push({
       left: `RSI-14 indicates elevated short-term momentum at ${rsi.toFixed(1)}.`,
-      right: "Verified headline flow reflects cautious or risk-sensitive editorial coverage.",
+      right: `Verified headline flow leans risk-sensitive across ${pillars.news.headlines.filter((h) => h.lean === "cautious").length} of the ${pillars.news.headlines.length} headlines returned.`,
       whyItMatters:
-        "Price momentum and cautious headline flow diverge; treat the clash as analytical friction rather than directional signal.",
+        "Measured momentum and the editorial lean of the returned headlines differ; treat the clash as a difference in what each stream observed rather than a directional signal.",
     });
   }
 
@@ -229,7 +229,9 @@ export function deterministicBriefing(opts: {
         pillars?.technicals?.rTokenGap
           ? `Tape & Venue Basis: 24/7 Bitget pricing vs NY cash close: ${inline(pillars.technicals.rTokenGap)}.`
           : "Tape & Venue Basis: Bitget trades 24/7 on crypto rails, while the primary US equity market closes overnight.",
-        "Liquidity & Spread: Off-hours rToken trading operates with thinner order depth, exposing positions to opening basis gap risk.",
+        pillars?.risk?.costs?.ok
+          ? `Live Round-Trip Cost: ${pillars.risk.costs.roundTrip.costBps.toFixed(1)} bps of the ${pillars.risk.costs.notionalUsd.toLocaleString("en-US")} dollar notional at the size asked, from the ${pillars.risk.costs.venue} order book stamped ${pillars.risk.costs.bookAsOf}.`
+          : "Live Round-Trip Cost: order book unavailable at request time, so cost is reported as unavailable rather than estimated.",
         pillars?.fundamentals?.eps
           ? `SEC EDGAR Filing Tape: Diluted EPS ${pillars.fundamentals.eps.value} for period ending ${pillars.fundamentals.eps.periodEnd} (${pillars.fundamentals.eps.form} filed ${pillars.fundamentals.eps.filed}).`
           : pillars?.fundamentals?.latestFilings?.[0]
@@ -309,6 +311,42 @@ export function deterministicBriefing(opts: {
     unverified.push(`Historical analog sample is limited (${analogSampleSize} cases).`);
   }
 
+  const risk = pillars?.risk;
+  if (risk) {
+    if (risk.verdict === "UNAVAILABLE") {
+      unverified.push(
+        risk.unavailableReason ?? "Risk sizing unavailable in this run, so no size could be checked.",
+      );
+    }
+    risk.unverified.forEach((item) => unverified.push(`Risk & sizing — ${item}`));
+    if (risk.maxLossUsd === null) {
+      unverified.push(
+        "No loss limit was stated, so the position size was never checked against a budget. Give the most you can lose to get a fitted size.",
+      );
+    }
+    if (!risk.costs.ok) {
+      unverified.push(
+        "Live round-trip cost unavailable — the sizing solve omitted trading costs rather than assuming a fee.",
+      );
+    }
+    if (risk.ordinary.status === "NO_DATA") {
+      unverified.push(
+        `Not enough clean ${risk.holdSessions}-session history to grade a hold range for ${risk.asset}; the adverse move is event-driven only.`,
+      );
+    } else if (risk.ordinary.status === "SHORT_OF_TARGET") {
+      unverified.push(
+        `The ${risk.holdSessions}-session hold range contained only ${Math.round((risk.ordinary.shareInside ?? 0) * 100)}% of held-out sessions against an 80% target; it is reported as measured and not widened to hide the miss.`,
+      );
+    }
+    risk.severities
+      .filter((severity) => severity.coverage.status === "SHORT_OF_TARGET")
+      .forEach((severity) => {
+        unverified.push(
+          `${severity.label} range contained only ${Math.round((severity.coverage.shareInside ?? 0) * 100)}% of held-out sessions against an 80% target.`,
+        );
+      });
+  }
+
   const result: Briefing = {
     title: `${name.rToken} — ${profile.label} stress test`,
     whatWeDid: whatWeDidText,
@@ -327,7 +365,10 @@ export function deterministicBriefing(opts: {
           if (!r || r.n === 0) return null;
           return {
             period,
-            wentUp: `Went up ${Math.round(r.pUp * r.n)} times out of ${r.n}`,
+            wentUp:
+              r.basis === "excess"
+                ? `Beat the baseline ${Math.round(r.pUp * r.n)} of ${r.n}`
+                : `Rose ${Math.round(r.pUp * r.n)} of ${r.n}`,
             typicalMove: `Typical move: usually between ${fmtPct(r.p10)} and ${fmtPct(r.p90)}`,
             median: fmtPct(r.p50),
           };
@@ -398,12 +439,15 @@ export function deterministicBriefing(opts: {
         note: "Excess versus a date-matched liquid-stock baseline, not raw return, and not a forecast.",
       })),
       caveat:
-        pillars?.analogs?.caveats?.join(" ") ||
+        // Scope notes carry the standing limits of this evidence; caveats carry
+        // what went wrong on this run. Both belong here so the memo never
+        // silently drops the provenance the sidebar shows.
+        [...(pillars?.analogs?.scopeNotes ?? []), ...(pillars?.analogs?.caveats ?? [])].join(" ") ||
         "Analogs are a historical sample. They do not assign a side to the current name.",
     },
     considerations: {
       forStyle: [
-        `This memo is framed for a ${profile.label} horizon (${profile.horizon}).`,
+        `Horizon: ${profile.label}, ${profile.horizon}.`,
         analogHorizon === "1d"
           ? "Single-session horizon prioritizes 24/7 rToken basis and overnight gap risk into the NY cash open."
           : analogHorizon === "10d"
@@ -411,7 +455,7 @@ export function deterministicBriefing(opts: {
             : "Swing horizon prioritizes 5-session analog dispersion and tension between tape momentum and news flow.",
         pillars?.technicals?.rTokenGap ?? "rToken venue print was not on the tape this run.",
         pillars?.marketStructure?.ok
-          ? `Community ${pillars.marketStructure.communityId} membership indicates peer moves inside that group carry higher explanatory power than broad index beta.`
+          ? `${pillars.marketStructure.communityMembers?.length ?? 0} names share this peer community; analog matching draws from them.`
           : "No community membership resolved this run; peer comparison requires manual tracking.",
       ],
       invalidation: [
@@ -423,7 +467,7 @@ export function deterministicBriefing(opts: {
           : "Monitor upcoming SEC filings; the recorded EDGAR state represents the last verified corporate baseline.",
       ],
       questions: [
-        "Is the analog quantile dispersion wide enough that standing aside represents the disciplined institutional choice?",
+        `How wide is the ${analogHorizon} dispersion (${band ? `${fmtPct(band.p10)} to ${fmtPct(band.p90)}` : "unavailable"}) relative to your tolerance?`,
         "If cash equity is offline while rToken trades 24/7, which venue's pricing governs your execution rules?",
         "Which witness stream, if it inverted tomorrow, would force immediate thesis invalidation?",
       ],

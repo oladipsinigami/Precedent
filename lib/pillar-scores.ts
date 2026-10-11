@@ -1,33 +1,49 @@
 import type { FundamentalsPillar, NewsPillar, TechnicalsPillar } from "./types";
 
+/**
+ * Pillar descriptors state how much evidence a stream returned, never which way
+ * it points. The old labels ("constructive" / "cautious") read as a judgement:
+ * scoring a company higher purely for *having* EPS made a complete filing read
+ * as a bullish one. Completeness is now named directly.
+ */
+export type EvidenceLevel = "complete" | "partial" | "sparse" | "insufficient";
+
 export type PillarScore = {
+  /** How many of the pillar's own checks resolved. Null when the stream failed. */
   value: number | null;
-  label: "constructive" | "mixed" | "cautious" | "insufficient";
+  label: EvidenceLevel;
   basis: string;
 };
 
-function labelFor(value: number | null): PillarScore["label"] {
-  if (value === null) return "insufficient";
-  if (value >= 65) return "constructive";
-  if (value <= 40) return "cautious";
-  return "mixed";
+// Tunable: share of checks that must resolve before a stream reads as complete.
+// Chosen at 3 of 4 because a single missing optional field should not demote a
+// stream that otherwise returned everything it asked for.
+export const COMPLETE_SHARE = 0.75;
+
+function levelFor(resolved: number, total: number): EvidenceLevel {
+  if (total <= 0) return "insufficient";
+  if (resolved >= total * COMPLETE_SHARE) return "complete";
+  if (resolved >= 2) return "partial";
+  if (resolved >= 1) return "sparse";
+  return "insufficient";
 }
 
-function score(value: number, basis: string): PillarScore {
-  const bounded = Math.max(0, Math.min(100, Math.round(value)));
-  return { value: bounded, label: labelFor(bounded), basis };
+function score(resolved: number, total: number, basis: string): PillarScore {
+  return { value: resolved, label: levelFor(resolved, total), basis };
 }
 
 export function sentimentScore(news?: NewsPillar): PillarScore {
   if (!news || (!news.headlines.length && !news.social.x.length)) {
     return { value: null, label: "insufficient", basis: "No usable news or discourse observations were returned." };
   }
-  const base = news.aggregateLean === "constructive" ? 72 : news.aggregateLean === "cautious" ? 32 : 50;
-  const headlineAdjustment = news.headlines.length ? Math.min(8, news.headlines.filter((item) => item.lean === news.aggregateLean).length * 2) : 0;
-  const caveatPenalty = Math.min(12, news.caveats.length * 4);
+  const resolved = (news.headlines.length ? 1 : 0) + (news.social.x.length ? 1 : 0);
   return score(
-    base + headlineAdjustment - caveatPenalty,
-    `${news.aggregateLean} aggregate lean across ${news.headlines.length} headlines and ${news.social.x.length} social items${news.caveats.length ? `; ${news.caveats.length} caveat${news.caveats.length === 1 ? "" : "s"}` : ""}.`,
+    resolved,
+    2,
+    `${news.headlines.length} headline${news.headlines.length === 1 ? "" : "s"} and ` +
+      `${news.social.x.length} social item${news.social.x.length === 1 ? "" : "s"} returned` +
+      `${news.caveats.length ? `, with ${news.caveats.length} coverage caveat${news.caveats.length === 1 ? "" : "s"}` : ""}. ` +
+      `Reported lean is "${news.aggregateLean}"; it is not scored into a view.`,
   );
 }
 
@@ -35,35 +51,59 @@ export function fundamentalsScore(fundamentals?: FundamentalsPillar): PillarScor
   if (!fundamentals || (!fundamentals.eps && !fundamentals.revenue && !fundamentals.latestFilings.length)) {
     return { value: null, label: "insufficient", basis: "No current EPS, revenue, or filing facts were returned." };
   }
-  let value = 35;
-  if (fundamentals.eps) value += 20;
-  if (fundamentals.revenue) value += 20;
-  if (fundamentals.latestFilings.length) value += 15;
-  if (fundamentals.catalysts.length) value += 5;
-  if (fundamentals.eps?.prior !== undefined) value += fundamentals.eps.value >= fundamentals.eps.prior ? 5 : -5;
-  return score(value, `${fundamentals.eps ? "EPS" : "No EPS"}${fundamentals.revenue ? ", revenue" : ""}${fundamentals.latestFilings.length ? `, and ${fundamentals.latestFilings.length} recent filing${fundamentals.latestFilings.length === 1 ? "" : "s"}` : ""} were available; this is a completeness and recency description, not a forecast.`);
+  const resolved =
+    (fundamentals.eps ? 1 : 0) +
+    (fundamentals.revenue ? 1 : 0) +
+    (fundamentals.latestFilings.length ? 1 : 0) +
+    (fundamentals.catalysts.length ? 1 : 0);
+
+  const parts = [
+    fundamentals.eps ? `EPS ${fundamentals.eps.value}` : "no EPS",
+    fundamentals.revenue ? "revenue" : "",
+    fundamentals.latestFilings.length ? `${fundamentals.latestFilings.length} recent filing${fundamentals.latestFilings.length === 1 ? "" : "s"}` : "",
+    fundamentals.catalysts.length ? `${fundamentals.catalysts.length} catalyst${fundamentals.catalysts.length === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+
+  return score(
+    resolved,
+    4,
+    `${resolved} of 4 disclosure checks returned: ${parts.join(", ")}. This counts what was filed, not whether it is favourable.`,
+  );
 }
 
 export function technicalsScore(technicals?: TechnicalsPillar): PillarScore {
   if (!technicals?.ok) {
     return { value: null, label: "insufficient", basis: "Technical tape data was unavailable or degraded." };
   }
-  let value = 50;
   const { last } = technicals.native;
   const averages = [technicals.indicators.sma20, technicals.indicators.sma50, technicals.indicators.sma200].filter(
     (item): item is number => item !== undefined && Number.isFinite(item),
   );
-  if (averages.length) value += averages.filter((average) => last >= average).length * 8 - (averages.length - averages.filter((average) => last >= average).length) * 4;
-  if (technicals.indicators.rsi14 !== undefined && technicals.indicators.rsi14 >= 40 && technicals.indicators.rsi14 <= 60) value += 8;
-  if (technicals.rToken?.premiumPct !== undefined && technicals.rToken.premiumPct !== null) value += Math.abs(technicals.rToken.premiumPct) <= 2 ? 5 : -5;
-  if (technicals.indicators.realizedVol20 !== undefined && technicals.indicators.realizedVol20 > 40) value -= 8;
-  return score(value, `${averages.length ? `${averages.length} moving-average comparisons` : "No moving-average comparisons"}${technicals.indicators.rsi14 !== undefined ? `; RSI ${technicals.indicators.rsi14.toFixed(1)}` : ""}${technicals.rToken?.premiumPct !== undefined && technicals.rToken.premiumPct !== null ? `; rToken basis ${technicals.rToken.premiumPct.toFixed(2)}%` : ""}.`);
+  const above = averages.filter((average) => last >= average);
+
+  const resolved =
+    (averages.length ? 1 : 0) +
+    (technicals.indicators.rsi14 !== undefined ? 1 : 0) +
+    (technicals.indicators.realizedVol20 !== undefined ? 1 : 0) +
+    (technicals.rToken?.premiumPct !== undefined && technicals.rToken?.premiumPct !== null ? 1 : 0);
+
+  const averageClause = averages.length
+    ? `above ${above.length} of ${averages.length} moving averages`
+    : "no moving-average comparison available";
+
+  return score(
+    resolved,
+    4,
+    `${averageClause}${technicals.indicators.rsi14 !== undefined ? `; RSI ${technicals.indicators.rsi14.toFixed(1)}` : ""}` +
+      `${technicals.indicators.realizedVol20 !== undefined ? `; realized vol ${technicals.indicators.realizedVol20.toFixed(1)}%` : ""}` +
+      `${technicals.rToken?.premiumPct !== undefined && technicals.rToken?.premiumPct !== null ? `; rToken basis ${technicals.rToken.premiumPct.toFixed(2)}%` : ""}.`,
+  );
 }
 
 export type PillarCoverage = {
   available: number;
   total: number;
-  label: "complete" | "partial" | "insufficient";
+  label: EvidenceLevel;
   basis: string;
 };
 
@@ -73,7 +113,7 @@ export function summarizePillarCoverage(availability: boolean[]): PillarCoverage
   return {
     available,
     total,
-    label: available === total ? "complete" : available > 0 ? "partial" : "insufficient",
-    basis: `${available} of ${total} evidence streams returned usable data. This is a source-coverage check, not a blended investment score.`,
+    label: levelFor(available, total),
+    basis: `${available} of ${total} evidence streams returned usable data. This is a source-coverage check, not a blended investment score, and says nothing about direction.`,
   };
 }
