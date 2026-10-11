@@ -1,0 +1,13 @@
+A trader holding an rToken on Bitget faces a structural blind spot: their position trades 24 7 on crypto rails, but primary equity disclosures and SEC filings operate on New York cash hours. Generic AI tools give hyped, ungrounded directional calls. Precedent changes this. Built for the Bitget AI Base Camp, Precedent is an autonomous AI research desk that cross-examines setups across four independent witnesses, delivering institutional evidence while keeping human judgment sovereign.
+
+We begin by selecting our trading style: Swing trader, and choosing rAAPL from the live Bitget universe. We submit a concrete research question: stress test the AAPL rToken setup into next week, especially the 24 7 window versus the cash session. Precedent immediately initiates a server sent events stream.
+
+In parallel, Precedent interrogates four independent witnesses that are allowed to disagree. Witness 1 examines the live Bitget tape versus the New York cash close, quantifying venue basis. Witness 2 queries a 10-year chart library state packet for historical analogs. Witness 3 streams financial headlines and social sentiment. Witness 4 pulls SEC EDGAR XBRL disclosures and Random Matrix Theory market structure telemetry.
+
+In under six seconds, Precedent renders an Institutional Desk Note. Notice the core quantitative anchor: 300 historically similar setups showing exact empirical follow through: 147 of 300 went up over 5 days, with a median return of plus 0.4 percent and a p10 to p90 quantile dispersion range. Below, Precedent highlights witness clashes, contrasting elevated tape momentum against cautious headline sentiment, and poses pre-mortem invalidation questions.
+
+Precedent's Active Language Guard enforces 21 compliance rules. Prohibited directional calls like BUY or SELL, influencer hype like going to rip, and patronizing coaching are actively sanitized into cold, objective facts before display.
+
+For quantitative inspection, expandable accordions disclose full source attributions, SEC CIK filings, and Random Matrix Theory correlation communities, isolating market mode noise to group 500 underlyings into 103 clean sector cohorts.
+
+Research first. Decide yourself. Precedent never executes trades or manages positions. At the foot of the memo, the trader logs their private decision rationale in browser local storage. This is Precedent: cold empirical research, complete transparency, and human judgment sovereign.
